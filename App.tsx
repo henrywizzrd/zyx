@@ -9,6 +9,7 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { NowPlayingScreen } from './src/screens/NowPlayingScreen';
 import { TabId } from './src/theme/types';
+import { DropPreview } from './src/components/DropPreview';
 
 function Placeholder({ name }: { name: string }) {
   const { theme } = useTheme();
@@ -32,6 +33,7 @@ function Root() {
       {tab === 'library' && <Placeholder name="Library" />}
       {tab === 'settings' && <SettingsScreen />}
       {tab === 'player' && <NowPlayingScreen />}
+      <DropPreview />
       <MiniPlayer hidden={tab === 'player'} onOpen={() => setTab('player')} />
       <FloatingDock active={tab} onChange={setTab} />
     </View>

@@ -2,12 +2,8 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { useContentInsets } from '../components/FloatingDock';
-import { MiniPlayerVariant, Position } from '../theme/types';
+import { MiniPlayerVariant } from '../theme/types';
 
-const POSITIONS: Position[] = [
-  'bottom', 'top', 'left', 'right',
-  'top-left', 'top-right', 'bottom-left', 'bottom-right',
-];
 const VARIANTS: MiniPlayerVariant[] = ['pill', 'rect'];
 
 function Chips<T extends string>({ options, value, onSelect }: { options: T[]; value: T; onSelect: (v: T) => void }) {
@@ -31,7 +27,8 @@ function Chips<T extends string>({ options, value, onSelect }: { options: T[]; v
 }
 
 export function SettingsScreen() {
-  const { theme, resetTheme, setDockPosition, setMiniPlayerPosition, setMiniPlayerVariant, setMerged } = useTheme();  const pad = useContentInsets();
+  const { theme, resetTheme, setMiniPlayerVariant, setMerged } = useTheme();
+  const pad = useContentInsets();
   const label = { color: theme.colors.textSecondary, marginTop: 24, marginBottom: 12 };
 
   return (
@@ -44,15 +41,12 @@ export function SettingsScreen() {
       }}
     >
       <Text style={[styles.title, { color: theme.colors.text }]}>Settings</Text>
-
-      <Text style={label}>Dock position</Text>
-      <Chips options={POSITIONS} value={theme.dock.position} onSelect={setDockPosition} />
+      <Text style={{ color: theme.colors.textSecondary, marginTop: 8 }}>
+        Giữ lâu vào dock hoặc mini player rồi kéo để đổi vị trí.
+      </Text>
 
       <Text style={label}>Mini player style</Text>
       <Chips options={VARIANTS} value={theme.miniPlayer.variant} onSelect={setMiniPlayerVariant} />
-
-      <Text style={label}>Mini player position</Text>
-      <Chips options={POSITIONS} value={theme.miniPlayer.position} onSelect={setMiniPlayerPosition} />
 
       <Text style={label}>Merge mini player into dock</Text>
       <Chips
@@ -60,6 +54,7 @@ export function SettingsScreen() {
         value={theme.miniPlayer.merged ? 'on' : 'off'}
         onSelect={(v) => setMerged(v === 'on')}
       />
+
       <Pressable
         onPress={resetTheme}
         style={[styles.chip, { backgroundColor: theme.colors.surface, alignSelf: 'flex-start', marginTop: 32 }]}

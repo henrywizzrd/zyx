@@ -1,6 +1,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { Track, tracks } from '../data/mock';
+import { Position } from '../theme/types';
+
+export type ViewRef = React.ElementRef<typeof View>;
+export type DragState = { kind: 'dock' | 'player'; target: Position | 'merge' };
 
 interface PlayerContextValue {
   track: Track;
@@ -9,10 +13,11 @@ interface PlayerContextValue {
   togglePlay: () => void;
   next: () => void;
   prev: () => void;
-  // Dùng cho hiệu ứng kéo mini player vào dock
-  dockRef: React.RefObject<View | null>;
-  hoverDock: boolean;
-  setHoverDock: (v: boolean) => void;
+  // Phần dưới dùng cho kéo thả / hợp nhất / tách dock và mini player
+  dockRef: React.RefObject<ViewRef | null>;
+  playerRef: React.RefObject<ViewRef | null>;
+  drag: DragState | null;
+  setDrag: (d: DragState | null) => void;
   emergeFrom: { cx: number; cy: number } | null;
   setEmergeFrom: (o: { cx: number; cy: number } | null) => void;
 }
@@ -23,9 +28,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [index, setIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [hoverDock, setHoverDock] = useState(false);
+  const [drag, setDrag] = useState<DragState | null>(null);
   const [emergeFrom, setEmergeFrom] = useState<{ cx: number; cy: number } | null>(null);
-  const dockRef = useRef<View>(null);
+  const dockRef = useRef<ViewRef>(null);
+  const playerRef = useRef<ViewRef>(null);
 
   const track = tracks[index];
 
@@ -54,9 +60,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<PlayerContextValue>(
     () => ({
       track, isPlaying, progress, togglePlay, next, prev,
-      dockRef, hoverDock, setHoverDock, emergeFrom, setEmergeFrom,
+      dockRef, playerRef, drag, setDrag, emergeFrom, setEmergeFrom,
     }),
-    [track, isPlaying, progress, togglePlay, next, prev, hoverDock, emergeFrom]
+    [track, isPlaying, progress, togglePlay, next, prev, drag, emergeFrom]
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;

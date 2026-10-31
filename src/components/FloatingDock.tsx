@@ -3,8 +3,9 @@ import { Animated, LayoutAnimation, Platform, Pressable, StyleSheet, Text, View 
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
-import { usePlayer } from '../player/PlayerProvider';
+import { usePlayer, ViewRef } from '../player/PlayerProvider';
 import { TabId } from '../theme/types';
+import { useDraggable } from './useDraggable';
 import {
   computeLayout, DOCK_GAP, DOCK_PADDING, DOCK_THICKNESS, ITEM_SIZE,
   isVertical, MP_THICKNESS, STACK_GAP,
@@ -54,7 +55,7 @@ function PlayerItem({
   const { theme } = useTheme();
   const { track } = usePlayer();
   const appear = useRef(new Animated.Value(0)).current;
-  const ref = useRef<View>(null);
+  const ref = useRef<ViewRef>(null);
 
   useEffect(() => {
     Animated.spring(appear, { toValue: 1, friction: 5, useNativeDriver: USE_NATIVE }).start();
@@ -96,19 +97,15 @@ function PlayerItem({
 
 export function FloatingDock({ active, onChange }: { active: TabId; onChange: (t: TabId) => void }) {
   const { theme, setMerged } = useTheme();
-  const { dockRef, hoverDock, setEmergeFrom } = usePlayer();
+  const { dockRef, setEmergeFrom } = usePlayer();
   const insets = useSafeAreaInsets();
+  const d = useDraggable('dock');
   const { dockStyle } = computeLayout(theme, insets);
   const { position, items, style } = theme.dock;
 
   const ids: TabId[] = theme.miniPlayer.merged ? [...items, 'player'] : items;
   const vertical = isVertical(position);
-
-  // Hiệu ứng "hút" khi mini player được kéo tới gần dock
-  const hoverScale = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    Animated.spring(hoverScale, { toValue: hoverDock ? 1.08 : 1, friction: 6, useNativeDriver: USE_NATIVE }).start();
-  }, [hoverDock, hoverScale]);
+  const lit = d.active || d.merging;
 
   // Hiệu ứng co lại khi dock mất một mục (mini player được tách ra)
   const squash = useRef(new Animated.Value(1)).current;
@@ -127,48 +124,70 @@ export function FloatingDock({ active, onChange }: { active: TabId; onChange: (t
     setMerged(false);
   };
 
+  const glow = lit
+    ? {
+        shadowColor: theme.colors.accent,
+        shadowOpacity: 0.9,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 0 },
+        elevation: 14,
+      }
+    : null;
+
   return (
-    <View pointerEvents="box-none" style={[styles.layer, dockStyle]}>
+    <View pointerEvents="box-none" style={[styles.layer, dockStyle, { zIndex: d.zIndex }]}>
       <View ref={dockRef} collapsable={false}>
         <Animated.View
+          {...d.panHandlers}
           style={{
-            flexDirection: vertical ? 'column' : 'row',
-            padding: DOCK_PADDING,
-            gap: DOCK_GAP,
             backgroundColor: style.background,
             borderRadius: style.radius,
-            transform: [{ scale: hoverScale }, { scale: squash }],
+            opacity: d.opacity,
+            transform: [
+              { translateX: d.pan.x },
+              { translateY: d.pan.y },
+              { scale: d.scale },
+              { scale: squash },
+            ],
+            ...glow,
           }}
         >
-          {ids.map((id) => {
-            const isActive = id === active;
-            if (id === 'player') {
+          {/* Giữ lâu vào khoảng trống giữa các nút cũng kéo được dock */}
+          <Pressable
+            {...d.pressProps}
+            style={{ flexDirection: vertical ? 'column' : 'row', padding: DOCK_PADDING, gap: DOCK_GAP }}
+          >
+            {ids.map((id) => {
+              const isActive = id === active;
+              if (id === 'player') {
+                return (
+                  <PlayerItem
+                    key={id}
+                    active={isActive}
+                    onPress={() => onChange('player')}
+                    onDetach={detachPlayer} // giữ lâu để tách player ra khỏi dock
+                  />
+                );
+              }
+              const color = isActive ? theme.colors.accent : theme.colors.textSecondary;
               return (
-                <PlayerItem
+                <Pressable
                   key={id}
-                  active={isActive}
-                  onPress={() => onChange('player')}
-                  onDetach={detachPlayer} // giữ lâu để tách player ra khỏi dock
-                />
+                  {...d.pressProps}
+                  onPress={() => onChange(id)}
+                  style={{ width: ITEM_SIZE, height: ITEM_SIZE, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <Ionicons name={isActive ? ICONS[id].on : ICONS[id].off} size={24} color={color} />
+                  {style.showLabels && <Text style={{ color, fontSize: 10, marginTop: 2 }}>{LABELS[id]}</Text>}
+                </Pressable>
               );
-            }
-            const color = isActive ? theme.colors.accent : theme.colors.textSecondary;
-            return (
-              <Pressable
-                key={id}
-                onPress={() => onChange(id)}
-                style={{ width: ITEM_SIZE, height: ITEM_SIZE, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <Ionicons name={isActive ? ICONS[id].on : ICONS[id].off} size={24} color={color} />
-                {style.showLabels && <Text style={{ color, fontSize: 10, marginTop: 2 }}>{LABELS[id]}</Text>}
-              </Pressable>
-            );
-          })}
+            })}
+          </Pressable>
           <View
             pointerEvents="none"
             style={[
               StyleSheet.absoluteFill,
-              { borderRadius: style.radius, borderWidth: 2, borderColor: theme.colors.accent, opacity: hoverDock ? 1 : 0 },
+              { borderRadius: style.radius, borderWidth: 2, borderColor: theme.colors.accent, opacity: lit ? 1 : 0 },
             ]}
           />
         </Animated.View>
@@ -178,5 +197,5 @@ export function FloatingDock({ active, onChange }: { active: TabId; onChange: (t
 }
 
 const styles = StyleSheet.create({
-  layer: { position: 'absolute', zIndex: 5 },
+  layer: { position: 'absolute' },
 });

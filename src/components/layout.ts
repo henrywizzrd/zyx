@@ -77,3 +77,24 @@ export function computeLayout(theme: Theme, insets: EdgeInsets) {
     playerPosition,
   };
 }
+
+export function playerSize(position: Position) {
+  const length = MP_ALBUM + 3 * MP_BUTTON + 3 * MP_GAP + MP_PADDING * 2;
+  return isVertical(position)
+    ? { width: MP_THICKNESS, height: length }
+    : { width: length, height: MP_THICKNESS };
+}
+
+// Chia màn hình thành lưới 3x3. Ô giữa thì chọn cạnh gần nhất.
+export function targetPosition(x: number, y: number, w: number, h: number): Position {
+  const col = x < w / 3 ? 0 : x > (w * 2) / 3 ? 2 : 1;
+  const row = y < h / 3 ? 0 : y > (h * 2) / 3 ? 2 : 1;
+
+  if (row === 0) return col === 0 ? 'top-left' : col === 2 ? 'top-right' : 'top';
+  if (row === 2) return col === 0 ? 'bottom-left' : col === 2 ? 'bottom-right' : 'bottom';
+  if (col === 0) return 'left';
+  if (col === 2) return 'right';
+
+  const d = { left: x, right: w - x, top: y, bottom: h - y };
+  return (Object.keys(d) as Array<keyof typeof d>).reduce((a, b) => (d[a] <= d[b] ? a : b));
+}
