@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { defaultTheme } from './defaultTheme';
-import { HomeSection, MiniPlayerVariant, Position, TabId, Theme } from './types';
+import { HomeSection, LibraryLayout, MiniPlayerVariant, Position, TabId, Theme } from './types';
 
 const STORAGE_KEY = 'zyx:theme';
 
@@ -13,6 +13,7 @@ const POSITIONS: Position[] = [
 const VARIANTS: MiniPlayerVariant[] = ['pill', 'rect'];
 const TABS: TabId[] = ['home', 'search', 'library', 'settings'];
 const SECTIONS: HomeSection[] = ['recentlyPlayed', 'madeForYou', 'newReleases'];
+const LIBRARY_LAYOUTS: LibraryLayout[] = ['list', 'columns', 'covers2', 'covers3'];
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -50,6 +51,10 @@ function sanitize(t: Theme): Theme {
       position: POSITIONS.includes(t.miniPlayer.position) ? t.miniPlayer.position : d.miniPlayer.position,
       variant: VARIANTS.includes(t.miniPlayer.variant) ? t.miniPlayer.variant : d.miniPlayer.variant,
     },
+    library: {
+      ...t.library,
+      layout: LIBRARY_LAYOUTS.includes(t.library.layout) ? t.library.layout : d.library.layout,
+    },
     home: { ...t.home, sections: sections.length ? sections : d.home.sections },
   };
 }
@@ -62,6 +67,7 @@ interface ThemeContextValue {
   setMiniPlayerPosition: (p: Position) => void;
   setMiniPlayerVariant: (v: MiniPlayerVariant) => void;
   setMerged: (merged: boolean) => void;
+  setLibraryLayout: (l: LibraryLayout) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -108,6 +114,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setMiniPlayerPosition: (position) => patchMini({ position }),
       setMiniPlayerVariant: (variant) => patchMini({ variant }),
       setMerged: (merged) => patchMini({ merged }),
+      setLibraryLayout: (layout) =>
+        setThemeState((t) => ({ ...t, library: { ...t.library, layout } })),
     };
   }, [theme]);
 

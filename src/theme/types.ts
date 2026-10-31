@@ -6,6 +6,7 @@ export type DockPosition = Position;
 export type TabId = 'home' | 'search' | 'library' | 'settings' | 'player';
 export type HomeSection = 'recentlyPlayed' | 'madeForYou' | 'newReleases';
 export type MiniPlayerVariant = 'pill' | 'rect';
+export type LibraryLayout = 'list' | 'columns' | 'covers2' | 'covers3';
 
 export interface Theme {
   version: number;
@@ -23,5 +24,6 @@ export interface Theme {
     merged: boolean;
     style: { background: string; rectRadius: number };
   };
+  library: { layout: LibraryLayout };
   home: { sections: HomeSection[] };
 }

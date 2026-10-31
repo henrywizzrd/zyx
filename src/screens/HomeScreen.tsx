@@ -25,7 +25,13 @@ function Row({ title, items }: { title: string; items: Item[] }) {
   return (
     <View style={{ marginTop: 28 }}>
       <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{title}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14 }}>
+      <ScrollView
+        horizontal
+        bounces={false}
+        overScrollMode="never"
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: 14 }}
+      >
         {items.map((it) => (
           <View key={it.id} style={{ width: 140 }}>
             <View style={[styles.cover, { backgroundColor: it.color }]} />
@@ -48,6 +54,8 @@ export function HomeScreen() {
 
   return (
     <ScrollView
+        bounces={false}
+        overScrollMode="never"
         contentContainerStyle={{
         paddingTop: pad.top + 16,
         paddingBottom: pad.bottom + pad.endPadding,

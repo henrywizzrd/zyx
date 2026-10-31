@@ -21,5 +21,6 @@ export const defaultTheme: Theme = {
     merged: false,
     style: { background: '#242424F2', rectRadius: 18 },
   },
+  library: { layout: 'list' },
   home: { sections: ['recentlyPlayed', 'madeForYou', 'newReleases'] },
 };

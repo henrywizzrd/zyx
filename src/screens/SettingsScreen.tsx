@@ -33,6 +33,8 @@ export function SettingsScreen() {
 
   return (
     <ScrollView
+    bounces={false}
+    overScrollMode="never"
       contentContainerStyle={{
         paddingTop: pad.top + 16,
         paddingBottom: pad.bottom + pad.endPadding,

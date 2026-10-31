@@ -42,3 +42,38 @@ export const tracks: Track[] = [
   { id: 't3', title: 'Paper Planes', artist: 'Kite & Co', color: '#C25B3C', duration: 243 },
   { id: 't4', title: 'Afterglow', artist: 'Violet Hour', color: '#B02A5B', duration: 201 },
 ];
+
+export interface LibraryItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  kind: 'playlist' | 'album';
+  color: string;
+}
+
+export const profile = {
+  name: 'Espiso',
+  tag: 'sing',
+  wallColor: '#0B4A7A',
+  avatarColor: '#C25B3C',
+};
+
+export const followers = [
+  { id: 'f1', initial: 'T', color: '#5B3CC4' },
+  { id: 'f2', initial: 'M', color: '#2E7D6B' },
+  { id: 'f3', initial: 'K', color: '#B02A5B' },
+  { id: 'f4', initial: 'L', color: '#7A8A2E' },
+];
+
+export const libraryItems: LibraryItem[] = [
+  { id: 'l1', title: 'Liked Songs', subtitle: 'Playlist • Espiso', kind: 'playlist', color: '#5B3CC4' },
+  { id: 'l2', title: 'Chill Vibes', subtitle: 'Playlist • Espiso', kind: 'playlist', color: '#2E7D6B' },
+  { id: 'l3', title: 'After Hours', subtitle: 'Album • Neon Atlas', kind: 'album', color: '#B02A5B' },
+  { id: 'l4', title: 'Late Night Feeling', subtitle: 'Playlist • Espiso', kind: 'playlist', color: '#3C6DC2' },
+  { id: 'l5', title: 'Golden Hour', subtitle: 'Album • Harbor Lights', kind: 'album', color: '#C2A23C' },
+  { id: 'l6', title: 'Road Trip', subtitle: 'Playlist • Espiso', kind: 'playlist', color: '#C25B3C' },
+  { id: 'l7', title: 'Focus Flow', subtitle: 'Playlist • Espiso', kind: 'playlist', color: '#7A8A2E' },
+  { id: 'l8', title: 'Midnight Tales', subtitle: 'Album • Violet Hour', kind: 'album', color: '#6E2E8A' },
+  { id: 'l9', title: 'Workout Mix', subtitle: 'Playlist • Espiso', kind: 'playlist', color: '#8A2E2E' },
+  { id: 'l10', title: 'Lo-fi Beats', subtitle: 'Playlist • Espiso', kind: 'playlist', color: '#2E5E8A' },
+];

@@ -10,6 +10,7 @@ import { SettingsScreen } from './src/screens/SettingsScreen';
 import { NowPlayingScreen } from './src/screens/NowPlayingScreen';
 import { TabId } from './src/theme/types';
 import { DropPreview } from './src/components/DropPreview';
+import { LibraryScreen } from './src/screens/LibraryScreen';
 
 function Placeholder({ name }: { name: string }) {
   const { theme } = useTheme();
@@ -30,7 +31,7 @@ function Root() {
       <StatusBar barStyle="light-content" />
       {tab === 'home' && <HomeScreen />}
       {tab === 'search' && <Placeholder name="Search" />}
-      {tab === 'library' && <Placeholder name="Library" />}
+      {tab === 'library' && <LibraryScreen />}
       {tab === 'settings' && <SettingsScreen />}
       {tab === 'player' && <NowPlayingScreen />}
       <DropPreview />
