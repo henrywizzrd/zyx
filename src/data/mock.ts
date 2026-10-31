@@ -27,3 +27,18 @@ export const newReleases: Item[] = [
   { id: 'n3', title: 'Song Three', subtitle: 'Single', color: '#5E8A2E' },
   { id: 'n4', title: 'Song Four', subtitle: 'EP', color: '#6E2E8A' },
 ];
+
+export interface Track {
+  id: string;
+  title: string;
+  artist: string;
+  color: string;
+  duration: number; // giây
+}
+
+export const tracks: Track[] = [
+  { id: 't1', title: 'Midnight Drive', artist: 'Neon Atlas', color: '#5B3CC4', duration: 214 },
+  { id: 't2', title: 'Slow Tides', artist: 'Harbor Lights', color: '#2E7D6B', duration: 187 },
+  { id: 't3', title: 'Paper Planes', artist: 'Kite & Co', color: '#C25B3C', duration: 243 },
+  { id: 't4', title: 'Afterglow', artist: 'Violet Hour', color: '#B02A5B', duration: 201 },
+];

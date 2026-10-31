@@ -1,27 +1,120 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { defaultTheme } from './defaultTheme';
-import { DockPosition, Theme } from './types';
+import { HomeSection, MiniPlayerVariant, Position, TabId, Theme } from './types';
+
+const STORAGE_KEY = 'zyx:theme';
+
+const POSITIONS: Position[] = [
+  'bottom', 'top', 'left', 'right',
+  'top-left', 'top-right', 'bottom-left', 'bottom-right',
+];
+const VARIANTS: MiniPlayerVariant[] = ['pill', 'rect'];
+const TABS: TabId[] = ['home', 'search', 'library', 'settings'];
+const SECTIONS: HomeSection[] = ['recentlyPlayed', 'madeForYou', 'newReleases'];
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+// Trộn bản đã lưu vào bản mặc định: thiếu trường thì lấy mặc định, sai kiểu thì bỏ.
+// Nhờ vậy sau này thêm trường mới vào theme thì bản lưu cũ vẫn chạy được.
+function merge<T>(base: T, saved: unknown): T {
+  if (isPlainObject(base)) {
+    const src = isPlainObject(saved) ? saved : {};
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(base)) {
+      out[key] = merge((base as Record<string, unknown>)[key], src[key]);
+    }
+    return out as T;
+  }
+  if (Array.isArray(base)) return (Array.isArray(saved) ? saved : base) as T;
+  return (typeof saved === typeof base ? saved : base) as T;
+}
+
+// Chặn giá trị không hợp lệ (ví dụ file lưu bị sửa tay hoặc từ phiên bản cũ)
+function sanitize(t: Theme): Theme {
+  const d = defaultTheme;
+  const items = t.dock.items.filter((i) => TABS.includes(i));
+  const sections = t.home.sections.filter((s) => SECTIONS.includes(s));
+  return {
+    ...t,
+    dock: {
+      ...t.dock,
+      position: POSITIONS.includes(t.dock.position) ? t.dock.position : d.dock.position,
+      items: items.length ? items : d.dock.items,
+    },
+    miniPlayer: {
+      ...t.miniPlayer,
+      position: POSITIONS.includes(t.miniPlayer.position) ? t.miniPlayer.position : d.miniPlayer.position,
+      variant: VARIANTS.includes(t.miniPlayer.variant) ? t.miniPlayer.variant : d.miniPlayer.variant,
+    },
+    home: { ...t.home, sections: sections.length ? sections : d.home.sections },
+  };
+}
 
 interface ThemeContextValue {
   theme: Theme;
   setTheme: (t: Theme) => void;
-  setDockPosition: (p: DockPosition) => void;
+  resetTheme: () => void;
+  setDockPosition: (p: Position) => void;
+  setMiniPlayerPosition: (p: Position) => void;
+  setMiniPlayerVariant: (v: MiniPlayerVariant) => void;
+  setMerged: (merged: boolean) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(defaultTheme);
+  const [theme, setThemeState] = useState<Theme>(defaultTheme);
+  const [ready, setReady] = useState(false);
 
-  const value = useMemo<ThemeContextValue>(
-    () => ({
+  // Đọc theme đã lưu khi mở app
+  useEffect(() => {
+    let alive = true;
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((raw) => {
+        if (raw && alive) setThemeState(sanitize(merge(defaultTheme, JSON.parse(raw))));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setReady(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Lưu lại mỗi khi theme đổi (chờ 300ms để không ghi liên tục)
+  useEffect(() => {
+    if (!ready) return;
+    const id = setTimeout(() => {
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(theme)).catch(() => {});
+    }, 300);
+    return () => clearTimeout(id);
+  }, [theme, ready]);
+
+  const value = useMemo<ThemeContextValue>(() => {
+    const patchMini = (patch: Partial<Theme['miniPlayer']>) =>
+      setThemeState((t) => ({ ...t, miniPlayer: { ...t.miniPlayer, ...patch } }));
+
+    return {
       theme,
-      setTheme,
+      setTheme: setThemeState,
+      resetTheme: () => setThemeState(defaultTheme),
       setDockPosition: (position) =>
-        setTheme((t) => ({ ...t, dock: { ...t.dock, position } })),
-    }),
-    [theme]
-  );
+        setThemeState((t) => ({ ...t, dock: { ...t.dock, position } })),
+      setMiniPlayerPosition: (position) => patchMini({ position }),
+      setMiniPlayerVariant: (variant) => patchMini({ variant }),
+      setMerged: (merged) => patchMini({ merged }),
+    };
+  }, [theme]);
+
+  // Chờ đọc xong để không bị nháy từ giao diện mặc định sang giao diện đã lưu
+  if (!ready) {
+    return <View style={{ flex: 1, backgroundColor: defaultTheme.background.color }} />;
+  }
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

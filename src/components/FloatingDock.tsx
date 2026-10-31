@@ -1,30 +1,35 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, LayoutAnimation, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { EdgeInsets, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
-import { DockPosition, TabId } from '../theme/types';
+import { usePlayer } from '../player/PlayerProvider';
+import { TabId } from '../theme/types';
+import {
+  computeLayout, DOCK_GAP, DOCK_PADDING, DOCK_THICKNESS, ITEM_SIZE,
+  isVertical, MP_THICKNESS, STACK_GAP,
+} from './layout';
 
-const ITEM_SIZE = 52;
-const PADDING = 8;
-const DOCK_THICKNESS = ITEM_SIZE + PADDING * 2;
+const USE_NATIVE = Platform.OS !== 'web';
 
-const ICONS: Record<TabId, { on: keyof typeof Ionicons.glyphMap; off: keyof typeof Ionicons.glyphMap }> = {
+type Origin = { cx: number; cy: number };
+
+const ICONS: Record<Exclude<TabId, 'player'>, { on: keyof typeof Ionicons.glyphMap; off: keyof typeof Ionicons.glyphMap }> = {
   home: { on: 'home', off: 'home-outline' },
   search: { on: 'search', off: 'search-outline' },
   library: { on: 'library', off: 'library-outline' },
   settings: { on: 'settings', off: 'settings-outline' },
 };
 
-const LABELS: Record<TabId, string> = {
+const LABELS: Record<Exclude<TabId, 'player'>, string> = {
   home: 'Home',
   search: 'Search',
   library: 'Library',
   settings: 'Settings',
 };
 
-// Dock không còn đẩy nội dung. Hook này chỉ trả về safe area,
-// kèm endPadding để màn hình cuộn có thể kéo mục cuối lên khỏi dock.
+// Dock và mini player nổi trên nội dung, nên chỉ trả về safe area.
+// endPadding dùng để màn hình cuộn kéo được mục cuối lên khỏi các khối nổi ở đáy.
 export function useContentInsets() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
@@ -33,75 +38,145 @@ export function useContentInsets() {
     bottom: insets.bottom,
     left: insets.left,
     right: insets.right,
-    endPadding: DOCK_THICKNESS + theme.dock.style.margin * 2,
+    endPadding: DOCK_THICKNESS + MP_THICKNESS + STACK_GAP + theme.dock.style.margin * 2,
   };
 }
 
-function placement(position: DockPosition, insets: EdgeInsets, m: number): ViewStyle {
-  const top = insets.top + m;
-  const bottom = insets.bottom + m;
-  const left = insets.left + m;
-  const right = insets.right + m;
+function PlayerItem({
+  active,
+  onPress,
+  onDetach,
+}: {
+  active: boolean;
+  onPress: () => void;
+  onDetach: (origin: Origin | null) => void;
+}) {
+  const { theme } = useTheme();
+  const { track } = usePlayer();
+  const appear = useRef(new Animated.Value(0)).current;
+  const ref = useRef<View>(null);
 
-  switch (position) {
-    case 'bottom':
-      return { left: 0, right: 0, bottom, alignItems: 'center' };
-    case 'top':
-      return { left: 0, right: 0, top, alignItems: 'center' };
-    case 'left':
-      return { top: 0, bottom: 0, left, justifyContent: 'center' };
-    case 'right':
-      return { top: 0, bottom: 0, right, justifyContent: 'center' };
-    case 'top-left':
-      return { top, left };
-    case 'top-right':
-      return { top, right };
-    case 'bottom-left':
-      return { bottom, left };
-    case 'bottom-right':
-      return { bottom, right };
-  }
+  useEffect(() => {
+    Animated.spring(appear, { toValue: 1, friction: 5, useNativeDriver: USE_NATIVE }).start();
+  }, [appear]);
+
+  // Đo vị trí của mục này để mini player bay ra từ đúng chỗ đó
+  const detach = () => {
+    if (!ref.current) return onDetach(null);
+    ref.current.measureInWindow((x, y, w, h) => onDetach({ cx: x + w / 2, cy: y + h / 2 }));
+  };
+
+  return (
+    <Pressable
+      ref={ref}
+      collapsable={false}
+      onPress={onPress}
+      onLongPress={detach}
+      delayLongPress={350}
+      style={{ width: ITEM_SIZE, height: ITEM_SIZE, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Animated.View
+        style={{
+          transform: [{ scale: appear }],
+          width: 40,
+          height: 40,
+          borderRadius: 12,
+          borderWidth: 2,
+          padding: 2,
+          borderColor: active ? theme.colors.accent : 'transparent',
+        }}
+      >
+        <View style={{ flex: 1, borderRadius: 9, backgroundColor: track.color, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="musical-notes" size={16} color="#FFFFFF" />
+        </View>
+      </Animated.View>
+    </Pressable>
+  );
 }
 
 export function FloatingDock({ active, onChange }: { active: TabId; onChange: (t: TabId) => void }) {
-  const { theme } = useTheme();
+  const { theme, setMerged } = useTheme();
+  const { dockRef, hoverDock, setEmergeFrom } = usePlayer();
   const insets = useSafeAreaInsets();
+  const { dockStyle } = computeLayout(theme, insets);
   const { position, items, style } = theme.dock;
 
-  const vertical = position !== 'top' && position !== 'bottom';
+  const ids: TabId[] = theme.miniPlayer.merged ? [...items, 'player'] : items;
+  const vertical = isVertical(position);
+
+  // Hiệu ứng "hút" khi mini player được kéo tới gần dock
+  const hoverScale = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.spring(hoverScale, { toValue: hoverDock ? 1.08 : 1, friction: 6, useNativeDriver: USE_NATIVE }).start();
+  }, [hoverDock, hoverScale]);
+
+  // Hiệu ứng co lại khi dock mất một mục (mini player được tách ra)
+  const squash = useRef(new Animated.Value(1)).current;
+  const prevCount = useRef(ids.length);
+  useEffect(() => {
+    if (ids.length < prevCount.current) {
+      squash.setValue(1.12);
+      Animated.spring(squash, { toValue: 1, friction: 4, useNativeDriver: USE_NATIVE }).start();
+    }
+    prevCount.current = ids.length;
+  }, [ids.length, squash]);
+
+  const detachPlayer = (origin: Origin | null) => {
+    setEmergeFrom(origin);
+    if (Platform.OS !== 'web') LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
+    setMerged(false);
+  };
+
   return (
-    <View
-      pointerEvents="box-none"
-      style={[styles.layer, placement(position, insets, style.margin)]}
-    >
-      <View
-        style={{
-          flexDirection: vertical ? 'column' : 'row',
-          padding: PADDING,
-          gap: 6,
-          backgroundColor: style.background,
-          borderRadius: style.radius,
-        }}
-      >
-        {items.map((id) => {
-          const isActive = id === active;
-          const color = isActive ? theme.colors.accent : theme.colors.textSecondary;
-          return (
-            <Pressable
-              key={id}
-              onPress={() => onChange(id)}
-              style={{ width: ITEM_SIZE, height: ITEM_SIZE, alignItems: 'center', justifyContent: 'center' }}
-            >
-              <Ionicons name={isActive ? ICONS[id].on : ICONS[id].off} size={24} color={color} />
-              {style.showLabels && <Text style={{ color, fontSize: 10, marginTop: 2 }}>{LABELS[id]}</Text>}
-            </Pressable>
-          );
-        })}
+    <View pointerEvents="box-none" style={[styles.layer, dockStyle]}>
+      <View ref={dockRef} collapsable={false}>
+        <Animated.View
+          style={{
+            flexDirection: vertical ? 'column' : 'row',
+            padding: DOCK_PADDING,
+            gap: DOCK_GAP,
+            backgroundColor: style.background,
+            borderRadius: style.radius,
+            transform: [{ scale: hoverScale }, { scale: squash }],
+          }}
+        >
+          {ids.map((id) => {
+            const isActive = id === active;
+            if (id === 'player') {
+              return (
+                <PlayerItem
+                  key={id}
+                  active={isActive}
+                  onPress={() => onChange('player')}
+                  onDetach={detachPlayer} // giữ lâu để tách player ra khỏi dock
+                />
+              );
+            }
+            const color = isActive ? theme.colors.accent : theme.colors.textSecondary;
+            return (
+              <Pressable
+                key={id}
+                onPress={() => onChange(id)}
+                style={{ width: ITEM_SIZE, height: ITEM_SIZE, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Ionicons name={isActive ? ICONS[id].on : ICONS[id].off} size={24} color={color} />
+                {style.showLabels && <Text style={{ color, fontSize: 10, marginTop: 2 }}>{LABELS[id]}</Text>}
+              </Pressable>
+            );
+          })}
+          <View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              { borderRadius: style.radius, borderWidth: 2, borderColor: theme.colors.accent, opacity: hoverDock ? 1 : 0 },
+            ]}
+          />
+        </Animated.View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  layer: { position: 'absolute' },
+  layer: { position: 'absolute', zIndex: 5 },
 });

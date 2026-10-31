@@ -15,5 +15,11 @@ export const defaultTheme: Theme = {
     items: ['home', 'search', 'library', 'settings'],
     style: { background: '#242424F2', radius: 28, margin: 12, showLabels: false },
   },
+  miniPlayer: {
+    variant: 'pill',
+    position: 'bottom',
+    merged: false,
+    style: { background: '#242424F2', rectRadius: 18 },
+  },
   home: { sections: ['recentlyPlayed', 'madeForYou', 'newReleases'] },
 };

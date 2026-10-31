@@ -1,41 +1,77 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { useContentInsets } from '../components/FloatingDock';
-import { DockPosition } from '../theme/types';
+import { MiniPlayerVariant, Position } from '../theme/types';
 
-const POSITIONS: DockPosition[] = [
+const POSITIONS: Position[] = [
   'bottom', 'top', 'left', 'right',
   'top-left', 'top-right', 'bottom-left', 'bottom-right',
 ];
+const VARIANTS: MiniPlayerVariant[] = ['pill', 'rect'];
 
-export function SettingsScreen() {
-  const { theme, setDockPosition } = useTheme();
-  const pad = useContentInsets();
-
+function Chips<T extends string>({ options, value, onSelect }: { options: T[]; value: T; onSelect: (v: T) => void }) {
+  const { theme } = useTheme();
   return (
-    <View style={{ flex: 1, paddingTop: pad.top + 16, paddingLeft: pad.left + 16, paddingRight: pad.right + 16 }}>
-      <Text style={[styles.title, { color: theme.colors.text }]}>Settings</Text>
-      <Text style={{ color: theme.colors.textSecondary, marginBottom: 12 }}>Dock position</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {POSITIONS.map((p) => {
-          const on = theme.dock.position === p;
-          return (
-            <Pressable
-              key={p}
-              onPress={() => setDockPosition(p)}
-              style={[styles.btn, { backgroundColor: on ? theme.colors.accent : theme.colors.surface }]}
-            >
-              <Text style={{ color: on ? '#000' : theme.colors.text, fontWeight: '600' }}>{p}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+    <View style={styles.chips}>
+      {options.map((o) => {
+        const on = o === value;
+        return (
+          <Pressable
+            key={o}
+            onPress={() => onSelect(o)}
+            style={[styles.chip, { backgroundColor: on ? theme.colors.accent : theme.colors.surface }]}
+          >
+            <Text style={{ color: on ? '#000' : theme.colors.text, fontWeight: '600' }}>{o}</Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
+export function SettingsScreen() {
+  const { theme, resetTheme, setDockPosition, setMiniPlayerPosition, setMiniPlayerVariant, setMerged } = useTheme();  const pad = useContentInsets();
+  const label = { color: theme.colors.textSecondary, marginTop: 24, marginBottom: 12 };
+
+  return (
+    <ScrollView
+      contentContainerStyle={{
+        paddingTop: pad.top + 16,
+        paddingBottom: pad.bottom + pad.endPadding,
+        paddingLeft: pad.left + 16,
+        paddingRight: pad.right + 16,
+      }}
+    >
+      <Text style={[styles.title, { color: theme.colors.text }]}>Settings</Text>
+
+      <Text style={label}>Dock position</Text>
+      <Chips options={POSITIONS} value={theme.dock.position} onSelect={setDockPosition} />
+
+      <Text style={label}>Mini player style</Text>
+      <Chips options={VARIANTS} value={theme.miniPlayer.variant} onSelect={setMiniPlayerVariant} />
+
+      <Text style={label}>Mini player position</Text>
+      <Chips options={POSITIONS} value={theme.miniPlayer.position} onSelect={setMiniPlayerPosition} />
+
+      <Text style={label}>Merge mini player into dock</Text>
+      <Chips
+        options={['on', 'off'] as const}
+        value={theme.miniPlayer.merged ? 'on' : 'off'}
+        onSelect={(v) => setMerged(v === 'on')}
+      />
+      <Pressable
+        onPress={resetTheme}
+        style={[styles.chip, { backgroundColor: theme.colors.surface, alignSelf: 'flex-start', marginTop: 32 }]}
+      >
+        <Text style={{ color: theme.colors.text, fontWeight: '600' }}>Reset to default</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
 const styles = StyleSheet.create({
-  title: { fontSize: 26, fontWeight: '700', marginBottom: 24 },
-  btn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
+  title: { fontSize: 26, fontWeight: '700' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
 });
