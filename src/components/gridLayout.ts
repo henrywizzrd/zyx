@@ -1,6 +1,9 @@
 // Tính toán lưới cho danh sách kéo thả. File thuần (không import React Native)
 // nên có thể test độc lập. Mọi ô được đặt tuyệt đối theo index, nên đổi thứ tự
 // chỉ là đổi toạ độ đích, không bao giờ làm layout thật thay đổi.
+//
+// Các hàm bên dưới có 'worklet' vì được gọi trực tiếp trên UI thread khi kéo
+// (xem Reorderable.tsx). Chúng vẫn gọi bình thường được ở JS thread.
 
 export interface Geometry {
   columns: number; // 1 = dạng danh sách
@@ -29,6 +32,7 @@ export function computeSlots(
   fallbackH: number,
   g: Geometry
 ): GridResult {
+  'worklet';
   const cols = Math.max(1, Math.floor(g.columns));
   const rowCount = Math.ceil(ids.length / cols);
   const rowH: number[] = [];
@@ -63,6 +67,7 @@ export function computeSlots(
 
 // Vị trí (index) có tâm gần điểm (cx, cy) nhất. Trả -1 nếu không có ô nào.
 export function slotIndexAt(rects: Rect[], cx: number, cy: number): number {
+  'worklet';
   let best = -1;
   let bestD = Infinity;
   for (let i = 0; i < rects.length; i++) {
@@ -80,6 +85,7 @@ export function slotIndexAt(rects: Rect[], cx: number, cy: number): number {
 
 // Trả mảng mới, id được chuyển tới vị trí toIndex. Không sửa mảng gốc.
 export function moveId(order: string[], id: string, toIndex: number): string[] {
+  'worklet';
   const from = order.indexOf(id);
   if (from < 0) return order;
   const next = order.slice();

@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
@@ -7,7 +7,8 @@ import { useContentInsets } from '../components/FloatingDock';
 import { LibraryLayout } from '../theme/types';
 import { followers, libraryItems, LibraryItem, profile } from '../data/mock';
 import { useFrame } from '../components/layout';
-import { Reorderable, ScrollRef } from '../components/Reorderable';
+import { Reorderable } from '../components/Reorderable';
+import { ReorderableScrollView } from '../components/ReorderableScrollView';
 
 const H_PAD = 16;
 
@@ -52,11 +53,6 @@ export function LibraryScreen() {
   const [sort, setSort] = useState<Sort>('recents');
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
-
-  // Dùng cho kéo thả đổi thứ tự: tắt cuộn khi đang kéo và tự cuộn khi kéo sát mép
-  const scrollRef = useRef<ScrollRef>(null);
-  const scrollY = useRef(0);
-  const [scrollEnabled, setScrollEnabled] = useState(true);
 
   const layout = theme.library.layout;
   const innerW = width - H_PAD * 2; 
@@ -160,25 +156,12 @@ export function LibraryScreen() {
         gapY={grid.gapY}
         renderItem={renderItem}
         onReorder={setLibraryOrder}
-        scrollRef={scrollRef}
-        scrollY={scrollY}
-        setScrollEnabled={setScrollEnabled}
       />
     );
   };
 
   return (
-    <ScrollView
-    ref={scrollRef}
-    scrollEnabled={scrollEnabled}
-    onScroll={(e) => {
-      scrollY.current = e.nativeEvent.contentOffset.y;
-    }}
-    scrollEventThrottle={16}
-    bounces={false}
-    overScrollMode="never"
-    contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}
-    >
+    <ReorderableScrollView contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}>
       <View style={{ width: '100%' }}>
         {/* Nền (wall) của profile, sau này cho người dùng tự chọn ảnh */}
         <LinearGradient
@@ -269,7 +252,7 @@ export function LibraryScreen() {
           {renderItems()}
         </View>
       </View>
-    </ScrollView>
+    </ReorderableScrollView>
   );
 }
 
