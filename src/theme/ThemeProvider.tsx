@@ -54,6 +54,7 @@ function sanitize(t: Theme): Theme {
     library: {
       ...t.library,
       layout: LIBRARY_LAYOUTS.includes(t.library.layout) ? t.library.layout : d.library.layout,
+      order: t.library.order.filter((id) => typeof id === 'string'),
     },
     home: { ...t.home, sections: sections.length ? sections : d.home.sections },
   };
@@ -68,6 +69,7 @@ interface ThemeContextValue {
   setMiniPlayerVariant: (v: MiniPlayerVariant) => void;
   setMerged: (merged: boolean) => void;
   setLibraryLayout: (l: LibraryLayout) => void;
+  setLibraryOrder: (ids: string[]) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -116,6 +118,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setMerged: (merged) => patchMini({ merged }),
       setLibraryLayout: (layout) =>
         setThemeState((t) => ({ ...t, library: { ...t.library, layout } })),
+      setLibraryOrder: (order) =>
+        setThemeState((t) => ({ ...t, library: { ...t.library, order } })),
     };
   }, [theme]);
 

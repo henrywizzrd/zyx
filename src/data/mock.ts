@@ -77,3 +77,16 @@ export const libraryItems: LibraryItem[] = [
   { id: 'l9', title: 'Workout Mix', subtitle: 'Playlist • Espiso', kind: 'playlist', color: '#8A2E2E' },
   { id: 'l10', title: 'Lo-fi Beats', subtitle: 'Playlist • Espiso', kind: 'playlist', color: '#2E5E8A' },
 ];
+
+export const genres = [
+  { id: 'g1', title: 'Pop', color: '#8D67AB' },
+  { id: 'g2', title: 'Hip-Hop', color: '#BA5D07' },
+  { id: 'g3', title: 'Rock', color: '#E91429' },
+  { id: 'g4', title: 'Chill', color: '#477D95' },
+  { id: 'g5', title: 'Lo-fi', color: '#1E3264' },
+  { id: 'g6', title: 'Dance', color: '#D84000' },
+  { id: 'g7', title: 'Indie', color: '#608108' },
+  { id: 'g8', title: 'Jazz', color: '#7D4B32' },
+  { id: 'g9', title: 'V-Pop', color: '#AF2896' },
+  { id: 'g10', title: 'Focus', color: '#503750' },
+];

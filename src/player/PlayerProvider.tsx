@@ -20,6 +20,7 @@ interface PlayerContextValue {
   setDrag: (d: DragState | null) => void;
   emergeFrom: { cx: number; cy: number } | null;
   setEmergeFrom: (o: { cx: number; cy: number } | null) => void;
+  playTrack: (id: string) => void;
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
@@ -46,6 +47,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     else goTo(index - 1);
   }, [goTo, index, progress]);
   const togglePlay = useCallback(() => setIsPlaying((p) => !p), []);
+  const playTrack = useCallback((id: string) => {
+    const i = tracks.findIndex((t) => t.id === id);
+    if (i < 0) return;
+    setIndex(i);
+    setProgress(0);
+    setIsPlaying(true);
+  }, []);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -59,10 +67,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<PlayerContextValue>(
     () => ({
-      track, isPlaying, progress, togglePlay, next, prev,
+      track, isPlaying, progress, togglePlay, next, prev, playTrack,
       dockRef, playerRef, drag, setDrag, emergeFrom, setEmergeFrom,
     }),
-    [track, isPlaying, progress, togglePlay, next, prev, drag, emergeFrom]
+    [track, isPlaying, progress, togglePlay, next, prev, playTrack, drag, emergeFrom]
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;

@@ -11,6 +11,7 @@ import { NowPlayingScreen } from './src/screens/NowPlayingScreen';
 import { TabId } from './src/theme/types';
 import { DropPreview } from './src/components/DropPreview';
 import { LibraryScreen } from './src/screens/LibraryScreen';
+import { SearchScreen } from './src/screens/SearchScreen';
 
 function Placeholder({ name }: { name: string }) {
   const { theme } = useTheme();
@@ -29,14 +30,16 @@ function Root() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.background.color }}>
       <StatusBar barStyle="light-content" />
-      {tab === 'home' && <HomeScreen />}
-      {tab === 'search' && <Placeholder name="Search" />}
-      {tab === 'library' && <LibraryScreen />}
-      {tab === 'settings' && <SettingsScreen />}
-      {tab === 'player' && <NowPlayingScreen />}
-      <DropPreview />
-      <MiniPlayer hidden={tab === 'player'} onOpen={() => setTab('player')} />
-      <FloatingDock active={tab} onChange={setTab} />
+      <View style={{ flex: 1 }}>
+        {tab === 'home' && <HomeScreen />}
+        {tab === 'search' && <SearchScreen />}
+        {tab === 'library' && <LibraryScreen />}
+        {tab === 'settings' && <SettingsScreen />}
+        {tab === 'player' && <NowPlayingScreen />}
+        <DropPreview />
+        <MiniPlayer hidden={tab === 'player'} onOpen={() => setTab('player')} />
+        <FloatingDock active={tab} onChange={setTab} />
+      </View>
     </View>
   );
 }

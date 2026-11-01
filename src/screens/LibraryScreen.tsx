@@ -1,13 +1,14 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
 import { useContentInsets } from '../components/FloatingDock';
 import { LibraryLayout } from '../theme/types';
 import { followers, libraryItems, LibraryItem, profile } from '../data/mock';
+import { useFrame } from '../components/layout';
+import { Reorderable, ScrollRef } from '../components/Reorderable';
 
-const MAX_W = 600; // giữ bố cục giống điện thoại khi xem trên web
 const H_PAD = 16;
 
 const LAYOUT_ORDER: LibraryLayout[] = ['list', 'columns', 'covers2', 'covers3'];
@@ -43,26 +44,44 @@ function CoverBox({ item, size, radius }: { item: LibraryItem; size: number; rad
 }
 
 export function LibraryScreen() {
-  const { theme, setLibraryLayout } = useTheme();
+  const { theme, setLibraryLayout, setLibraryOrder } = useTheme();
   const pad = useContentInsets();
-  const { width } = useWindowDimensions();
+  const { width } = useFrame();
 
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('recents');
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
 
+  // Dùng cho kéo thả đổi thứ tự: tắt cuộn khi đang kéo và tự cuộn khi kéo sát mép
+  const scrollRef = useRef<ScrollRef>(null);
+  const scrollY = useRef(0);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
+
   const layout = theme.library.layout;
-  const innerW = Math.min(width, MAX_W) - H_PAD * 2;
+  const innerW = width - H_PAD * 2; 
   const { text, textSecondary, accent, surface } = theme.colors;
 
+  // Áp dụng thứ tự do người dùng tự sắp xếp (mục chưa có trong thứ tự thì xếp sau, giữ nguyên vị trí cũ)
+  const ordered = useMemo(() => {
+    const order = theme.library.order;
+    const pos = new Map(order.map((id, i) => [id, i] as const));
+    return libraryItems
+      .map((it, i) => ({ it, key: pos.get(it.id) ?? order.length + i }))
+      .sort((a, b) => a.key - b.key)
+      .map((x) => x.it);
+  }, [theme.library.order]);
+
   const items = useMemo(() => {
-    let list = libraryItems.filter((i) => filter === 'all' || i.kind === filter);
+    let list = ordered.filter((i) => filter === 'all' || i.kind === filter);
     const q = query.trim().toLowerCase();
     if (q) list = list.filter((i) => i.title.toLowerCase().includes(q));
     if (sort === 'alpha') list = [...list].sort((a, b) => a.title.localeCompare(b.title));
     return list;
-  }, [filter, query, sort]);
+  }, [ordered, filter, query, sort]);
+
+  // Chỉ cho kéo đổi thứ tự khi đang xem đủ danh sách theo thứ tự của mình
+  const reorderable = filter === 'all' && query.trim() === '' && sort === 'recents';
 
   const cycleLayout = () => {
     const next = LAYOUT_ORDER[(LAYOUT_ORDER.indexOf(layout) + 1) % LAYOUT_ORDER.length];
@@ -86,57 +105,81 @@ export function LibraryScreen() {
       return <Text style={{ color: textSecondary, marginTop: 24 }}>Không có kết quả</Text>;
     }
 
+    // Mô tả lưới cho Reorderable (columns = 1 là dạng danh sách)
+    let grid: { columns: number; cellWidth: number; gapX: number; gapY: number };
+    let renderItem: (it: LibraryItem) => React.ReactNode;
+
     if (layout === 'list') {
-      return items.map((it) => (
-        <Pressable key={it.id} style={styles.listRow}>
+      grid = { columns: 1, cellWidth: innerW, gapX: 0, gapY: 4 };
+      renderItem = (it) => (
+        <View style={styles.listRow}>
           <CoverBox item={it} size={56} radius={4} />
           <View style={{ flex: 1 }}>
             <Text numberOfLines={1} style={{ color: text, fontSize: 16, fontWeight: '600' }}>{it.title}</Text>
             <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>{it.subtitle}</Text>
           </View>
-        </Pressable>
-      ));
-    }
-
-    if (layout === 'columns') {
-      const w = (innerW - 8) / 2;
-      return (
-        <View style={styles.wrap8}>
-          {items.map((it) => (
-            <Pressable key={it.id} style={[styles.chipRow, { width: w, backgroundColor: surface }]}>
-              <CoverBox item={it} size={56} radius={0} />
-              <Text numberOfLines={2} style={{ color: text, flex: 1, marginHorizontal: 10, fontSize: 13, fontWeight: '600' }}>
-                {it.title}
-              </Text>
-            </Pressable>
-          ))}
+        </View>
+      );
+    } else if (layout === 'columns') {
+      const cols = Math.max(2, Math.floor(innerW / 220));
+      const w = (innerW - 8 * (cols - 1)) / cols;
+      grid = { columns: cols, cellWidth: w, gapX: 8, gapY: 8 };
+      renderItem = (it) => (
+        <View style={[styles.chipRow, { backgroundColor: surface }]}>
+          <CoverBox item={it} size={56} radius={0} />
+          <Text numberOfLines={2} style={{ color: text, flex: 1, marginHorizontal: 10, fontSize: 13, fontWeight: '600' }}>
+            {it.title}
+          </Text>
+        </View>
+      );
+    } else {
+      const base = layout === 'covers2' ? 2 : 3;
+      const targetW = layout === 'covers2' ? 200 : 140;
+      const cols = Math.max(base, Math.floor(innerW / targetW));
+      const gap = 14;
+      const w = (innerW - gap * (cols - 1)) / cols;
+      grid = { columns: cols, cellWidth: w, gapX: gap, gapY: gap };
+      renderItem = (it) => (
+        <View>
+          <CoverBox item={it} size={w} radius={6} />
+          <Text numberOfLines={1} style={{ color: text, fontSize: 14, fontWeight: '600', marginTop: 8 }}>{it.title}</Text>
+          <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 12, marginTop: 2 }}>{it.subtitle}</Text>
         </View>
       );
     }
 
-    const cols = layout === 'covers2' ? 2 : 3;
-    const gap = 14;
-    const w = (innerW - gap * (cols - 1)) / cols;
     return (
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>
-        {items.map((it) => (
-          <Pressable key={it.id} style={{ width: w }}>
-            <CoverBox item={it} size={w} radius={6} />
-            <Text numberOfLines={1} style={{ color: text, fontSize: 14, fontWeight: '600', marginTop: 8 }}>{it.title}</Text>
-            <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 12, marginTop: 2 }}>{it.subtitle}</Text>
-          </Pressable>
-        ))}
-      </View>
+      <Reorderable
+        // Đổi kiểu hiển thị hoặc bề rộng thì dựng lại để đo chiều cao ô từ đầu
+        key={`${layout}:${Math.round(grid.cellWidth)}`}
+        data={items}
+        enabled={reorderable}
+        columns={grid.columns}
+        cellWidth={grid.cellWidth}
+        gapX={grid.gapX}
+        gapY={grid.gapY}
+        renderItem={renderItem}
+        onReorder={setLibraryOrder}
+        scrollRef={scrollRef}
+        scrollY={scrollY}
+        setScrollEnabled={setScrollEnabled}
+      />
     );
   };
 
   return (
-    <ScrollView 
+    <ScrollView
+    ref={scrollRef}
+    scrollEnabled={scrollEnabled}
+    onScroll={(e) => {
+      scrollY.current = e.nativeEvent.contentOffset.y;
+    }}
+    scrollEventThrottle={16}
     bounces={false}
     overScrollMode="never"
     contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}
     >
-      <View style={{ width: '100%', maxWidth: MAX_W, alignSelf: 'center' }}>
+      <View style={{ width: '100%' }}>
         {/* Nền (wall) của profile, sau này cho người dùng tự chọn ảnh */}
         <LinearGradient
           colors={[profile.wallColor, theme.background.color]}
@@ -213,7 +256,7 @@ export function LibraryScreen() {
           )}
           <Pressable onPress={() => setSort((s) => (s === 'recents' ? 'alpha' : 'recents'))}>
             <Text style={{ color: textSecondary, fontSize: 13, fontWeight: '600' }}>
-              {sort === 'recents' ? 'Recents' : 'A–Z'}
+              {sort === 'recents' ? 'Custom order' : 'A–Z'}
             </Text>
           </Pressable>
           <Pressable onPress={cycleLayout} hitSlop={8}>
@@ -222,7 +265,7 @@ export function LibraryScreen() {
         </View>
 
         {/* Danh sách */}
-        <View style={{ paddingHorizontal: H_PAD, marginTop: 16, gap: layout === 'list' ? 4 : 0 }}>
+        <View style={{ paddingHorizontal: H_PAD, marginTop: 16 }}>
           {renderItems()}
         </View>
       </View>
@@ -238,6 +281,5 @@ const styles = StyleSheet.create({
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18 },
   searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 8, paddingHorizontal: 10 },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 },
-  wrap8: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chipRow: { height: 56, borderRadius: 6, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
 });

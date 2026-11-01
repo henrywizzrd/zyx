@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import { Animated, PanResponder, Platform, useWindowDimensions } from 'react-native';
+import { Animated, PanResponder, Platform } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { usePlayer } from '../player/PlayerProvider';
 import { Position } from '../theme/types';
-import { targetPosition } from './layout';
+import { targetPosition, useFrame } from './layout';
 
 const USE_NATIVE = Platform.OS !== 'web';
 const MERGE_PAD = 12; // ngón tay cách khối kia bao nhiêu px thì tính là chạm để hợp nhất
@@ -19,7 +19,7 @@ function isOver(r: Rect | null, px: number, py: number) {
 export function useDraggable(kind: 'dock' | 'player') {
   const { theme, setDockPosition, setMiniPlayerPosition, setMerged } = useTheme();
   const { dockRef, playerRef, drag, setDrag } = usePlayer();
-  const { width, height } = useWindowDimensions();
+  const { width, height, left } = useFrame();
 
   const selfRef = kind === 'dock' ? dockRef : playerRef;
   const otherRef = kind === 'dock' ? playerRef : dockRef;
@@ -38,8 +38,8 @@ export function useDraggable(kind: 'dock' | 'player') {
   const landFrom = useRef<{ cx: number; cy: number } | null>(null);
 
   // PanResponder chỉ tạo một lần nên cần đọc giá trị mới nhất qua ref
-  const latest = useRef({ width, height, position });
-  latest.current = { width, height, position };
+  const latest = useRef({ width, height, left, position });
+  latest.current = { width, height, left, position };
 
   const active = drag?.kind === kind;
   const merging = !!drag && drag.kind !== kind && drag.target === 'merge';
@@ -111,10 +111,10 @@ export function useDraggable(kind: 'dock' | 'player') {
       },
       onPanResponderMove: (_, g) => {
         pan.setValue({ x: g.dx, y: g.dy });
-        const { width: W, height: H } = latest.current;
+        const { width: W, height: H, left: L } = latest.current;
         const next: Position | 'merge' = isOver(otherRect.current, g.moveX, g.moveY)
-          ? 'merge'
-          : targetPosition(g.moveX, g.moveY, W, H);
+        ? 'merge'
+        : targetPosition(g.moveX - L, g.moveY, W, H);
         if (target.current !== next) {
           target.current = next;
           setDrag({ kind, target: next });

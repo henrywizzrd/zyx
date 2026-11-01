@@ -24,6 +24,6 @@ export interface Theme {
     merged: boolean;
     style: { background: string; rectRadius: number };
   };
-  library: { layout: LibraryLayout };
+  library: { layout: LibraryLayout; order: string[] };
   home: { sections: HomeSection[] };
 }
