@@ -99,3 +99,57 @@ export async function getAudio(videoId: string, log?: Log, muxed = false): Promi
   }
   throw new Error('Không client nào lấy được link phát.\n' + errors.join('\n'));
 }
+
+// ---------- Gợi ý trong lúc gõ (giống ô tìm kiếm của YouTube Music) ----------
+// Trả về hai thứ: các từ khoá gợi ý, và các bài hát / nghệ sĩ / album khớp luôn với chữ đang gõ.
+export type SuggestKind = 'song' | 'video' | 'artist' | 'album' | 'playlist';
+
+export interface SuggestItem {
+  kind: SuggestKind;
+  id: string;
+  title: string;
+  subtitle: string;
+  thumb?: string;
+  song?: Song; // chỉ có với bài hát / video (phát được ngay)
+}
+
+export interface Suggestions {
+  queries: string[];
+  items: SuggestItem[];
+}
+
+const SUGGEST_KINDS: SuggestKind[] = ['song', 'video', 'artist', 'album', 'playlist'];
+
+export async function getSuggestions(input: string): Promise<Suggestions> {
+  const yt = await getSession();
+  const sections = await yt.music.getSearchSuggestions(input);
+  const queries: string[] = [];
+  const items: SuggestItem[] = [];
+  for (const section of sections) {
+    for (const node of section.contents as any[]) {
+      if (node.type === 'SearchSuggestion' || node.type === 'HistorySuggestion') {
+        const q: string = node.suggestion?.toString?.() ?? '';
+        if (q && !queries.includes(q)) queries.push(q);
+        continue;
+      }
+      if (node.type !== 'MusicResponsiveListItem') continue;
+      const kind = node.item_type as SuggestKind;
+      if (!SUGGEST_KINDS.includes(kind) || !node.id) continue;
+      const title: string = node.title ?? node.name ?? '';
+      const artist: string = node.artists?.map((a: { name: string }) => a.name).join(', ') ?? node.author?.name ?? '';
+      const thumbs = node.thumbnails ?? [];
+      const thumb: string | undefined = thumbs[thumbs.length - 1]?.url;
+      const subtitle: string = node.subtitle?.toString?.() || artist;
+      const playable = kind === 'song' || kind === 'video';
+      items.push({
+        kind,
+        id: node.id,
+        title,
+        subtitle,
+        thumb,
+        song: playable ? { id: node.id, title, artist, duration: node.duration?.seconds, thumb } : undefined,
+      });
+    }
+  }
+  return { queries, items };
+}

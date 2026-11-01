@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Track } from '../data/mock';
 
 export type LyricLine = { t: number | null; text: string };
@@ -7,6 +8,7 @@ type Status = 'idle' | 'loading' | 'done';
 
 const BASE = 'https://lrclib.net/api';
 const cache = new Map<string, Lyrics | null>();
+const MAX_DURATION_DIFF = 3; // giây
 
 // Bỏ các đoạn như (feat. ...), (Remix), (Remastered) để dễ khớp tên bài
 const cleanTitle = (s: string) => s.replace(/\s*[\(\[](?:feat|ft|with|remaster|live|version|remix)[^\)\]]*[\)\]]/gi, '').trim();
@@ -60,10 +62,25 @@ export async function fetchLyrics(t: Track): Promise<Lyrics | null> {
 
   const list = await getJson(`${BASE}/search?${qs}`);
   if (Array.isArray(list)) {
-    const sorted = [...list].sort((x, y) => Math.abs((x.duration ?? 0) - t.duration) - Math.abs((y.duration ?? 0) - t.duration));
-    for (const it of sorted.slice(0, 5)) {
+    // Chỉ nhận bản có độ dài gần đúng bài đang phát. Lệch nhiều thường là bản khác (MV có intro, live, remix...)
+    // và lời sẽ chạy sai hẳn, thà không có lời đồng bộ còn hơn.
+    const diff = (x: any) => Math.abs((x.duration ?? 0) - t.duration);
+    const near = t.duration ? list.filter((x) => diff(x) <= MAX_DURATION_DIFF) : list;
+    const sorted = [...near].sort((x, y) => diff(x) - diff(y));
+    // Ưu tiên bản có lời chạy theo thời gian
+    for (const it of sorted.slice(0, 8)) {
+      if (it?.syncedLyrics) {
+        const r = fromItem(it);
+        if (r?.synced) return r;
+      }
+    }
+    for (const it of sorted.slice(0, 8)) {
       const r = fromItem(it);
       if (r) return r;
+    }
+    // Không có bản nào khớp độ dài: chỉ lấy lời thường (không chạy theo nhạc) để khỏi sai nhịp
+    for (const it of list.slice(0, 5)) {
+      if (it?.plainLyrics) return { synced: false, lines: String(it.plainLyrics).split('\n').map((text: string) => ({ t: null, text: text.trim() })) };
     }
   }
   return null;
@@ -93,4 +110,44 @@ export function useLyrics(track: Track, enabled: boolean) {
   }, [track.id, enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return state;
+}
+
+// ---------- Chỉnh lệch lời cho từng bài (lưu lại) ----------
+// Số dương: lời hiện sớm hơn. Số âm: lời hiện muộn hơn.
+const OFFSET_KEY = 'zyx:lyricOffset';
+let offsets: Record<string, number> | null = null;
+let offsetsLoad: Promise<Record<string, number>> | null = null;
+
+function loadOffsets(): Promise<Record<string, number>> {
+  if (offsets) return Promise.resolve(offsets);
+  if (!offsetsLoad) {
+    offsetsLoad = AsyncStorage.getItem(OFFSET_KEY)
+      .then((raw) => (offsets = raw ? JSON.parse(raw) : {}))
+      .catch(() => (offsets = {}));
+  }
+  return offsetsLoad;
+}
+
+export function useLyricOffset(trackId: string): [number, (v: number) => void] {
+  const [value, setValue] = useState(() => offsets?.[trackId] ?? 0);
+  useEffect(() => {
+    let dead = false;
+    loadOffsets().then((o) => !dead && setValue(o[trackId] ?? 0));
+    return () => {
+      dead = true;
+    };
+  }, [trackId]);
+  const set = useCallback(
+    (v: number) => {
+      const r = Math.round(v * 10) / 10;
+      setValue(r);
+      loadOffsets().then((o) => {
+        if (r === 0) delete o[trackId];
+        else o[trackId] = r;
+        AsyncStorage.setItem(OFFSET_KEY, JSON.stringify(o)).catch(() => {});
+      });
+    },
+    [trackId]
+  );
+  return [value, set];
 }

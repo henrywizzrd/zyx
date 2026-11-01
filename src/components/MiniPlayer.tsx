@@ -12,6 +12,8 @@ import type { ViewRef } from '../player/PlayerProvider';
 import { FULL_LENGTH, MP_ALBUM, MP_BUTTON, MP_GAP, MP_PADDING, MP_THICKNESS, resolveMini, useFrame } from './layout';
 
 const USE_NATIVE = Platform.OS !== 'web';
+// Chờ lần bấm thứ hai trong bao lâu (bấm đúp = đổi bubble). Ngắn quá thì bấm đúp khó trúng.
+const DOUBLE_TAP_MS = 170;
 
 export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => void }) {
   const { theme, setMiniPlayerAnchor, setMiniPlayerCollapsed } = useTheme();
@@ -118,6 +120,11 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
     Animated.timing(d.pan, { toValue: { x: 0, y: 0 }, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE }).start();
   }, [geom.x, geom.y, geom.cy, live.anchor, collapsed]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Ảnh album lún nhẹ ngay khi ngón tay chạm vào, để thấy app đã nhận lệnh trong lúc chờ xem có bấm đúp không
+  const press = useRef(new Animated.Value(1)).current;
+  const pressIn = () => Animated.timing(press, { toValue: 0.9, duration: 70, useNativeDriver: USE_NATIVE }).start();
+  const pressOut = () => Animated.spring(press, { toValue: 1, friction: 5, tension: 160, useNativeDriver: USE_NATIVE }).start();
+
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (tapTimer.current) clearTimeout(tapTimer.current);
@@ -214,7 +221,7 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
     tapTimer.current = setTimeout(() => {
       tapTimer.current = null;
       openPlayer();
-    }, 230);
+    }, DOUBLE_TAP_MS);
   };
 
   // Ba nút bị hút vào giữa ảnh album khi thu nhỏ
@@ -278,10 +285,23 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
                   gap: MP_GAP,
                 }}
               >
-                <Pressable ref={albumRef} collapsable={false} {...d.pressProps} onPress={onAlbumPress} style={{ zIndex: 2 }}>
-                  <Cover track={track} style={{ width: MP_ALBUM, height: MP_ALBUM, borderRadius: albumRadius }}>
-                    <Ionicons name="musical-notes" size={20} color="rgba(255,255,255,0.85)" />
-                  </Cover>
+                <Pressable
+                  ref={albumRef}
+                  collapsable={false}
+                  {...d.pressProps}
+                  onPressIn={pressIn}
+                  onPressOut={() => {
+                    pressOut();
+                    d.pressProps.onPressOut();
+                  }}
+                  onPress={onAlbumPress}
+                  style={{ zIndex: 2 }}
+                >
+                  <Animated.View style={{ transform: [{ scale: press }] }}>
+                    <Cover track={track} style={{ width: MP_ALBUM, height: MP_ALBUM, borderRadius: albumRadius }}>
+                      <Ionicons name="musical-notes" size={20} color="rgba(255,255,255,0.85)" />
+                    </Cover>
+                  </Animated.View>
                 </Pressable>
                 <Animated.View
                   pointerEvents={collapsed ? 'none' : 'auto'}

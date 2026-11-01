@@ -14,6 +14,9 @@ import { audio, musicSupported } from '../music/lazy';
 const fmt = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`;
 const SOFT = 'rgba(255,255,255,0.65)';
 
+// Nhớ đang xem lời hay ảnh bìa, để vuốt xuống rồi mở lại player vẫn giữ nguyên
+let lyricsOpen = false;
+
 export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const { theme } = useTheme();
   const pad = useContentInsets();
@@ -32,7 +35,9 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
       if (w > 0) swipe.reportCover({ x, y, w, h, r: 10 });
     });
 
-  const [showLyrics, setShowLyrics] = useState(false);
+  const [showLyrics, setShowLyricsState] = useState(() => lyricsOpen);
+  const setShowLyrics = (v: boolean | ((p: boolean) => boolean)) =>
+    setShowLyricsState((p) => (lyricsOpen = typeof v === 'function' ? v(p) : v));
   const [scrub, setScrub] = useState<number | null>(null); // 0..1 khi đang kéo thanh tiến trình
   const [vol, setVol] = useState(() => (musicSupported ? audio().getPlayer().volume : 1));
   const [box, setBox] = useState({ width: 0, height: 0 });
