@@ -17,7 +17,8 @@ export const defaultTheme: Theme = {
   },
   miniPlayer: {
     variant: 'pill',
-    position: 'bottom',
+    anchor: { edge: 'bottom', t: 0.5 },
+    collapsed: false,
     merged: false,
     style: { background: '#242424F2', rectRadius: 18 },
   },

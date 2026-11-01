@@ -149,12 +149,13 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
     setMerged(false);
   };
 
+  // Đang kéo: nổi lên với bóng đổ mờ, không viền
   const glow = lit
     ? {
-        shadowColor: theme.colors.accent,
-        shadowOpacity: 0.9,
-        shadowRadius: 16,
-        shadowOffset: { width: 0, height: 0 },
+        shadowColor: '#000',
+        shadowOpacity: 0.45,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 10 },
         elevation: 14,
       }
     : null;
@@ -210,13 +211,6 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
               );
             })}
           </Pressable>
-          <View
-            pointerEvents="none"
-            style={[
-              StyleSheet.absoluteFill,
-              { borderRadius: style.radius, borderWidth: 2, borderColor: theme.colors.accent, opacity: lit ? 1 : 0 },
-            ]}
-          />
         </Animated.View>
       </View>
     </View>

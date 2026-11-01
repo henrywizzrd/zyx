@@ -3,6 +3,10 @@ export type Position =
   | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 export type DockPosition = Position;
 
+// Mini player nằm tự do dọc viền màn hình: cạnh nào + vị trí dọc theo cạnh đó (0 = đầu cạnh, 1 = cuối cạnh)
+export type Edge = 'top' | 'bottom' | 'left' | 'right';
+export interface MiniAnchor { edge: Edge; t: number }
+
 export type TabId = 'home' | 'search' | 'library' | 'settings' | 'player';
 export type HomeSection = 'recentlyPlayed' | 'madeForYou' | 'newReleases';
 export type MiniPlayerVariant = 'pill' | 'rect';
@@ -20,7 +24,8 @@ export interface Theme {
   };
   miniPlayer: {
     variant: MiniPlayerVariant;
-    position: Position;
+    anchor: MiniAnchor;
+    collapsed: boolean; // đang thu nhỏ thành bubble (chỉ còn ảnh album)
     merged: boolean;
     style: { background: string; rectRadius: number };
   };

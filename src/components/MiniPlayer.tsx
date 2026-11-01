@@ -1,24 +1,123 @@
-import React, { useEffect, useLayoutEffect, useRef } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
+import React, { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Animated, Easing, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { usePlayer } from '../player/PlayerProvider';
 import { useDraggable } from './useDraggable';
+import type { MiniAnchor } from '../theme/types';
 import { Cover } from './Cover';
 import { playerOrigin } from './PlayerTransition';
 import type { ViewRef } from '../player/PlayerProvider';
-import { computeLayout, isVertical, MP_ALBUM, MP_BUTTON, MP_GAP, MP_PADDING, MP_THICKNESS, playerSize } from './layout';
+import { FULL_LENGTH, MP_ALBUM, MP_BUTTON, MP_GAP, MP_PADDING, MP_THICKNESS, resolveMini, useFrame } from './layout';
 
 const USE_NATIVE = Platform.OS !== 'web';
 
 export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => void }) {
-  const { theme } = useTheme();
+  const { theme, setMiniPlayerAnchor, setMiniPlayerCollapsed } = useTheme();
+  const frame = useFrame();
   const { track, isPlaying, togglePlay, next, prev, playerRef, emergeFrom, setEmergeFrom } = usePlayer();
   const insets = useSafeAreaInsets();
-  const d = useDraggable('player');
   const albumRef = useRef<ViewRef>(null);
-  const [collapsed, setCollapsed] = React.useState(false); // đang thu nhỏ chỉ còn ảnh album
+
+  // Vị trí và trạng thái bubble đang hiển thị nằm ở state cục bộ: đổi là mini player đổi ngay, chỉ nó vẽ lại.
+  // Theme (làm 10 nơi vẽ lại + stringify + ghi ổ đĩa) được cập nhật muộn, sau khi animation đã xong.
+  const [live, setLive] = useState({ anchor: theme.miniPlayer.anchor, collapsed: theme.miniPlayer.collapsed });
+  useEffect(() => {
+    // Theme đổi từ nơi khác (đọc từ ổ đĩa, đặt lại mặc định...) thì theo theme
+    setLive((l) => (l.anchor === theme.miniPlayer.anchor && l.collapsed === theme.miniPlayer.collapsed ? l : { anchor: theme.miniPlayer.anchor, collapsed: theme.miniPlayer.collapsed }));
+  }, [theme.miniPlayer.anchor, theme.miniPlayer.collapsed]);
+
+  const setters = useRef({ setMiniPlayerAnchor, setMiniPlayerCollapsed });
+  setters.current = { setMiniPlayerAnchor, setMiniPlayerCollapsed };
+  const pending = useRef<{ anchor?: MiniAnchor; collapsed?: boolean }>({});
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flush = useCallback(() => {
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = null;
+    const p = pending.current;
+    pending.current = {};
+    if (p.anchor === undefined && p.collapsed === undefined) return;
+    startTransition(() => {
+      if (p.anchor) setters.current.setMiniPlayerAnchor(p.anchor);
+      if (p.collapsed !== undefined) setters.current.setMiniPlayerCollapsed(p.collapsed);
+    });
+  }, []);
+  const busy = useRef(false);
+  const persist = useCallback(
+    (patch: { anchor?: MiniAnchor; collapsed?: boolean }) => {
+      Object.assign(pending.current, patch);
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+      persistTimer.current = setTimeout(() => (busy.current ? persist({}) : flush()), 1500);
+    },
+    [flush]
+  );
+  const setAnchor = useCallback(
+    (a: MiniAnchor) => {
+      setLive((l) => ({ ...l, anchor: a }));
+      persist({ anchor: a });
+    },
+    [persist]
+  );
+  const setCollapsed = useCallback(
+    (c: boolean) => {
+      setLive((l) => ({ ...l, collapsed: c }));
+      persist({ collapsed: c });
+    },
+    [persist]
+  );
+  useEffect(() => flush, [flush]); // thoát màn hình thì ghi nốt phần còn chờ
+
+  const collapsed = live.collapsed; // đang thu nhỏ thành bubble, chỉ còn ảnh album
+  const collapsedRef = useRef(collapsed);
+  collapsedRef.current = collapsed;
+
+  // ---- Hình học (tính trước mọi hook dùng tới nó)
+  const rect = resolveMini(theme, insets, frame.width, frame.height, live.anchor, collapsed);
+  const vertical = rect.vertical; // đứng dọc hay nằm ngang (đã tính cả việc đứng dọc cạnh dock ở góc)
+  // Đứng dọc ở nửa dưới màn hình thì ảnh album nằm dưới cùng, ở nửa trên thì nằm trên cùng
+  const albumAtEnd = vertical && rect.y + rect.h / 2 > frame.height / 2;
+  // Tâm ảnh album tính từ góc trên trái của mini player. Ảnh luôn đứng yên khi khung co/giãn.
+  const half = MP_THICKNESS / 2;
+  const albumCY = albumAtEnd ? rect.h - half : half;
+  const geom = { x: rect.x + frame.left, y: rect.y, cy: albumCY };
+  const geomRef = useRef(geom);
+
+  // ---- Thả ở chỗ mới / đổi bubble: trượt ảnh album từ chỗ cũ tới chỗ mới
+  const landing = useRef<{ dx: number; dy: number } | null>(null);
+  const drop = useCallback(
+    (a: MiniAnchor, dx: number, dy: number) => {
+      landing.current = { dx, dy };
+      setAnchor(a);
+    },
+    [setAnchor]
+  );
+
+  const d = useDraggable('player', {
+    anchor: live.anchor,
+    origin: () => {
+      const g = geomRef.current;
+      return { cx: g.x + half, cy: g.y + g.cy };
+    },
+    drop,
+  });
+  busy.current = d.active;
+
+  useLayoutEffect(() => {
+    const prevGeom = geomRef.current;
+    geomRef.current = geom;
+    const l = landing.current;
+    landing.current = null;
+    if (!l) return;
+    // Ngay sau khi đổi chỗ, đặt pan sao cho ảnh album vẫn ở đúng chỗ cũ (chỗ ngón tay vừa nhả), rồi trượt về 0.
+    // Chỉ dùng hình học: không đo, không ẩn hiện.
+    const ox = prevGeom.x + half + l.dx - (geom.x + half);
+    const oy = prevGeom.y + prevGeom.cy + l.dy - (geom.y + geom.cy);
+    d.pan.stopAnimation();
+    d.pan.setValue({ x: ox, y: oy });
+    Animated.timing(d.pan, { toValue: { x: 0, y: 0 }, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE }).start();
+  }, [geom.x, geom.y, geom.cy, live.anchor, collapsed]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (tapTimer.current) clearTimeout(tapTimer.current);
@@ -27,7 +126,6 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
   // Giữ lâu thì co lại thành hình tròn (pill) hoặc hình vuông bo góc (rect), chỉ còn ảnh album. Thả ra thì dãn lại.
   // Dùng giá trị riêng chạy bằng JS vì đổi width/height không dùng được native driver.
   const shrink = useRef(new Animated.Value(0)).current;
-  // Thu nhỏ khi đang giữ/kéo, hoặc khi người dùng đã bấm một lần vào ảnh để thu nhỏ hẳn
   useEffect(() => {
     const to = d.active || collapsed ? 1 : 0;
     // Thu lại thì êm, dãn ra thì nảy nhẹ cho có cảm giác kéo giãn
@@ -76,8 +174,6 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
 
   if (theme.miniPlayer.merged || hidden) return null;
 
-  const { playerStyle, playerPosition } = computeLayout(theme, insets);
-  const vertical = isVertical(playerPosition);
   const pill = theme.miniPlayer.variant === 'pill';
   const radius = pill ? MP_THICKNESS / 2 : theme.miniPlayer.style.rectRadius;
   const albumRadius = pill ? MP_ALBUM / 2 : 12;
@@ -85,19 +181,20 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
 
   const btn = { width: MP_BUTTON, height: MP_BUTTON, alignItems: 'center' as const, justifyContent: 'center' as const };
 
+  // Đang kéo: nổi lên với bóng đổ mờ, không viền
   const glow = lit
     ? {
-        shadowColor: theme.colors.accent,
-        shadowOpacity: 0.9,
-        shadowRadius: 16,
-        shadowOffset: { width: 0, height: 0 },
+        shadowColor: '#000',
+        shadowOpacity: 0.45,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 10 },
         elevation: 14,
       }
     : null;
 
-  const size = playerSize(playerPosition);
+  const size = vertical ? { width: MP_THICKNESS, height: FULL_LENGTH } : { width: FULL_LENGTH, height: MP_THICKNESS };
 
-  // Bấm 1 lần vào ảnh: thu nhỏ (hoặc dãn ra nếu đang thu nhỏ). Bấm 2 lần: mở player.
+  // Bấm 1 lần vào ảnh: mở player. Bấm 2 lần: thu thành bubble (hoặc dãn lại thành mini player nếu đang là bubble).
   // Phải đợi một chút sau lần bấm đầu để biết có lần bấm thứ hai không.
   const openPlayer = () => {
     if (!albumRef.current) return onOpen();
@@ -110,93 +207,105 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
     if (tapTimer.current) {
       clearTimeout(tapTimer.current);
       tapTimer.current = null;
-      openPlayer();
+      landing.current = { dx: 0, dy: 0 };
+      setCollapsed(!collapsedRef.current);
       return;
     }
     tapTimer.current = setTimeout(() => {
       tapTimer.current = null;
-      setCollapsed((c) => !c);
+      openPlayer();
     }, 230);
   };
 
   // Ba nút bị hút vào giữa ảnh album khi thu nhỏ
   const btnLen = 3 * MP_BUTTON + 2 * MP_GAP;
-  const pull = -(MP_ALBUM / 2 + MP_GAP + btnLen / 2);
+  const pull = (albumAtEnd ? 1 : -1) * (MP_ALBUM / 2 + MP_GAP + btnLen / 2);
   const pullAnim = shrink.interpolate({ inputRange: [0, 1], outputRange: [0, pull] });
   const btnScale = shrink.interpolate({ inputRange: [0, 1], outputRange: [1, 0.2], extrapolate: 'clamp' });
   const wAnim = shrink.interpolate({ inputRange: [0, 1], outputRange: [size.width, MP_THICKNESS] });
   const hAnim = shrink.interpolate({ inputRange: [0, 1], outputRange: [size.height, MP_THICKNESS] });
   const btnOpacity = shrink.interpolate({ inputRange: [0, 0.7], outputRange: [1, 0], extrapolate: 'clamp' });
 
+  // QUAN TRỌNG: hai lớp mang hiệu ứng native (pan, scale/opacity) có kích thước CỐ ĐỊNH = rect.
+  // iOS (RN Fabric) áp lại transform từ props cũ mỗi khi view có transform đổi kích thước,
+  // nên nếu chúng co giãn theo khung (shrink chạy bằng JS) thì mini player bị giựt về chỗ cũ.
+  // Khung co giãn nằm bên trong, dính vào phía ảnh album.
+  const box = { width: rect.w, height: rect.h };
+
   return (
-    <View pointerEvents="box-none" style={[styles.layer, playerStyle, { zIndex: d.zIndex }]}>
-      <View ref={playerRef} collapsable={false}>
+    <View pointerEvents="box-none" style={[styles.layer, { left: rect.x, top: rect.y, zIndex: d.zIndex }]}>
+      <View ref={playerRef} collapsable={false} pointerEvents="box-none" style={box}>
         <Animated.View
           {...d.panHandlers}
-          style={{
-            opacity: d.opacity,
-            transform: [{ translateX: d.pan.x }, { translateY: d.pan.y }, { scale: d.scale }],
-            ...glow,
-          }}
+          pointerEvents="box-none"
+          style={[box, { transform: [{ translateX: d.pan.x }, { translateY: d.pan.y }] }]}
         >
-          {/* Khung co giãn: nền và bo góc nằm ở đây, nội dung bên trong giữ nguyên cỡ và bị cắt khi khung co lại */}
           <Animated.View
-            style={{
-              width: wAnim,
-              height: hAnim,
-              borderRadius: radius,
-              backgroundColor: theme.miniPlayer.style.background,
-              overflow: 'hidden',
-            }}
+            pointerEvents="box-none"
+            style={[
+              box,
+              {
+                justifyContent: albumAtEnd ? 'flex-end' : 'flex-start',
+                alignItems: 'flex-start',
+                opacity: d.opacity,
+                transform: [{ scale: d.scale }],
+                transformOrigin: [half, albumCY, 0],
+              },
+              glow,
+            ]}
           >
-            <Pressable
-              {...d.pressProps}
+            {/* Khung co giãn: nền và bo góc nằm ở đây, nội dung bên trong giữ nguyên cỡ và bị cắt khi khung co lại */}
+            <Animated.View
               style={{
-                position: 'absolute',
-                left: 0,
-                top: 0,
-                width: size.width,
-                height: size.height,
-                flexDirection: vertical ? 'column' : 'row',
-                alignItems: 'center',
-                padding: MP_PADDING,
-                gap: MP_GAP,
+                width: wAnim,
+                height: hAnim,
+                borderRadius: radius,
+                backgroundColor: theme.miniPlayer.style.background,
+                overflow: 'hidden',
               }}
             >
-              <Pressable ref={albumRef} collapsable={false} {...d.pressProps} onPress={onAlbumPress} style={{ zIndex: 2 }}>
-                <Cover track={track} style={{ width: MP_ALBUM, height: MP_ALBUM, borderRadius: albumRadius }}>
-                  <Ionicons name="musical-notes" size={20} color="rgba(255,255,255,0.85)" />
-                </Cover>
-              </Pressable>
-              <Animated.View
-                pointerEvents={collapsed ? 'none' : 'auto'}
+              <Pressable
+                {...d.pressProps}
                 style={{
-                  zIndex: 1,
-                  flexDirection: vertical ? 'column' : 'row',
+                  position: 'absolute',
+                  left: 0,
+                  ...(albumAtEnd ? { bottom: 0 } : { top: 0 }),
+                  width: size.width,
+                  height: size.height,
+                  flexDirection: vertical ? (albumAtEnd ? 'column-reverse' : 'column') : 'row',
                   alignItems: 'center',
+                  padding: MP_PADDING,
                   gap: MP_GAP,
-                  opacity: btnOpacity,
-                  transform: [vertical ? { translateY: pullAnim } : { translateX: pullAnim }, { scale: btnScale }],
                 }}
               >
-                <Pressable {...d.pressProps} onPress={prev} style={btn}>
-                  <Ionicons name="play-skip-back" size={20} color={theme.colors.text} />
+                <Pressable ref={albumRef} collapsable={false} {...d.pressProps} onPress={onAlbumPress} style={{ zIndex: 2 }}>
+                  <Cover track={track} style={{ width: MP_ALBUM, height: MP_ALBUM, borderRadius: albumRadius }}>
+                    <Ionicons name="musical-notes" size={20} color="rgba(255,255,255,0.85)" />
+                  </Cover>
                 </Pressable>
-                <Pressable {...d.pressProps} onPress={togglePlay} style={btn}>
-                  <Ionicons name={isPlaying ? 'pause' : 'play'} size={24} color={theme.colors.text} />
-                </Pressable>
-                <Pressable {...d.pressProps} onPress={next} style={btn}>
-                  <Ionicons name="play-skip-forward" size={20} color={theme.colors.text} />
-                </Pressable>
-              </Animated.View>
-            </Pressable>
-            <View
-              pointerEvents="none"
-              style={[
-                StyleSheet.absoluteFill,
-                { borderRadius: radius, borderWidth: 2, borderColor: theme.colors.accent, opacity: lit ? 1 : 0 },
-              ]}
-            />
+                <Animated.View
+                  pointerEvents={collapsed ? 'none' : 'auto'}
+                  style={{
+                    zIndex: 1,
+                    flexDirection: vertical ? 'column' : 'row',
+                    alignItems: 'center',
+                    gap: MP_GAP,
+                    opacity: btnOpacity,
+                    transform: [vertical ? { translateY: pullAnim } : { translateX: pullAnim }, { scale: btnScale }],
+                  }}
+                >
+                  <Pressable {...d.pressProps} onPress={prev} style={btn}>
+                    <Ionicons name="play-skip-back" size={20} color={theme.colors.text} />
+                  </Pressable>
+                  <Pressable {...d.pressProps} onPress={togglePlay} style={btn}>
+                    <Ionicons name={isPlaying ? 'pause' : 'play'} size={24} color={theme.colors.text} />
+                  </Pressable>
+                  <Pressable {...d.pressProps} onPress={next} style={btn}>
+                    <Ionicons name="play-skip-forward" size={20} color={theme.colors.text} />
+                  </Pressable>
+                </Animated.View>
+              </Pressable>
+            </Animated.View>
           </Animated.View>
         </Animated.View>
       </View>

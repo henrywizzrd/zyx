@@ -1,12 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, View } from 'react-native';
 import type { Track } from '../data/mock';
-import { Position } from '../theme/types';
+import { MiniAnchor, Position } from '../theme/types';
 import { audio, musicSupported, ytmusic } from '../music/lazy';
 import { bigThumb } from '../components/Cover';
 
 export type ViewRef = React.ElementRef<typeof View>;
-export type DragState = { kind: 'dock' | 'player'; target: Position | 'merge' };
+export type DragState = { kind: 'dock' | 'player'; target: Position | MiniAnchor | 'merge' };
 
 // Hiện khi chưa phát bài nào
 const IDLE: Track = { id: 'none', title: 'Chưa phát bài nào', artist: 'Tìm một bài ở tab Search', color: '#333333', duration: 0 };
@@ -33,13 +33,18 @@ interface PlayerContextValue {
   // Phần dưới dùng cho kéo thả / hợp nhất / tách dock và mini player
   dockRef: React.RefObject<ViewRef | null>;
   playerRef: React.RefObject<ViewRef | null>;
-  drag: DragState | null;
-  setDrag: (d: DragState | null) => void;
   emergeFrom: { cx: number; cy: number } | null;
   setEmergeFrom: (o: { cx: number; cy: number } | null) => void;
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
+
+// Trạng thái đang kéo dock/mini player tách riêng: nó đổi liên tục lúc kéo, để chung thì cả app vẽ lại theo từng cử động ngón tay
+interface DragContextValue {
+  drag: DragState | null;
+  setDrag: (d: DragState | null) => void;
+}
+const DragContext = createContext<DragContextValue | null>(null);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [queue, setQueue] = useState<Track[]>([]);
@@ -203,16 +208,29 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     () => ({
       track, isPlaying, progress, duration, loading, togglePlay, next, prev, seekTo, playTrack,
       shuffle, repeat, toggleShuffle, cycleRepeat, liked, toggleLike,
-      dockRef, playerRef, drag, setDrag, emergeFrom, setEmergeFrom,
+      dockRef, playerRef, emergeFrom, setEmergeFrom,
     }),
-    [track, isPlaying, progress, duration, loading, togglePlay, next, prev, seekTo, playTrack, shuffle, repeat, toggleShuffle, cycleRepeat, liked, toggleLike, drag, emergeFrom]
+    [track, isPlaying, progress, duration, loading, togglePlay, next, prev, seekTo, playTrack, shuffle, repeat, toggleShuffle, cycleRepeat, liked, toggleLike, emergeFrom]
   );
 
-  return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;
+  const dragValue = useMemo<DragContextValue>(() => ({ drag, setDrag }), [drag]);
+
+  return (
+    <PlayerContext.Provider value={value}>
+      <DragContext.Provider value={dragValue}>{children}</DragContext.Provider>
+    </PlayerContext.Provider>
+  );
 }
 
 export function usePlayer() {
   const ctx = useContext(PlayerContext);
   if (!ctx) throw new Error('usePlayer must be used inside PlayerProvider');
+  return ctx;
+}
+
+
+export function useDrag() {
+  const ctx = useContext(DragContext);
+  if (!ctx) throw new Error('useDrag must be used inside PlayerProvider');
   return ctx;
 }

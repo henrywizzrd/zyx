@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { defaultTheme } from './defaultTheme';
-import { HomeSection, LibraryLayout, MiniPlayerVariant, Position, TabId, Theme } from './types';
+import { Edge, HomeSection, LibraryLayout, MiniAnchor, MiniPlayerVariant, Position, TabId, Theme } from './types';
 
 const STORAGE_KEY = 'zyx:theme';
 
@@ -10,10 +10,26 @@ const POSITIONS: Position[] = [
   'bottom', 'top', 'left', 'right',
   'top-left', 'top-right', 'bottom-left', 'bottom-right',
 ];
+const EDGES: Edge[] = ['top', 'bottom', 'left', 'right'];
 const VARIANTS: MiniPlayerVariant[] = ['pill', 'rect'];
 const TABS: TabId[] = ['home', 'search', 'library', 'settings'];
 const SECTIONS: HomeSection[] = ['recentlyPlayed', 'madeForYou', 'newReleases'];
 const LIBRARY_LAYOUTS: LibraryLayout[] = ['list', 'columns', 'covers2', 'covers3'];
+
+// Bản lưu cũ có miniPlayer.position (8 vị trí cố định): đổi sang vị trí tự do theo viền
+function migrate(saved: unknown): unknown {
+  if (!isPlainObject(saved) || !isPlainObject(saved.miniPlayer)) return saved;
+  const mp = saved.miniPlayer;
+  if (mp.anchor || typeof mp.position !== 'string') return saved;
+  const map: Record<string, MiniAnchor> = {
+    bottom: { edge: 'bottom', t: 0.5 }, top: { edge: 'top', t: 0.5 },
+    left: { edge: 'left', t: 0.5 }, right: { edge: 'right', t: 0.5 },
+    'top-left': { edge: 'left', t: 0 }, 'top-right': { edge: 'right', t: 0 },
+    'bottom-left': { edge: 'left', t: 1 }, 'bottom-right': { edge: 'right', t: 1 },
+  };
+  const anchor = map[mp.position];
+  return anchor ? { ...saved, miniPlayer: { ...mp, anchor } } : saved;
+}
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -48,7 +64,10 @@ function sanitize(t: Theme): Theme {
     },
     miniPlayer: {
       ...t.miniPlayer,
-      position: POSITIONS.includes(t.miniPlayer.position) ? t.miniPlayer.position : d.miniPlayer.position,
+      anchor: {
+        edge: EDGES.includes(t.miniPlayer.anchor.edge) ? t.miniPlayer.anchor.edge : d.miniPlayer.anchor.edge,
+        t: Number.isFinite(t.miniPlayer.anchor.t) ? Math.max(0, Math.min(1, t.miniPlayer.anchor.t)) : d.miniPlayer.anchor.t,
+      },
       variant: VARIANTS.includes(t.miniPlayer.variant) ? t.miniPlayer.variant : d.miniPlayer.variant,
     },
     library: {
@@ -65,7 +84,8 @@ interface ThemeContextValue {
   setTheme: (t: Theme) => void;
   resetTheme: () => void;
   setDockPosition: (p: Position) => void;
-  setMiniPlayerPosition: (p: Position) => void;
+  setMiniPlayerAnchor: (a: MiniAnchor) => void;
+  setMiniPlayerCollapsed: (c: boolean) => void;
   setMiniPlayerVariant: (v: MiniPlayerVariant) => void;
   setMerged: (merged: boolean) => void;
   setLibraryLayout: (l: LibraryLayout) => void;
@@ -83,7 +103,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     let alive = true;
     AsyncStorage.getItem(STORAGE_KEY)
       .then((raw) => {
-        if (raw && alive) setThemeState(sanitize(merge(defaultTheme, JSON.parse(raw))));
+        if (raw && alive) setThemeState(sanitize(merge(defaultTheme, migrate(JSON.parse(raw)))));
       })
       .catch(() => {})
       .finally(() => {
@@ -113,7 +133,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       resetTheme: () => setThemeState(defaultTheme),
       setDockPosition: (position) =>
         setThemeState((t) => ({ ...t, dock: { ...t.dock, position } })),
-      setMiniPlayerPosition: (position) => patchMini({ position }),
+      setMiniPlayerAnchor: (anchor) => patchMini({ anchor }),
+      setMiniPlayerCollapsed: (collapsed) => patchMini({ collapsed }),
       setMiniPlayerVariant: (variant) => patchMini({ variant }),
       setMerged: (merged) => patchMini({ merged }),
       setLibraryLayout: (layout) =>
