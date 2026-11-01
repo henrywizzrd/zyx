@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, LayoutAnimation, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Cover } from './Cover';
+import { playerOrigin } from './PlayerTransition';
+import { Animated, Easing, LayoutAnimation, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
@@ -67,11 +69,19 @@ function PlayerItem({
     ref.current.measureInWindow((x, y, w, h) => onDetach({ cx: x + w / 2, cy: y + h / 2 }));
   };
 
+  const open = () => {
+    if (!ref.current) return onPress();
+    ref.current.measureInWindow((x, y, w, h) => {
+      playerOrigin.current = { x, y, w, h, r: 16 };
+      onPress();
+    });
+  };
+
   return (
     <Pressable
       ref={ref}
       collapsable={false}
-      onPress={onPress}
+      onPress={open}
       onLongPress={detach}
       delayLongPress={350}
       style={{ width: ITEM_SIZE, height: ITEM_SIZE, alignItems: 'center', justifyContent: 'center' }}
@@ -87,15 +97,15 @@ function PlayerItem({
           borderColor: active ? theme.colors.accent : 'transparent',
         }}
       >
-        <View style={{ flex: 1, borderRadius: 9, backgroundColor: track.color, alignItems: 'center', justifyContent: 'center' }}>
+        <Cover track={track} style={{ flex: 1, borderRadius: 9 }}>
           <Ionicons name="musical-notes" size={16} color="#FFFFFF" />
-        </View>
+        </Cover>
       </Animated.View>
     </Pressable>
   );
 }
 
-export function FloatingDock({ active, onChange }: { active: TabId; onChange: (t: TabId) => void }) {
+export function FloatingDock({ active, onChange, hidden = false }: { active: TabId; onChange: (t: TabId) => void; hidden?: boolean }) {
   const { theme, setMerged } = useTheme();
   const { dockRef, setEmergeFrom } = usePlayer();
   const insets = useSafeAreaInsets();
@@ -106,6 +116,21 @@ export function FloatingDock({ active, onChange }: { active: TabId; onChange: (t
   const ids: TabId[] = theme.miniPlayer.merged ? [...items, 'player'] : items;
   const vertical = isVertical(position);
   const lit = d.active || d.merging;
+
+  // Thụt vào cạnh màn hình mà dock đang đứng (dock ở dưới thì thụt xuống, bên trái thì thụt qua trái...). hidden=true là thụt vào.
+  const slide = useRef(new Animated.Value(hidden ? 1 : 0)).current;
+  useEffect(() => {
+    if (hidden) {
+      Animated.timing(slide, { toValue: 1, duration: 260, easing: Easing.bezier(0.4, 0, 0.2, 1), useNativeDriver: USE_NATIVE }).start();
+    } else {
+      Animated.spring(slide, { toValue: 0, friction: 8, tension: 70, useNativeDriver: USE_NATIVE }).start();
+    }
+  }, [hidden, slide]);
+  const OUT = 180; // đủ xa để dock ra khỏi màn hình hoàn toàn
+  const toX = position === 'top' || position === 'bottom' ? 0 : position.endsWith('left') || position === 'left' ? -OUT : OUT;
+  const toY = position === 'top' ? -OUT : position === 'bottom' ? OUT : 0;
+  const slideX = slide.interpolate({ inputRange: [0, 1], outputRange: [0, toX] });
+  const slideY = slide.interpolate({ inputRange: [0, 1], outputRange: [0, toY] });
 
   // Hiệu ứng co lại khi dock mất một mục (mini player được tách ra)
   const squash = useRef(new Animated.Value(1)).current;
@@ -135,7 +160,7 @@ export function FloatingDock({ active, onChange }: { active: TabId; onChange: (t
     : null;
 
   return (
-    <View pointerEvents="box-none" style={[styles.layer, dockStyle, { zIndex: d.zIndex }]}>
+    <View pointerEvents={hidden ? 'none' : 'box-none'} style={[styles.layer, dockStyle, { zIndex: d.zIndex }]}>
       <View ref={dockRef} collapsable={false}>
         <Animated.View
           {...d.panHandlers}
@@ -144,6 +169,8 @@ export function FloatingDock({ active, onChange }: { active: TabId; onChange: (t
             borderRadius: style.radius,
             opacity: d.opacity,
             transform: [
+              { translateX: slideX },
+              { translateY: slideY },
               { translateX: d.pan.x },
               { translateY: d.pan.y },
               { scale: d.scale },

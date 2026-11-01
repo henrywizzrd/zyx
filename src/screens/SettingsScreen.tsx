@@ -1,9 +1,11 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { useContentInsets } from '../components/FloatingDock';
 import { MiniPlayerVariant } from '../theme/types';
 
+const PlaybackLab: React.ComponentType | null =
+  Platform.OS === 'web' ? null : require('../components/PlaybackLab').PlaybackLab;
 const VARIANTS: MiniPlayerVariant[] = ['pill', 'rect'];
 
 function Chips<T extends string>({ options, value, onSelect }: { options: T[]; value: T; onSelect: (v: T) => void }) {
@@ -63,6 +65,7 @@ export function SettingsScreen() {
       >
         <Text style={{ color: theme.colors.text, fontWeight: '600' }}>Reset to default</Text>
       </Pressable>
+      {PlaybackLab && <PlaybackLab />}
     </ScrollView>
   );
 }

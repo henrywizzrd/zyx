@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { usePlayer } from '../player/PlayerProvider';
 import { useContentInsets } from '../components/FloatingDock';
-import { genres, libraryItems, tracks } from '../data/mock';
+import { genres, libraryItems, Track } from '../data/mock';
+import { musicSupported, toTrack, ytmusic } from '../music/lazy';
 import { useFrame } from '../components/layout';
 
 const H_PAD = 16;
@@ -24,6 +25,23 @@ export function SearchScreen() {
   const pad = useContentInsets();
   const { width } = useFrame();
   const [query, setQuery] = useState('');
+  const [yt, setYt] = useState<Track[]>([]);
+  const [ytBusy, setYtBusy] = useState(false);
+  const [ytError, setYtError] = useState<string | null>(null);
+
+  const runSearch = async () => {
+    const q = query.trim();
+    if (!q || !musicSupported || ytBusy) return;
+    setYtBusy(true);
+    setYtError(null);
+    try {
+      setYt((await ytmusic().searchSongs(q)).map(toTrack));
+    } catch (e) {
+      setYtError(String((e as Error)?.message ?? e));
+    } finally {
+      setYtBusy(false);
+    }
+  };
 
   const { text, textSecondary, accent } = theme.colors;
   const innerW = width - H_PAD * 2;
@@ -33,13 +51,10 @@ export function SearchScreen() {
   const results = useMemo<Result[]>(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    const songs = tracks
-      .filter((t) => t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q))
-      .map((t) => ({ id: t.id, title: t.title, subtitle: `Song • ${t.artist}`, color: t.color, kind: 'song' as const }));
     const lib = libraryItems
       .filter((i) => i.title.toLowerCase().includes(q))
       .map((i) => ({ id: i.id, title: i.title, subtitle: i.subtitle, color: i.color, kind: i.kind }));
-    return [...songs, ...lib];
+    return lib;
   }, [query]);
 
   const searching = query.trim().length > 0;
@@ -60,12 +75,14 @@ export function SearchScreen() {
           <TextInput
             value={query}
             onChangeText={setQuery}
+            onSubmitEditing={runSearch}
+            returnKeyType="search"
             placeholder="What do you want to listen to?"
             placeholderTextColor="#6B6B6B"
             style={[styles.input, { color: theme.background.color }]}
           />
           {searching && (
-            <Pressable onPress={() => setQuery('')} hitSlop={8}>
+            <Pressable onPress={() => { setQuery(''); setYt([]); setYtError(null); }} hitSlop={8}>
               <Ionicons name="close" size={20} color={theme.background.color} />
             </Pressable>
           )}
@@ -89,40 +106,37 @@ export function SearchScreen() {
               ))}
             </View>
           </>
-        ) : results.length === 0 ? (
-          <Text style={{ color: textSecondary, marginTop: 28 }}>Không tìm thấy kết quả cho "{query}"</Text>
         ) : (
           <View style={{ marginTop: 20, gap: 4 }}>
-            {results.map((r) => {
-              const isSong = r.kind === 'song';
-              const playing = isSong && r.id === track.id;
-              return (
-                <Pressable
-                  key={`${r.kind}-${r.id}`}
-                  onPress={() => isSong && playTrack(r.id)}
-                  style={styles.row}
-                >
-                  <View style={[styles.cover, { backgroundColor: r.color, borderRadius: r.kind === 'album' ? 28 : 4 }]}>
-                    <Ionicons
-                      name={r.kind === 'album' ? 'disc' : 'musical-notes'}
-                      size={22}
-                      color="rgba(255,255,255,0.8)"
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      numberOfLines={1}
-                      style={{ color: playing ? accent : text, fontSize: 16, fontWeight: '600' }}
-                    >
-                      {r.title}
-                    </Text>
-                    <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>
-                      {r.subtitle}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })}
+            {ytBusy && <ActivityIndicator color={accent} style={{ marginVertical: 12 }} />}
+            {ytError && <Text style={{ color: textSecondary }}>Lỗi tìm kiếm: {ytError}</Text>}
+            {musicSupported && !ytBusy && !ytError && yt.length === 0 && (
+              <Text style={{ color: textSecondary }}>Nhấn Search trên bàn phím để tìm trên YouTube Music</Text>
+            )}
+            {yt.map((t) => (
+              <Pressable key={`yt-${t.id}`} onPress={() => playTrack(t, yt)} style={styles.row}>
+                <Image source={{ uri: t.thumb }} style={[styles.cover, { backgroundColor: t.color, borderRadius: 4 }]} />
+                <View style={{ flex: 1 }}>
+                  <Text numberOfLines={1} style={{ color: t.id === track.id ? accent : text, fontSize: 16, fontWeight: '600' }}>
+                    {t.title}
+                  </Text>
+                  <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>
+                    Song • {t.artist}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+            {results.map((r) => (
+              <View key={`${r.kind}-${r.id}`} style={styles.row}>
+                <View style={[styles.cover, { backgroundColor: r.color, borderRadius: r.kind === 'album' ? 28 : 4, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Ionicons name={r.kind === 'album' ? 'disc' : 'musical-notes'} size={22} color="rgba(255,255,255,0.8)" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text numberOfLines={1} style={{ color: text, fontSize: 16, fontWeight: '600' }}>{r.title}</Text>
+                  <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>{r.subtitle}</Text>
+                </View>
+              </View>
+            ))}
           </View>
         )}
       </View>

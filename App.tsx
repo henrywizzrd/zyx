@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StatusBar, Text, View } from 'react-native';
+import { StatusBar, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
@@ -13,6 +13,7 @@ import { TabId } from './src/theme/types';
 import { DropPreview } from './src/components/DropPreview';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
+import { PlayerTransition } from './src/components/PlayerTransition';
 
 function Placeholder({ name }: { name: string }) {
   const { theme } = useTheme();
@@ -27,19 +28,27 @@ function Placeholder({ name }: { name: string }) {
 function Root() {
   const { theme } = useTheme();
   const [tab, setTab] = useState<TabId>('home');
+  const [lastTab, setLastTab] = useState<TabId>('home');
+  const go = (t: TabId) => {
+    if (t !== 'player') setLastTab(t);
+    setTab(t);
+  };
+  const shown = tab === 'player' ? lastTab : tab; // đang mở player thì vẫn vẽ tab phía sau
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background.color }}>
       <StatusBar barStyle="light-content" />
       <View style={{ flex: 1 }}>
-        {tab === 'home' && <HomeScreen />}
-        {tab === 'search' && <SearchScreen />}
-        {tab === 'library' && <LibraryScreen />}
-        {tab === 'settings' && <SettingsScreen />}
-        {tab === 'player' && <NowPlayingScreen />}
+        {shown === 'home' && <HomeScreen />}
+        {shown === 'search' && <SearchScreen />}
+        {shown === 'library' && <LibraryScreen />}
+        {shown === 'settings' && <SettingsScreen />}
         <DropPreview />
         <MiniPlayer hidden={tab === 'player'} onOpen={() => setTab('player')} />
-        <FloatingDock active={tab} onChange={setTab} />
+          <FloatingDock active={tab} onChange={go} hidden={tab === 'player'} />
+          <PlayerTransition open={tab === 'player'} onClose={() => setTab(lastTab)}>
+          <NowPlayingScreen onClose={() => setTab(lastTab)} />
+        </PlayerTransition>
       </View>
     </View>
   );

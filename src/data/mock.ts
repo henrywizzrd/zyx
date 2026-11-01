@@ -34,6 +34,7 @@ export interface Track {
   artist: string;
   color: string;
   duration: number; // giây
+  thumb?: string;
 }
 
 export const tracks: Track[] = [
