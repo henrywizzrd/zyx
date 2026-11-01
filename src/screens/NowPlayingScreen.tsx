@@ -1,5 +1,7 @@
-import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { usePlayer, ViewRef } from '../player/PlayerProvider';
@@ -10,12 +12,15 @@ import { Slider } from '../components/Slider';
 import { LyricsView } from '../components/LyricsView';
 import { useLyrics } from '../music/lyrics';
 import { audio, musicSupported } from '../music/lazy';
+import { QueueSheet } from '../components/QueueSheet';
 
 const fmt = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`;
 const SOFT = 'rgba(255,255,255,0.65)';
 
 // Nhớ đang xem lời hay ảnh bìa, để vuốt xuống rồi mở lại player vẫn giữ nguyên
 let lyricsOpen = false;
+
+const lock = (o: ScreenOrientation.OrientationLock) => ScreenOrientation.lockAsync(o).catch(() => {});
 
 export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const { theme } = useTheme();
@@ -41,7 +46,30 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const [scrub, setScrub] = useState<number | null>(null); // 0..1 khi đang kéo thanh tiến trình
   const [vol, setVol] = useState(() => (musicSupported ? audio().getPlayer().volume : 1));
   const [box, setBox] = useState({ width: 0, height: 0 });
-  const lyr = useLyrics(track, showLyrics);
+  const [queueOpen, setQueueOpen] = useState(false);
+
+  // Màn hình ngang: bấm nút điện thoại để xoay. Rời player thì luôn quay về dọc.
+  const win = useWindowDimensions();
+  const landscape = win.width > win.height;
+  const insets = useSafeAreaInsets();
+  const [landLyrics, setLandLyrics] = useState(true); // ở chế độ ngang, lời hiện mặc định
+  const toggleLandscape = () => lock(landscape ? ScreenOrientation.OrientationLock.PORTRAIT_UP : ScreenOrientation.OrientationLock.LANDSCAPE);
+  useEffect(() => () => void lock(ScreenOrientation.OrientationLock.PORTRAIT_UP), []);
+  // Đang ngang mà đóng player: xoay về dọc trước, xoay xong mới chạy hiệu ứng thu về mini player
+  const closeAfterRotate = useRef(false);
+  const close = () => {
+    if (!landscape) return onClose();
+    closeAfterRotate.current = true;
+    lock(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+  };
+  useEffect(() => {
+    if (landscape || !closeAfterRotate.current) return;
+    closeAfterRotate.current = false;
+    const id = setTimeout(onClose, 60);
+    return () => clearTimeout(id);
+  }, [landscape, onClose]);
+
+  const lyr = useLyrics(track, landscape ? landLyrics : showLyrics);
 
   const pct = duration > 0 ? Math.min(1, progress / duration) : 0;
   const shownPct = scrub ?? pct;
@@ -62,9 +90,9 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     </Pressable>
   );
 
-  return (
-    <View style={{ flex: 1 }}>
-      {/* Nền mờ lấy màu từ ảnh bìa */}
+  // Nền mờ lấy màu từ ảnh bìa
+  const Background = (
+    <>
       {track.thumb ? (
         <Image
           source={{ uri: track.thumb.replace(/=(w\d+-h\d+|s\d+)/, '=w200-h200') }}
@@ -76,6 +104,122 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         <View style={[StyleSheet.absoluteFill, { backgroundColor: track.color }]} />
       )}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)' }]} />
+    </>
+  );
+
+  const Progress = (
+    <View>
+      <Slider
+        value={pct}
+        thickness={8}
+        onChange={setScrub}
+        onCommit={(v) => {
+          seekTo(v * duration);
+          setScrub(null);
+        }}
+      />
+      <View style={styles.times}>
+        <Text style={styles.time}>{fmt(elapsed)}</Text>
+        <Text style={styles.time}>{loading ? 'Đang tải...' : `-${fmt(duration - elapsed)}`}</Text>
+      </View>
+    </View>
+  );
+
+  // ================= Màn hình ngang =================
+  // Trái: ảnh bìa, tên bài, album, nghệ sĩ, thanh thời gian, 3 nút điều khiển
+  // Giữa: lời bài hát (chạy theo nhạc như màn hình dọc)
+  // Mép phải: thanh âm lượng dọc, rồi 3 nút lời / hàng đợi / xoay màn hình xếp dọc
+  if (landscape) {
+    const padT = Math.max(insets.top, 12);
+    const padB = Math.max(insets.bottom, 12);
+    const usableH = win.height - padT - padB;
+    const leftW = Math.min(360, win.width * (landLyrics ? 0.36 : 0.5));
+    const art = Math.max(0, Math.min(leftW, usableH - 190));
+    return (
+      <View style={{ flex: 1 }}>
+        {Background}
+        <View
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            paddingTop: padT,
+            paddingBottom: padB,
+            paddingLeft: insets.left + 20,
+            paddingRight: insets.right + 12,
+            gap: 24,
+            justifyContent: landLyrics ? 'flex-start' : 'center',
+          }}
+        >
+          {/* Trái */}
+          <View style={{ width: leftW, justifyContent: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Pressable onPress={close} style={[styles.circle, { width: 36, height: 36 }]}>
+                <Ionicons name="chevron-down" size={22} color="#FFFFFF" />
+              </Pressable>
+              <View style={{ flex: 1 }} />
+              {LikeButton}
+            </View>
+            <View style={{ alignItems: 'center', marginTop: 8 }}>
+              <Cover track={track} size={600} style={{ width: art, height: art, borderRadius: 8 }}>
+                <Ionicons name="musical-notes" size={40} color="rgba(255,255,255,0.8)" />
+              </Cover>
+            </View>
+            <Text numberOfLines={1} style={[styles.title, { fontSize: 20, marginTop: 10 }]}>{track.title}</Text>
+            <Text numberOfLines={1} style={[styles.artist, { fontSize: 14 }]}>
+              {track.album ? `${track.album} • ` : ''}
+              {track.artist}
+            </Text>
+            <View style={{ marginTop: 6 }}>{Progress}</View>
+            <View style={[styles.controls, { justifyContent: 'center', gap: 36, marginTop: 4 }]}>
+              <Pressable onPress={prev} hitSlop={10}>
+                <Ionicons name="play-back" size={32} color="#FFFFFF" />
+              </Pressable>
+              <Pressable onPress={togglePlay} hitSlop={10} style={{ width: 52, alignItems: 'center' }}>
+                {loading ? (
+                  <ActivityIndicator size="large" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name={isPlaying ? 'pause' : 'play'} size={46} color="#FFFFFF" />
+                )}
+              </Pressable>
+              <Pressable onPress={next} hitSlop={10}>
+                <Ionicons name="play-forward" size={32} color="#FFFFFF" />
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Giữa: lời */}
+          {landLyrics && (
+            <View style={{ flex: 1 }}>
+              <LyricsView status={lyr.status} lyrics={lyr.lyrics} progress={progress} onSeek={seekTo} />
+            </View>
+          )}
+
+          {/* Mép phải: âm lượng dọc + 3 nút */}
+          <View style={{ width: 44, alignItems: 'center', gap: 14 }}>
+            <Ionicons name="volume-high" size={18} color={SOFT} />
+            <Slider vertical value={vol} thickness={6} onChange={onVolume} fill="#E6E6E6" />
+            <Ionicons name="volume-low" size={18} color={SOFT} />
+            <Pressable onPress={() => setLandLyrics((v) => !v)} hitSlop={10} style={{ marginTop: 6 }}>
+              <Ionicons name={landLyrics ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} size={24} color={landLyrics ? '#FFFFFF' : SOFT} />
+            </Pressable>
+            <Pressable onPress={() => setQueueOpen(true)} hitSlop={10}>
+              <Ionicons name="list" size={26} color={SOFT} />
+            </Pressable>
+            <Pressable onPress={toggleLandscape} hitSlop={10}>
+              <Ionicons name="phone-portrait-outline" size={24} color="#FFFFFF" />
+            </Pressable>
+          </View>
+        </View>
+
+        <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} />
+      </View>
+    );
+  }
+
+  // ================= Màn hình dọc =================
+  return (
+    <View style={{ flex: 1 }}>
+      {Background}
 
       <View
         style={{
@@ -91,7 +235,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
       >
         {/* Thanh trên: thu xuống / tên nghệ sĩ / thêm */}
         <View style={styles.top} {...swipe.panHandlers}>
-          <Pressable onPress={onClose} style={styles.circle}>
+          <Pressable onPress={close} style={styles.circle}>
             <Ionicons name="chevron-down" size={26} color="#FFFFFF" />
           </Pressable>
           <Text numberOfLines={1} style={styles.topTitle}>{track.artist}</Text>
@@ -209,10 +353,16 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
           <Pressable onPress={() => setShowLyrics((v) => !v)} hitSlop={10}>
             <Ionicons name={showLyrics ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} size={26} color={showLyrics ? '#FFFFFF' : SOFT} />
           </Pressable>
-          <Ionicons name="phone-portrait-outline" size={26} color={SOFT} />
-          <Ionicons name="list" size={28} color={SOFT} />
+          <Pressable onPress={toggleLandscape} hitSlop={10}>
+            <Ionicons name="phone-landscape-outline" size={26} color={SOFT} />
+          </Pressable>
+          <Pressable onPress={() => setQueueOpen(true)} hitSlop={10}>
+            <Ionicons name="list" size={28} color={SOFT} />
+          </Pressable>
         </View>
       </View>
+
+      <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} />
     </View>
   );
 }

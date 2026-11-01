@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActionSheetIOS, ActivityIndicator, Alert, Image, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { usePlayer } from '../player/PlayerProvider';
@@ -57,7 +57,7 @@ if (musicSupported) {
 
 export function SearchScreen() {
   const { theme } = useTheme();
-  const { track, playTrack } = usePlayer();
+  const { track, playTrack, playNext, addToQueue } = usePlayer();
   const pad = useContentInsets();
   const { width } = useFrame();
 
@@ -105,6 +105,7 @@ export function SearchScreen() {
   const runSearch = (raw: string) => {
     const q = raw.trim();
     if (!q || !musicSupported) return;
+    Keyboard.dismiss(); // đã chọn xong từ khoá thì cất bàn phím đi để thấy hết danh sách
     latest.current = q;
     setQuery(q);
     setMode('results');
@@ -142,12 +143,30 @@ export function SearchScreen() {
 
   // Bấm vào một gợi ý: bài hát thì phát luôn, nghệ sĩ/album thì tìm theo tên (chưa có trang nghệ sĩ/album)
   const onSuggestItem = (it: SuggestItem) => {
+    Keyboard.dismiss();
     if (it.song) {
       const playable = (suggest?.items ?? []).filter((x) => x.song).map((x) => toTrack(x.song!));
       playTrack(toTrack(it.song), playable);
       return;
     }
     runSearch(it.title);
+  };
+
+  // Nhấn giữ một bài: phát tiếp theo / thêm vào cuối hàng đợi
+  const songMenu = (t: Track) => {
+    Keyboard.dismiss();
+    const actions = [
+      { label: 'Phát tiếp theo', run: () => playNext(t) },
+      { label: 'Thêm vào hàng đợi', run: () => addToQueue(t) },
+    ];
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { title: t.title, message: t.artist, options: [...actions.map((a) => a.label), 'Huỷ'], cancelButtonIndex: actions.length },
+        (i) => actions[i]?.run()
+      );
+    } else {
+      Alert.alert(t.title, t.artist, [...actions.map((a) => ({ text: a.label, onPress: a.run })), { text: 'Huỷ', style: 'cancel' as const }]);
+    }
   };
 
   const { text, textSecondary, accent } = theme.colors;
@@ -244,7 +263,12 @@ export function SearchScreen() {
               </Pressable>
             ))}
             {(suggest?.items ?? []).map((it) => (
-              <Pressable key={`s-${it.kind}-${it.id}`} onPress={() => onSuggestItem(it)} style={styles.row}>
+              <Pressable
+                key={`s-${it.kind}-${it.id}`}
+                onPress={() => onSuggestItem(it)}
+                onLongPress={it.song ? () => songMenu(toTrack(it.song!)) : undefined}
+                style={styles.row}
+              >
                 {it.thumb ? (
                   <Image source={{ uri: it.thumb }} style={[styles.cover, { borderRadius: it.kind === 'artist' ? 28 : 4, backgroundColor: '#2A2A2A' }]} />
                 ) : (
@@ -284,7 +308,7 @@ export function SearchScreen() {
             )}
             {resultsReady &&
               results.map((t) => (
-                <Pressable key={`yt-${t.id}`} onPress={() => playTrack(t, results)} style={styles.row}>
+                <Pressable key={`yt-${t.id}`} onPress={() => playTrack(t, results)} onLongPress={() => songMenu(t)} style={styles.row}>
                   <Image source={{ uri: t.thumb }} style={[styles.cover, { backgroundColor: t.color, borderRadius: 4 }]} />
                   <View style={{ flex: 1 }}>
                     <Text numberOfLines={1} style={{ color: t.id === track.id ? accent : text, fontSize: 16, fontWeight: '600' }}>

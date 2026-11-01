@@ -13,7 +13,10 @@ import { TabId } from './src/theme/types';
 import { DropPreview } from './src/components/DropPreview';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { PlayerTransition } from './src/components/PlayerTransition';
+
+ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
 
 function Placeholder({ name }: { name: string }) {
   const { theme } = useTheme();

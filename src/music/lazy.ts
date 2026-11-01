@@ -9,5 +9,5 @@ export const ytmusic = () => require('./ytmusic') as typeof import('./ytmusic');
 export const audio = () => require('./audioPlayer') as typeof import('./audioPlayer');
 
 export function toTrack(s: Song): Track {
-  return { id: s.id, title: s.title, artist: s.artist, color: '#2A2A2A', duration: s.duration ?? 0, thumb: s.thumb };
+  return { id: s.id, title: s.title, artist: s.artist, color: '#2A2A2A', duration: s.duration ?? 0, thumb: s.thumb, album: s.album };
 }

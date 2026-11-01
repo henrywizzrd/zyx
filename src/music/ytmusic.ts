@@ -153,3 +153,25 @@ export async function getSuggestions(input: string): Promise<Suggestions> {
   }
   return { queries, items };
 }
+
+// ---------- Danh sách "Up next" / radio của YouTube Music ----------
+// Dùng để tự phát tiếp các bài liên quan khi hết hàng đợi. Bài đầu tiên thường chính là bài đang phát.
+export async function getUpNext(videoId: string): Promise<Song[]> {
+  const yt = await getSession();
+  const panel = await yt.music.getUpNext(videoId, true);
+  const out: Song[] = [];
+  for (const raw of (panel?.contents ?? []) as any[]) {
+    const v = raw?.type === 'PlaylistPanelVideoWrapper' ? raw.primary : raw;
+    if (!v || v.type !== 'PlaylistPanelVideo' || !v.video_id) continue;
+    const thumbs = v.thumbnail ?? [];
+    out.push({
+      id: v.video_id,
+      title: v.title?.toString?.() ?? '(không tên)',
+      artist: v.artists?.map((a: { name: string }) => a.name).join(', ') || v.author || '',
+      album: v.album?.name,
+      duration: v.duration?.seconds,
+      thumb: thumbs[thumbs.length - 1]?.url,
+    });
+  }
+  return out;
+}
