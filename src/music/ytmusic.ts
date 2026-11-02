@@ -47,7 +47,9 @@ export function getSession(log?: Log): Promise<Innertube> {
   if (!sessionPromise) {
     const t0 = Date.now();
     log?.('Đang tạo phiên Innertube...');
-    sessionPromise = Innertube.create()
+    // cache: lưu player đã phân tích vào file, lần mở app sau không phải phân tích lại
+    const { FileCache } = require('./ytCache') as typeof import('./ytCache');
+    sessionPromise = Innertube.create({ cache: new FileCache() })
       .then((yt) => {
         log?.(`Tạo phiên xong (${Date.now() - t0} ms)`);
         return yt;
@@ -462,5 +464,56 @@ export async function getArtist(id: string): Promise<ArtistPage> {
     thumb,
     songs: songsFrom(songShelf?.contents).slice(0, 10),
     shelves: toShelves(sections),
+  };
+}
+
+// ---------- Lời có giờ của chính YouTube Music ----------
+// YouTube Music có lời chạy theo thời gian (từ LyricFind / Musixmatch) gắn đúng vào từng video.
+// Cách lấy (giống thư viện ytmusicapi):
+//  1. /next của bài → tìm mã trang lời (browseId bắt đầu bằng "MPLYt")
+//  2. /browse trang lời đó bằng client của app YouTube Music trên Android → có thêm mốc thời gian từng dòng
+// Bài không có lời có giờ thì trả về lời thường (nếu có), hoặc null.
+export interface YTLyrics {
+  synced: boolean;
+  lines: { t: number | null; text: string }[];
+  source: string;
+}
+
+export async function getYTLyrics(videoId: string): Promise<YTLyrics | null> {
+  const yt = await getBrowseSession();
+  const next: any = await yt.actions.execute('/next', { videoId, client: 'YTMUSIC' });
+  const m = JSON.stringify(next?.data ?? {}).match(/"browseId":"(MPLYt[^"]+)"/);
+  if (!m) return null;
+
+  const client: any = (yt.session as any).context?.client ?? {};
+  const res = await fetch('https://music.youtube.com/youtubei/v1/browse?prettyPrint=false', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(client.visitorData ? { 'X-Goog-Visitor-Id': client.visitorData } : {}) },
+    body: JSON.stringify({
+      context: {
+        client: {
+          clientName: 'ANDROID_MUSIC',
+          clientVersion: '7.21.50',
+          hl: client.hl ?? 'en',
+          gl: client.gl ?? 'US',
+          ...(client.visitorData ? { visitorData: client.visitorData } : {}),
+        },
+      },
+      browseId: m[1],
+    }),
+  });
+  if (!res.ok) return null;
+  const d: any = await res.json();
+  const data = d?.contents?.elementRenderer?.newElement?.type?.componentType?.model?.timedLyricsModel?.lyricsData;
+  const raw: any[] | undefined = data?.timedLyricsData;
+  if (!Array.isArray(raw) || !raw.length) return null;
+  const timed = raw.every((x) => x?.cueRange?.startTimeMilliseconds != null);
+  return {
+    synced: timed,
+    lines: raw.map((x) => ({
+      t: timed ? Number(x.cueRange.startTimeMilliseconds) / 1000 : null,
+      text: String(x?.lyricLine ?? '').trim(),
+    })),
+    source: String(data?.sourceMessage ?? 'YouTube Music'),
   };
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Animated, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
@@ -128,27 +128,48 @@ function Root() {
   );
 }
 
-// Nạp sẵn thư viện YouTube Music (youtubei.js) ngay lúc mở app, khi màn hình còn trống.
-// Thư viện này nặng: lần đầu nạp làm luồng JS bận khoảng 1 giây. Trước đây nó được nạp lúc vào tab Tìm kiếm
-// hoặc vài giây sau khi mở app, đúng lúc người dùng đang bấm dock → dock "đơ". Giờ chịu chờ thêm chút lúc mở app,
-// đổi lại dùng app không còn bị khựng giữa chừng.
+// Màn hình chờ lúc mở app: chuẩn bị sẵn mọi thứ của YouTube Music trước khi hiện giao diện.
+//  - nạp thư viện youtubei.js (nặng)
+//  - tạo phiên duyệt (tìm kiếm, Home...) và phiên phát nhạc (tải + phân tích player của YouTube để giải mã link)
+// Nhờ vậy khi giao diện hiện ra: bấm dock không đơ, bấm bài là phát ngay.
+// Player đã phân tích được lưu vào file, nên từ lần mở app thứ hai thường nhanh hơn hẳn.
+// Chờ tối đa BOOT_MAX_MS (mạng chậm): quá thì vẫn vào app, phần còn lại chạy tiếp phía sau.
+const BOOT_MAX_MS = 4000;
 function Boot({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
   const [ready, setReady] = useState(!musicSupported);
   useEffect(() => {
     if (ready) return;
-    // Chờ một khung hình để màn hình nền hiện ra trước, rồi mới nạp
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      setReady(true);
+    };
+    const cap = setTimeout(finish, BOOT_MAX_MS);
+    // Chờ một khung hình để màn hình chờ hiện ra trước, rồi mới nạp
     const id = setTimeout(() => {
       try {
-        ytmusic().getBrowseSession().catch(() => {}); // tạo phiên duyệt luôn (nhẹ, chạy nền qua mạng)
+        const yt = ytmusic();
+        Promise.all([yt.getBrowseSession(), yt.getSession()]).catch(() => {}).finally(finish);
       } catch (e) {
         console.warn('[boot] preload', e);
+        finish();
       }
-      setReady(true);
     }, 16);
-    return () => clearTimeout(id);
+    return () => {
+      clearTimeout(id);
+      clearTimeout(cap);
+    };
   }, [ready]);
-  if (!ready) return <View style={{ flex: 1, backgroundColor: theme.background.color }} />;
+  if (!ready) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.background.color, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: theme.colors.text, fontSize: 44, fontWeight: '900', letterSpacing: 6 }}>ZYX</Text>
+        <ActivityIndicator color={theme.colors.textSecondary} style={{ marginTop: 18 }} />
+      </View>
+    );
+  }
   return <>{children}</>;
 }
 

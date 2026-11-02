@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useState } from 'react';
 import type { Track } from '../data/mock';
 
 export type LyricLine = { t: number | null; text: string };
-export type Lyrics = { synced: boolean; lines: LyricLine[] };
+export type Lyrics = { synced: boolean; lines: LyricLine[]; source?: string }; // source: lời lấy từ đâu (hiện nhỏ ở cuối lời)
 type Status = 'idle' | 'loading' | 'done';
 
 const BASE = 'https://lrclib.net/api';
+// Kho lời của SimpMusic: lưu theo đúng mã video YouTube (videoId), nên mốc thời gian khớp đúng bản đang phát
+const SIMP = 'https://api-lyrics.simpmusic.org/v1';
 const cache = new Map<string, Lyrics | null>();
 const MAX_DURATION_DIFF = 3; // giây
 
@@ -51,44 +52,85 @@ async function getJson(url: string): Promise<any | null> {
 }
 
 // Lời bài hát lấy từ lrclib.net (miễn phí, không cần khoá, có lời chạy theo thời gian)
-export async function fetchLyrics(t: Track): Promise<Lyrics | null> {
+// duration: độ dài THẬT của bản đang phát (đọc từ trình phát), không dùng số trong thông tin bài
+// (nhiều bài từ kết quả tìm kiếm không có độ dài, hoặc là bản MV dài hơn bản gốc vì có đoạn mở đầu).
+//
+// Thứ tự tìm, từ khớp nhất tới kém nhất:
+//  1. Lời có giờ của chính YouTube Music, gắn đúng vào video đang phát (nguồn LyricFind / Musixmatch)
+//  2. Kho SimpMusic theo videoId: lời được cộng đồng canh giờ cho đúng video này
+//  3. LRCLIB theo tên bài + nghệ sĩ + độ dài thật (chỉ nhận bản lệch độ dài ≤ 3 giây)
+//  4. Không có lời chạy theo thời gian thì hiện lời thường (ưu tiên lời của YouTube Music)
+export async function fetchLyrics(t: Track, duration: number): Promise<Lyrics | null> {
+  let plainFallback: Lyrics | null = null;
+  const keepPlain = (l: Lyrics) => {
+    if (!plainFallback && l.lines.some((x) => x.text)) plainFallback = { ...l, synced: false, lines: l.lines.map((x) => ({ t: null, text: x.text })) };
+  };
+
+  // 1. YouTube Music
+  try {
+    const { ytmusic, musicSupported } = require('./lazy') as typeof import('./lazy');
+    if (musicSupported) {
+      const y = await ytmusic().getYTLyrics(t.id);
+      if (y?.synced && y.lines.length) return { synced: true, lines: y.lines, source: y.source };
+      if (y) keepPlain({ synced: false, lines: y.lines, source: y.source });
+    }
+  } catch (e) {
+    console.warn('[lyrics] youtube', e);
+  }
+
+  // 2. SimpMusic
+  const sm = await getJson(`${SIMP}/${encodeURIComponent(t.id)}`);
+  const item = Array.isArray(sm?.data) ? sm.data[0] : sm?.data ?? null;
+  if (item?.syncedLyrics) {
+    const lines = parseLrc(String(item.syncedLyrics));
+    if (lines.length) return { synced: true, lines, source: 'SimpMusic Lyrics' };
+  }
+  if (item?.plainLyric) {
+    keepPlain({ synced: false, lines: String(item.plainLyric).split('\n').map((text) => ({ t: null, text: text.trim() })), source: 'SimpMusic Lyrics' });
+  }
+
+  // 3. LRCLIB
   const title = cleanTitle(t.title);
   const artist = t.artist.split(',')[0].trim();
   const qs = `track_name=${encodeURIComponent(title)}&artist_name=${encodeURIComponent(artist)}`;
-
-  const exact = await getJson(`${BASE}/get?${qs}${t.duration ? `&duration=${Math.round(t.duration)}` : ''}`);
+  const len = duration > 0 ? duration : t.duration;
+  const exact = await getJson(`${BASE}/get?${qs}${len ? `&duration=${Math.round(len)}` : ''}`);
   const a = fromItem(exact);
-  if (a) return a;
+  if (a?.synced && len && Math.abs((exact?.duration ?? len) - len) <= MAX_DURATION_DIFF) return { ...a, source: 'LRCLIB' };
+  if (a) keepPlain({ ...a, source: 'LRCLIB' });
 
   const list = await getJson(`${BASE}/search?${qs}`);
   if (Array.isArray(list)) {
     // Chỉ nhận bản có độ dài gần đúng bài đang phát. Lệch nhiều thường là bản khác (MV có intro, live, remix...)
-    // và lời sẽ chạy sai hẳn, thà không có lời đồng bộ còn hơn.
-    const diff = (x: any) => Math.abs((x.duration ?? 0) - t.duration);
-    const near = t.duration ? list.filter((x) => diff(x) <= MAX_DURATION_DIFF) : list;
+    const diff = (x: any) => Math.abs((x.duration ?? 0) - len);
+    const near = len ? list.filter((x) => diff(x) <= MAX_DURATION_DIFF) : [];
     const sorted = [...near].sort((x, y) => diff(x) - diff(y));
-    // Ưu tiên bản có lời chạy theo thời gian
     for (const it of sorted.slice(0, 8)) {
       if (it?.syncedLyrics) {
         const r = fromItem(it);
-        if (r?.synced) return r;
+        if (r?.synced) return { ...r, source: 'LRCLIB' };
       }
     }
-    for (const it of sorted.slice(0, 8)) {
+    for (const it of [...sorted, ...list].slice(0, 8)) {
       const r = fromItem(it);
-      if (r) return r;
-    }
-    // Không có bản nào khớp độ dài: chỉ lấy lời thường (không chạy theo nhạc) để khỏi sai nhịp
-    for (const it of list.slice(0, 5)) {
-      if (it?.plainLyrics) return { synced: false, lines: String(it.plainLyrics).split('\n').map((text: string) => ({ t: null, text: text.trim() })) };
+      if (r) keepPlain({ ...r, source: 'LRCLIB' });
     }
   }
-  return null;
+
+  // 4. Lời thường
+  return plainFallback;
 }
 
-// enabled=false thì không tải gì (chỉ tải khi mở chế độ lời bài hát)
-export function useLyrics(track: Track, enabled: boolean) {
+// duration: độ dài thật của bài đang phát (từ trình phát). Chờ có độ dài rồi mới tìm lời (tối đa 4 giây)
+export function useLyrics(track: Track, enabled: boolean, duration = 0) {
   const [state, setState] = useState<{ status: Status; lyrics: Lyrics | null }>({ status: 'idle', lyrics: null });
+  const [waited, setWaited] = useState(false);
+  useEffect(() => {
+    setWaited(false);
+    const id = setTimeout(() => setWaited(true), 4000);
+    return () => clearTimeout(id);
+  }, [track.id]);
+  const known = duration > 0;
 
   useEffect(() => {
     if (!enabled || track.id === 'none') return;
@@ -98,7 +140,8 @@ export function useLyrics(track: Track, enabled: boolean) {
     }
     let dead = false;
     setState({ status: 'loading', lyrics: null });
-    fetchLyrics(track)
+    if (!known && !waited) return; // còn đang chờ trình phát báo độ dài bài
+    fetchLyrics(track, duration)
       .catch(() => null)
       .then((l) => {
         cache.set(track.id, l);
@@ -107,47 +150,7 @@ export function useLyrics(track: Track, enabled: boolean) {
     return () => {
       dead = true;
     };
-  }, [track.id, enabled]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [track.id, enabled, known, waited]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return state;
-}
-
-// ---------- Chỉnh lệch lời cho từng bài (lưu lại) ----------
-// Số dương: lời hiện sớm hơn. Số âm: lời hiện muộn hơn.
-const OFFSET_KEY = 'zyx:lyricOffset';
-let offsets: Record<string, number> | null = null;
-let offsetsLoad: Promise<Record<string, number>> | null = null;
-
-function loadOffsets(): Promise<Record<string, number>> {
-  if (offsets) return Promise.resolve(offsets);
-  if (!offsetsLoad) {
-    offsetsLoad = AsyncStorage.getItem(OFFSET_KEY)
-      .then((raw) => (offsets = raw ? JSON.parse(raw) : {}))
-      .catch(() => (offsets = {}));
-  }
-  return offsetsLoad;
-}
-
-export function useLyricOffset(trackId: string): [number, (v: number) => void] {
-  const [value, setValue] = useState(() => offsets?.[trackId] ?? 0);
-  useEffect(() => {
-    let dead = false;
-    loadOffsets().then((o) => !dead && setValue(o[trackId] ?? 0));
-    return () => {
-      dead = true;
-    };
-  }, [trackId]);
-  const set = useCallback(
-    (v: number) => {
-      const r = Math.round(v * 10) / 10;
-      setValue(r);
-      loadOffsets().then((o) => {
-        if (r === 0) delete o[trackId];
-        else o[trackId] = r;
-        AsyncStorage.setItem(OFFSET_KEY, JSON.stringify(o)).catch(() => {});
-      });
-    },
-    [trackId]
-  );
-  return [value, set];
 }

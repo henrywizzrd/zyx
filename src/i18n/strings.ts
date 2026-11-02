@@ -154,6 +154,7 @@ export const vi = {
   'np.idleArtist': 'Tìm một bài ở tab Tìm kiếm',
 
   // Lời bài hát
+  'lyrics.source': 'Nguồn lời: {src}',
   'lyrics.notFound': 'Chưa tìm thấy lời cho bài này.',
   'lyrics.plainOnly': 'Bài này chỉ có lời thường, chưa có lời chạy theo nhạc.',
 
@@ -337,6 +338,7 @@ export const en: Record<StringKey, string> = {
   'np.idleTitle': 'Nothing playing',
   'np.idleArtist': 'Find a song in the Search tab',
 
+  'lyrics.source': 'Lyrics: {src}',
   'lyrics.notFound': 'No lyrics found for this song.',
   'lyrics.plainOnly': 'Only plain lyrics are available for this song, not synced ones.',
 

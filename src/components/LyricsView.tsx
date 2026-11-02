@@ -1,15 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Platform, Pressable, ScrollView, ScrollViewInstance, Text, View } from 'react-native';
 import type { Lyrics } from '../music/lyrics';
-import { useLyricOffset } from '../music/lyrics';
 import { audio, musicSupported } from '../music/lazy';
 import { usePlayer } from '../player/PlayerProvider';
 import { useT } from '../i18n';
+import RNMaskedView from '@react-native-masked-view/masked-view';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const USE_NATIVE = Platform.OS !== 'web';
+// Kiểu khai báo của thư viện chưa khớp React 19, ép kiểu để dùng như component bình thường
+const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
 const TICK_MS = 80; // đọc thời gian bài hát ~12 lần mỗi giây
 const LEAD = 0.2; // hiện dòng mới sớm một chút, vì mắt đọc chậm hơn tai nghe
-const STEP = 0.5; // mỗi lần bấm chỉnh lệch 0,5 giây
 const INTRO_MIN = 4; // câu hát đầu bắt đầu sau từng này giây thì coi đoạn trước đó là nhạc dạo
 const GAP_MIN = 10; // hai câu cách nhau từng này giây trở lên thì chèn đoạn chỉ có nhạc vào giữa
 
@@ -98,7 +100,8 @@ export function LyricsView({
 }) {
   const { track, duration } = usePlayer();
   const t = useT();
-  const [offset, setOffset] = useLyricOffset(track.id);
+  // Không còn chỉnh lệch tay: lời được chọn theo đúng videoId / độ dài thật nên khớp sẵn
+  const offset = 0;
   const scroll = useRef<ScrollViewInstance>(null);
   const ys = useRef<number[]>([]);
   const [h, setH] = useState(0);
@@ -150,7 +153,7 @@ export function LyricsView({
   const scrollToLine = (i: number, animated: boolean) => {
     const y = ys.current[i];
     if (y == null || !h) return false;
-    scroll.current?.scrollTo({ y: Math.max(0, y - h * 0.25), animated });
+    scroll.current?.scrollTo({ y: Math.max(0, y - h * 0.22), animated });
     return true;
   };
 
@@ -188,11 +191,20 @@ export function LyricsView({
     );
   }
 
-  const label = `${offset > 0 ? '+' : ''}${offset.toFixed(1)}s`;
-  const pillBtn = { width: 34, height: 30, alignItems: 'center' as const, justifyContent: 'center' as const };
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Mép trên và mép dưới của khung lời mờ dần (chữ tan dần khi trôi ra khỏi khung, không bị cắt ngang) */}
+      <MaskedView
+        style={{ flex: 1 }}
+        maskElement={
+          <LinearGradient
+            colors={['transparent', '#000', '#000', 'transparent']}
+            locations={[0, 0.14, 0.8, 1]}
+            style={{ flex: 1 }}
+          />
+        }
+      >
       <ScrollView
         ref={scroll}
         bounces={false}
@@ -200,7 +212,7 @@ export function LyricsView({
         showsVerticalScrollIndicator={false}
         onLayout={(e) => setH(e.nativeEvent.layout.height)}
         style={{ flex: 1, opacity: ready ? 1 : 0 }}
-        contentContainerStyle={{ paddingTop: 24, paddingBottom: h * 0.6 }}
+        contentContainerStyle={{ paddingTop: h * 0.12 + 8, paddingBottom: h * 0.6 }}
       >
         {!synced && (
           <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13, marginBottom: 12 }}>
@@ -240,34 +252,15 @@ export function LyricsView({
             </Pressable>
           );
         })}
+        {/* Lời lấy từ đâu (YouTube Music / LyricFind, SimpMusic, LRCLIB) */}
+        {!!lyrics.source && (
+          <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, marginTop: 24 }}>
+            {/^(source|nguồn)/i.test(lyrics.source) ? lyrics.source : t('lyrics.source', { src: lyrics.source })}
+          </Text>
+        )}
       </ScrollView>
+      </MaskedView>
 
-      {/* Chỉnh lệch lời cho bài này: lời chậm thì bấm +, lời nhanh thì bấm −. Bấm vào số để về 0. Lưu riêng từng bài. */}
-      {synced && (
-        <View
-          style={{
-            position: 'absolute',
-            right: 0,
-            bottom: 8,
-            flexDirection: 'row',
-            alignItems: 'center',
-            borderRadius: 16,
-            backgroundColor: 'rgba(0,0,0,0.35)',
-          }}
-        >
-          <Pressable onPress={() => setOffset(offset - STEP)} hitSlop={6} style={pillBtn}>
-            <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '700' }}>−</Text>
-          </Pressable>
-          <Pressable onPress={() => setOffset(0)} hitSlop={6}>
-            <Text style={{ color: offset ? '#FFFFFF' : 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '700', minWidth: 44, textAlign: 'center' }}>
-              {label}
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => setOffset(offset + STEP)} hitSlop={6} style={pillBtn}>
-            <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '700' }}>+</Text>
-          </Pressable>
-        </View>
-      )}
     </View>
   );
 }
