@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Image, PixelRatio, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useContentInsets } from '../components/FloatingDock';
@@ -11,6 +11,7 @@ import type { Card, Shelf } from '../music/ytmusic';
 import type { HomeSection, TrendingRange } from '../theme/types';
 import type { Track } from '../data/mock';
 import { useT } from '../i18n';
+import { SmartImage } from '../components/Cover';
 import { cacheGet, cacheSet, createPlaylist, getPlaylists, getRecent, getTopArtists, RecentItem, useDbVersion } from '../data/db';
 
 const PAD = 16;
@@ -117,7 +118,13 @@ function CoverCard({ title, subtitle, thumb, round, onPress, onLongPress, icon }
   return (
     <Pressable onPress={onPress} onLongPress={onLongPress} style={{ width: CARD }}>
       {thumb ? (
-        <Image source={{ uri: thumb }} style={{ width: CARD, height: CARD, borderRadius: r, backgroundColor: theme.colors.surface }} />
+        // Xin ảnh đúng cỡ hiển thị thật trên màn hình (CARD × mật độ điểm ảnh, iPhone là ×3).
+        // Ảnh bài hát lưu từ kết quả tìm kiếm chỉ có 120px nên phóng lên 148pt sẽ bị mờ
+        <SmartImage
+          url={thumb}
+          size={Math.round(CARD * PixelRatio.get())}
+          style={{ width: CARD, height: CARD, borderRadius: r, backgroundColor: theme.colors.surface }}
+        />
       ) : (
         <View style={{ width: CARD, height: CARD, borderRadius: r, backgroundColor: theme.colors.surface, alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name={icon ?? 'musical-notes'} size={40} color={theme.colors.textSecondary} />
