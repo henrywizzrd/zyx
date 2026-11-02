@@ -7,6 +7,7 @@ import type { Track } from './mock';
 //   - lịch sử nghe (để dựng Recent, Recommend for you ở Home)
 //   - bài đã thích
 //   - playlist tự tạo (có cờ công khai, sau này profile cho người khác xem)
+//   - album / playlist YouTube / nghệ sĩ đã lưu vào thư viện
 // Sau này có backend thì đồng bộ các bảng này lên server.
 //
 // Trên web không dùng SQLite (cần cấu hình riêng), các hàm trả về rỗng.
@@ -66,6 +67,10 @@ function open(): DB | null {
       PRIMARY KEY (playlist_id, position)
     );
     CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, at INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS saved (
+      kind TEXT NOT NULL, id TEXT NOT NULL, title TEXT NOT NULL, subtitle TEXT NOT NULL DEFAULT '',
+      thumb TEXT, saved_at INTEGER NOT NULL, PRIMARY KEY (kind, id)
+    );
   `);
   return db;
 }
@@ -310,5 +315,45 @@ export function kvGet<T>(key: string): T | null {
 
 export function kvSet(key: string, value: unknown) {
   cacheSet(key, value);
+  changed();
+}
+
+// ---------------- Album, playlist YouTube và nghệ sĩ đã lưu vào thư viện ----------------
+export type SavedKind = 'album' | 'playlist' | 'artist';
+export interface SavedItem {
+  kind: SavedKind;
+  id: string;
+  title: string;
+  subtitle: string;
+  thumb?: string;
+  savedAt: number;
+}
+
+export function getSaved(): SavedItem[] {
+  return safe([], (d) =>
+    d
+      .getAllSync<{ kind: SavedKind; id: string; title: string; subtitle: string; thumb: string | null; saved_at: number }>(
+        'SELECT kind, id, title, subtitle, thumb, saved_at FROM saved ORDER BY saved_at DESC'
+      )
+      .map((r) => ({ kind: r.kind, id: r.id, title: r.title, subtitle: r.subtitle, thumb: r.thumb ?? undefined, savedAt: r.saved_at }))
+  );
+}
+
+export function isSaved(kind: SavedKind, id: string): boolean {
+  return safe(false, (d) => !!d.getFirstSync('SELECT 1 FROM saved WHERE kind = ? AND id = ?', [kind, id]));
+}
+
+export function setSaved(item: Omit<SavedItem, 'savedAt'>, on: boolean) {
+  safe(undefined, (d) => {
+    if (on) {
+      d.runSync(
+        `INSERT INTO saved (kind, id, title, subtitle, thumb, saved_at) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(kind, id) DO UPDATE SET title = excluded.title, subtitle = excluded.subtitle, thumb = COALESCE(excluded.thumb, saved.thumb)`,
+        [item.kind, item.id, item.title, item.subtitle, item.thumb ?? null, Date.now()]
+      );
+    } else {
+      d.runSync('DELETE FROM saved WHERE kind = ? AND id = ?', [item.kind, item.id]);
+    }
+  });
   changed();
 }

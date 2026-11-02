@@ -11,10 +11,12 @@ export const useAnimatedBack = () => useContext(BackContext);
 // Khung cho một trang mở chồng (playlist, album...):
 //  - mở ra: trượt vào từ bên phải
 //  - đặt ngón tay sát cạnh trái rồi vuốt sang phải: trang đi theo ngón tay, thả quá 1/3 màn hình (hoặc vuốt nhanh) thì quay lại trang trước
-//  - trang phía sau tối dần lên khi trang trên trượt ra, giống iOS
-export function SwipeBack({ onBack, children }: { onBack: () => void; children: React.ReactNode }) {
+//  - trang trong suốt như một tấm kính: nền chung của app (màu, ảnh, video, tuyết/lá/cá...) vẫn chạy liền mạch phía sau.
+//    `x` (vị trí trang) truyền từ App để tab phía dưới mờ đi / hiện lại đúng theo ngón tay
+export function SwipeBack({ onBack, x: outerX, children }: { onBack: () => void; x?: Animated.Value; children: React.ReactNode }) {
   const { width } = useWindowDimensions();
-  const x = useRef(new Animated.Value(width)).current;
+  const ownX = useRef(new Animated.Value(width)).current;
+  const x = outerX ?? ownX;
   const widthRef = useRef(width);
   widthRef.current = width;
   const back = useRef(onBack);
@@ -22,6 +24,7 @@ export function SwipeBack({ onBack, children }: { onBack: () => void; children: 
   const leaving = useRef(false);
 
   useEffect(() => {
+    x.setValue(widthRef.current);
     Animated.timing(x, { toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE }).start();
   }, [x]);
 
@@ -49,25 +52,10 @@ export function SwipeBack({ onBack, children }: { onBack: () => void; children: 
     [x] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const shade = x.interpolate({ inputRange: [0, width], outputRange: [0.35, 0], extrapolate: 'clamp' });
-
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#000000', opacity: shade }]} />
       <BackContext.Provider value={leave}>
-        <Animated.View
-          {...pan.panHandlers}
-          style={[
-            StyleSheet.absoluteFill,
-            {
-              transform: [{ translateX: x }],
-              shadowColor: '#000',
-              shadowOpacity: 0.35,
-              shadowRadius: 12,
-              shadowOffset: { width: -4, height: 0 },
-            },
-          ]}
-        >
+        <Animated.View {...pan.panHandlers} style={[StyleSheet.absoluteFill, { transform: [{ translateX: x }] }]}>
           {children}
         </Animated.View>
       </BackContext.Provider>

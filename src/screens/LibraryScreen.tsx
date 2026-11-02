@@ -1,12 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, PixelRatio, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
 import { useT } from '../i18n';
 import { useContentInsets } from '../components/FloatingDock';
 import { LibraryLayout } from '../theme/types';
-import { followers, libraryItems, LibraryItem } from '../data/mock';
+import { followers } from '../data/mock';
+import { LibraryEntry, useLibrary } from '../data/library';
+import { createPlaylist, getPlaylists } from '../data/db';
+import { SmartImage } from '../components/Cover';
+import { useNav } from '../nav/Nav';
 import { ensureCoverTone, ImageSlot, PickedImage, pickProfileImage, removeProfileImage, saveCroppedCover, updateProfile, useProfile } from '../data/profile';
 import { CoverCropper } from '../components/CoverCropper';
 import { ProfileEditSheet } from '../components/ProfileEditSheet';
@@ -16,7 +20,15 @@ import { Reorderable } from '../components/Reorderable';
 import { ReorderableScrollView } from '../components/ReorderableScrollView';
 
 const H_PAD = 16;
-const COVER_H = 320; // chiều cao vùng ảnh bìa ở đầu trang
+const COVER_H = 520; // chiều cao vùng ảnh bìa: phủ phần đầu trang rồi mờ dần xuống tận danh sách
+
+// Màu "#RRGGBB" thêm độ trong suốt (0..1)
+const withAlpha = (hex: string, a: number) => hex.slice(0, 7) + Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');
+// Độ sáng cảm nhận của màu "#RRGGBB" (0 = đen, 1 = trắng)
+const lum = (hex: string) => {
+  const n = parseInt(hex.slice(1, 7), 16);
+  return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+};
 
 const LAYOUT_ORDER: LibraryLayout[] = ['list', 'columns', 'covers2', 'covers3'];
 const LAYOUT_ICON: Record<LibraryLayout, keyof typeof Ionicons.glyphMap> = {
@@ -26,26 +38,28 @@ const LAYOUT_ICON: Record<LibraryLayout, keyof typeof Ionicons.glyphMap> = {
   covers3: 'apps-outline',
 };
 
-type Filter = 'all' | 'playlist' | 'album';
+type Filter = 'all' | 'playlist' | 'album' | 'artist';
+type Item = LibraryEntry & { id: string }; // Reorderable cần trường id: dùng key của mục
 type Sort = 'recents' | 'alpha';
 
-function CoverBox({ item, size, radius }: { item: LibraryItem; size: number; radius: number }) {
-  return (
-    <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: radius,
-        backgroundColor: item.color,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <Ionicons
-        name={item.kind === 'album' ? 'disc' : 'musical-notes'}
-        size={Math.max(16, size * 0.38)}
-        color="rgba(255,255,255,0.8)"
+// Ảnh của một mục trong thư viện: ảnh thật nếu có; Liked Songs là ô tím có trái tim; nghệ sĩ thì ảnh tròn
+function CoverBox({ item, size, radius }: { item: LibraryEntry; size: number; radius: number }) {
+  const { theme } = useTheme();
+  const r = item.kind === 'artist' ? size / 2 : radius;
+  if (item.thumb) {
+    return (
+      <SmartImage
+        url={item.thumb}
+        size={Math.round(size * PixelRatio.get())}
+        style={{ width: size, height: size, borderRadius: r, backgroundColor: theme.colors.surface }}
       />
+    );
+  }
+  const liked = item.kind === 'liked';
+  const icon: keyof typeof Ionicons.glyphMap = liked ? 'heart' : item.kind === 'album' ? 'disc' : item.kind === 'artist' ? 'person' : 'musical-notes';
+  return (
+    <View style={{ width: size, height: size, borderRadius: r, backgroundColor: liked ? '#5B3CC4' : theme.colors.surface, alignItems: 'center', justifyContent: 'center' }}>
+      <Ionicons name={icon} size={Math.max(16, size * 0.38)} color={liked ? 'rgba(255,255,255,0.85)' : theme.colors.textSecondary} />
     </View>
   );
 }
@@ -78,6 +92,8 @@ export function LibraryScreen() {
 
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('recents');
+  const library = useLibrary();
+  const { push } = useNav();
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -92,30 +108,59 @@ export function LibraryScreen() {
   }, [profile.cover]);
   const hasCover = !!profile.cover;
   const lightCover = hasCover && profile.coverTone === 'light';
+  // Lấy đúng hai màu của theme: màu sáng và màu tối (chữ và nền của bộ màu, cái nào sáng hơn là "sáng").
+  // Ảnh bìa tối → chữ màu sáng của theme; ảnh bìa sáng → chữ màu tối của theme
+  const [themeLight, themeDark] = lum(theme.colors.text) > lum(theme.colors.bg) ? [theme.colors.text, theme.colors.bg] : [theme.colors.bg, theme.colors.text];
+  const onCover = lightCover ? themeDark : themeLight; // màu chữ trên ảnh
+  const underCover = lightCover ? themeLight : themeDark; // màu phủ nhẹ lên ảnh và bóng chữ
   const hero = !hasCover
     ? { text, sub: textSecondary, shadow: 'transparent' }
-    : lightCover
-      ? { text: '#111111', sub: 'rgba(17,17,17,0.68)', shadow: 'rgba(255,255,255,0.45)' }
-      : { text: '#FFFFFF', sub: 'rgba(255,255,255,0.78)', shadow: 'rgba(0,0,0,0.45)' };
+    : { text: onCover, sub: withAlpha(onCover, 0.75), shadow: withAlpha(underCover, 0.5) };
   const heroShadow = hasCover ? { textShadowColor: hero.shadow, textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 } : null;
 
-  // Áp dụng thứ tự do người dùng tự sắp xếp (mục chưa có trong thứ tự thì xếp sau, giữ nguyên vị trí cũ)
-  const ordered = useMemo(() => {
+  // Áp dụng thứ tự do người dùng tự sắp xếp. Mục mới (chưa có trong thứ tự: vừa lưu, vừa tạo) xếp lên đầu
+  const ordered = useMemo<Item[]>(() => {
     const order = theme.library.order;
     const pos = new Map(order.map((id, i) => [id, i] as const));
-    return libraryItems
-      .map((it, i) => ({ it, key: pos.get(it.id) ?? order.length + i }))
-      .sort((a, b) => a.key - b.key)
+    return library
+      .map((it, i) => ({ it: { ...it, id: it.key }, rank: pos.get(it.key) ?? i - library.length }))
+      .sort((a, b) => a.rank - b.rank)
       .map((x) => x.it);
-  }, [theme.library.order]);
+  }, [theme.library.order, library]);
+
+  const matches = (i: Item) =>
+    filter === 'all' ||
+    (filter === 'playlist' ? i.kind === 'liked' || i.kind === 'local' || i.kind === 'playlist' : i.kind === filter);
+
+  // Dòng phụ của từng mục: loại + số bài / người tạo
+  const subtitleOf = (i: Item) => {
+    if (i.kind === 'liked' || i.kind === 'local') return `${t('kind.playlist')} • ${t('col.songs', { n: Number(i.subtitle) || 0 })}`;
+    if (i.kind === 'artist') return t('kind.artist');
+    const kind = t(i.kind === 'album' ? 'kind.album' : 'kind.playlist');
+    return i.subtitle && !i.subtitle.startsWith(kind) ? `${kind} • ${i.subtitle}` : i.subtitle || kind;
+  };
+  const titleOf = (i: Item) => (i.kind === 'liked' ? t('lib.liked') : i.title);
+
+  const open = (i: Item) => {
+    if (i.kind === 'liked') push({ type: 'collection', source: 'liked', kind: 'playlist', id: 'liked', title: t('home.liked') });
+    else if (i.kind === 'local') push({ type: 'collection', source: 'local', kind: 'playlist', id: i.id.replace(/^local:/, ''), title: i.title, thumb: i.thumb });
+    else if (i.kind === 'artist') push({ type: 'artist', id: i.id.replace(/^artist:/, ''), name: i.title, thumb: i.thumb });
+    else push({ type: 'collection', source: 'yt', kind: i.kind, id: i.id.replace(/^(album|playlist):/, ''), title: i.title, thumb: i.thumb });
+  };
+
+  const newPlaylist = () => {
+    const name = t('home.newPlaylistName', { n: getPlaylists().length + 1 });
+    const id = createPlaylist(name);
+    push({ type: 'collection', source: 'local', kind: 'playlist', id, title: name });
+  };
 
   const items = useMemo(() => {
-    let list = ordered.filter((i) => filter === 'all' || i.kind === filter);
+    let list = ordered.filter(matches);
     const q = query.trim().toLowerCase();
-    if (q) list = list.filter((i) => i.title.toLowerCase().includes(q));
-    if (sort === 'alpha') list = [...list].sort((a, b) => a.title.localeCompare(b.title));
+    if (q) list = list.filter((i) => titleOf(i).toLowerCase().includes(q));
+    if (sort === 'alpha') list = [...list].sort((a, b) => titleOf(a).localeCompare(titleOf(b)));
     return list;
-  }, [ordered, filter, query, sort]);
+  }, [ordered, filter, query, sort, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Chỉ cho kéo đổi thứ tự khi đang xem đủ danh sách theo thứ tự của mình
   const reorderable = filter === 'all' && query.trim() === '' && sort === 'recents';
@@ -139,36 +184,46 @@ export function LibraryScreen() {
   // ----- Các kiểu hiển thị -----
   const renderItems = () => {
     if (items.length === 0) {
-      return <Text style={{ color: textSecondary, marginTop: 24 }}>{t('lib.noResults')}</Text>;
+      return <Text style={{ color: textSecondary, marginTop: 24 }}>{t(library.length <= 1 && filter === 'all' && !query.trim() ? 'lib.empty' : 'lib.noResults')}</Text>;
     }
+    // Bấm nhanh: mở mục. Giữ lâu: nhấc lên để kéo đổi thứ tự (onLongPress rỗng để thả tay sau khi kéo không bị tính là bấm)
+    const tap = (it: Item, node: React.ReactNode) => (
+      <Pressable onPress={() => open(it)} onLongPress={() => {}} delayLongPress={300}>
+        {node}
+      </Pressable>
+    );
 
     // Mô tả lưới cho Reorderable (columns = 1 là dạng danh sách)
     let grid: { columns: number; cellWidth: number; gapX: number; gapY: number };
-    let renderItem: (it: LibraryItem) => React.ReactNode;
+    let renderItem: (it: Item) => React.ReactNode;
 
     if (layout === 'list') {
       grid = { columns: 1, cellWidth: innerW, gapX: 0, gapY: 4 };
-      renderItem = (it) => (
-        <View style={styles.listRow}>
-          <CoverBox item={it} size={56} radius={4} />
-          <View style={{ flex: 1 }}>
-            <Text numberOfLines={1} style={{ color: text, fontSize: 16, fontWeight: '600' }}>{it.title}</Text>
-            <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>{it.subtitle}</Text>
+      renderItem = (it) =>
+        tap(
+          it,
+          <View style={styles.listRow}>
+            <CoverBox item={it} size={56} radius={4} />
+            <View style={{ flex: 1 }}>
+              <Text numberOfLines={1} style={{ color: text, fontSize: 16, fontWeight: '600' }}>{titleOf(it)}</Text>
+              <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>{subtitleOf(it)}</Text>
+            </View>
           </View>
-        </View>
-      );
+        );
     } else if (layout === 'columns') {
       const cols = Math.max(2, Math.floor(innerW / 220));
       const w = (innerW - 8 * (cols - 1)) / cols;
       grid = { columns: cols, cellWidth: w, gapX: 8, gapY: 8 };
-      renderItem = (it) => (
-        <View style={[styles.chipRow, { backgroundColor: surface }]}>
-          <CoverBox item={it} size={56} radius={0} />
-          <Text numberOfLines={2} style={{ color: text, flex: 1, marginHorizontal: 10, fontSize: 13, fontWeight: '600' }}>
-            {it.title}
-          </Text>
-        </View>
-      );
+      renderItem = (it) =>
+        tap(
+          it,
+          <View style={[styles.chipRow, { backgroundColor: surface }]}>
+            <CoverBox item={it} size={56} radius={0} />
+            <Text numberOfLines={2} style={{ color: text, flex: 1, marginHorizontal: 10, fontSize: 13, fontWeight: '600' }}>
+              {titleOf(it)}
+            </Text>
+          </View>
+        );
     } else {
       const base = layout === 'covers2' ? 2 : 3;
       const targetW = layout === 'covers2' ? 200 : 140;
@@ -176,13 +231,19 @@ export function LibraryScreen() {
       const gap = 14;
       const w = (innerW - gap * (cols - 1)) / cols;
       grid = { columns: cols, cellWidth: w, gapX: gap, gapY: gap };
-      renderItem = (it) => (
-        <View>
-          <CoverBox item={it} size={w} radius={6} />
-          <Text numberOfLines={1} style={{ color: text, fontSize: 14, fontWeight: '600', marginTop: 8 }}>{it.title}</Text>
-          <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 12, marginTop: 2 }}>{it.subtitle}</Text>
-        </View>
-      );
+      renderItem = (it) =>
+        tap(
+          it,
+          <View>
+            <CoverBox item={it} size={w} radius={6} />
+            <Text numberOfLines={1} style={{ color: text, fontSize: 14, fontWeight: '600', marginTop: 8, textAlign: it.kind === 'artist' ? 'center' : 'left' }}>
+              {titleOf(it)}
+            </Text>
+            <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 12, marginTop: 2, textAlign: it.kind === 'artist' ? 'center' : 'left' }}>
+              {subtitleOf(it)}
+            </Text>
+          </View>
+        );
     }
 
     return (
@@ -209,9 +270,15 @@ export function LibraryScreen() {
           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: COVER_H }}>
             <Image source={{ uri: profile.cover }} resizeMode="cover" style={StyleSheet.absoluteFill} />
             <LinearGradient
-              // Ảnh tối: phủ đen nhẹ cho chữ trắng nổi hơn. Ảnh sáng: phủ trắng nhẹ cho chữ đậm nổi hơn
-              colors={lightCover ? ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.3)', fadeTo] : ['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.35)', fadeTo]}
-              locations={[0, 0.55, 1]}
+              // Phần trên: phủ nhẹ màu tối/sáng của theme (ngược với màu chữ) cho chữ nổi.
+              // Phần dưới: mờ dần vào màu nền qua một đoạn dài, ảnh "tan" vào theme chứ không cắt ngang
+              colors={[
+                withAlpha(underCover, 0.12),
+                withAlpha(underCover, 0.3),
+                theme.background.type === 'preset' ? withAlpha(fadeTo, 0.7) : fadeTo,
+                fadeTo,
+              ]}
+              locations={[0, 0.4, 0.75, 1]}
               style={StyleSheet.absoluteFill}
             />
           </View>
@@ -280,6 +347,7 @@ export function LibraryScreen() {
         <View style={{ paddingHorizontal: H_PAD, marginTop: 28, flexDirection: 'row', gap: 8 }}>
           {chip(t('lib.playlists'), filter === 'playlist', () => toggleFilter('playlist'))}
           {chip(t('lib.albums'), filter === 'album', () => toggleFilter('album'))}
+          {chip(t('lib.artists'), filter === 'artist', () => toggleFilter('artist'))}
         </View>
 
         {/* Tìm kiếm, sắp xếp, đổi kiểu hiển thị */}
@@ -316,6 +384,10 @@ export function LibraryScreen() {
             <Text style={{ color: textSecondary, fontSize: 13, fontWeight: '600' }}>
               {t(sort === 'recents' ? 'lib.customOrder' : 'lib.az')}
             </Text>
+          </Pressable>
+          {/* Tạo playlist mới */}
+          <Pressable onPress={newPlaylist} hitSlop={8} accessibilityLabel={t('lib.create')}>
+            <Ionicons name="add" size={24} color={text} />
           </Pressable>
           <Pressable onPress={cycleLayout} hitSlop={8}>
             <Ionicons name={LAYOUT_ICON[layout]} size={20} color={text} />

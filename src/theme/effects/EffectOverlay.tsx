@@ -2,7 +2,9 @@ import React, { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Canvas, Fill, ImageShader, Picture, Shader, Skia, type SkImage } from '@shopify/react-native-skia';
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
-import { leafRevealShader, rippleRevealShader, snowRevealShader } from './shaders';
+import {
+  coffeeRevealShader, inkRevealShader, leafRevealShader, rippleRevealShader, snowRevealShader, sunRevealShader,
+} from './shaders';
 import { drawBubble } from './ocean';
 import { drawFlake, FLAKE_SVGS } from './snowflakes';
 import { drawLeaf, LEAF_COLORS, LEAF_SVGS, makeLeafPaths } from './leaves';
@@ -10,10 +12,13 @@ import { drawLeaf, LEAF_COLORS, LEAF_SVGS, makeLeafPaths } from './leaves';
 // Màu bông tuyết lúc chuyển theme: xanh xám vừa phải, thấy được trên cả nền tối lẫn nền trắng
 const FLAKE_COLOR = '#7C9EC4';
 
-export type ThemeEffect = 'snow' | 'leaves' | 'ripple';
+export type ThemeEffect = 'snow' | 'leaves' | 'ripple' | 'ink' | 'sun' | 'coffee';
 
 // Thời gian chạy của từng hiệu ứng (ms)
-export const EFFECT_MS: Record<ThemeEffect, number> = { snow: 1500, leaves: 1400, ripple: 1300 };
+export const EFFECT_MS: Record<ThemeEffect, number> = { snow: 1500, leaves: 1400, ripple: 1300, ink: 1500, sun: 1300, coffee: 1600 };
+
+// Dark và Latte: có một giọt (mực / cà phê) rơi xuống chỗ bấm trước, chiếm phần đầu của hiệu ứng; sau đó mới loang
+const DROP = 0.22;
 
 type Props = {
   effect: ThemeEffect;
@@ -25,8 +30,11 @@ type Props = {
 };
 
 // Shader của hiệu ứng dựng được chưa (dựng lỗi thì chuyển theme kiểu mờ dần thay vì giật)
-const shaderOf = (effect: ThemeEffect) =>
-  effect === 'snow' ? snowRevealShader() : effect === 'leaves' ? leafRevealShader() : rippleRevealShader();
+const SHADERS = {
+  snow: snowRevealShader, leaves: leafRevealShader, ripple: rippleRevealShader,
+  ink: inkRevealShader, sun: sunRevealShader, coffee: coffeeRevealShader,
+};
+const shaderOf = (effect: ThemeEffect) => SHADERS[effect]();
 export const effectReady = (effect: ThemeEffect) => !!shaderOf(effect);
 
 // Số ngẫu nhiên cố định theo chỉ số (để mỗi lần vẽ, bông tuyết / chiếc lá thứ i luôn giống nhau)
@@ -49,15 +57,23 @@ export function EffectOverlay({ effect, image, origin, progress, width, height }
   const ox = origin.x;
   const oy = origin.y;
 
+  const hasDrop = effect === 'ink' || effect === 'coffee';
   const uniforms = useDerivedValue(() => {
-    const p = progress.value;
+    // Hiệu ứng có giọt rơi: chờ giọt chạm xuống rồi mới bắt đầu loang
+    // (giá trị âm trước lúc chạm để chỗ bấm chưa bị nhuộm màu sớm)
+    const p = hasDrop ? Math.max(-0.15, (progress.value - DROP) / (1 - DROP)) : progress.value;
     // Chậm lúc đầu, nhanh ở giữa, chậm lại lúc cuối
     const e = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
     return { origin: [ox, oy], progress: e, maxR };
   });
 
   const particles = useMemo(
-    () => (effect === 'snow' ? makeFlakes(width, height) : effect === 'leaves' ? makeLeaves() : makeBubbles()),
+    () =>
+      effect === 'snow' ? makeFlakes(width, height)
+        : effect === 'leaves' ? makeLeaves()
+        : effect === 'ripple' ? makeBubbles()
+        : hasDrop ? makeSplash()
+        : [],
     [effect, width, height]
   );
   // Chỉ chuyển chữ/số sang luồng UI; hình (SkPath) dựng ngay trong worklet cho chắc
@@ -97,6 +113,30 @@ export function EffectOverlay({ effect, image, origin, progress, width, height }
           const x = x0 + Math.sin(t * 6.2 + phase) * amp;
           paint.setAlphaf(alpha * fadeIn * fadeOut);
           drawFlake(canvas, paint, shape, x, y, r, phase * 57.3 + t * 90, 1.4);
+        }
+      } else if (hasDrop) {
+        // Giọt rơi từ mép trên xuống chỗ bấm (nhanh dần), chạm xuống thì bắn ra vài giọt nhỏ
+        const color = Skia.Color(effect === 'ink' ? '#0B0B0B' : '#5A3A24');
+        paint.setStyle(0);
+        paint.setColor(color);
+        if (p < DROP) {
+          const k = p / DROP;
+          const y = -30 + (oy + 30) * k * k;
+          const rx = 7;
+          const ry = 7 + 6 * k; // rơi càng nhanh giọt càng dài ra
+          canvas.drawOval(Skia.XYWHRect(ox - rx, y - ry, rx * 2, ry * 2), paint);
+        } else {
+          const k = (p - DROP) / 0.25;
+          if (k < 1) {
+            const out = 1 - (1 - k) * (1 - k);
+            for (let i = 0; i < particles.length; i += 3) {
+              const ang = particles[i];
+              const dist = particles[i + 1];
+              const r = particles[i + 2] * (1 - k * 0.7);
+              paint.setAlphaf(1 - k);
+              canvas.drawCircle(ox + Math.cos(ang) * dist * out, oy + Math.sin(ang) * dist * out, r, paint);
+            }
+          }
         }
       } else if (effect === 'ripple') {
         // Một chùm bong bóng sủi lên từ chỗ bấm, lắc lư rồi tan
@@ -169,6 +209,13 @@ function makeFlakes(width: number, height: number) {
   for (let i = 0; i < count; i++) {
     out.push(rnd(i, 1) * width, rnd(i, 2) * 0.45, 6 + rnd(i, 3) * 8, 6 + rnd(i, 4) * 16, rnd(i, 5) * 6.28, 0.55 + rnd(i, 6) * 0.45);
   }
+  return out;
+}
+
+// Giọt bắn ra khi giọt mực / cà phê chạm xuống, mỗi giọt 3 số: hướng, quãng bay, bán kính
+function makeSplash() {
+  const out: number[] = [];
+  for (let i = 0; i < 12; i++) out.push((i / 12) * Math.PI * 2 + rnd(i, 1) * 0.4, 30 + rnd(i, 2) * 50, 2 + rnd(i, 3) * 3.5);
   return out;
 }
 

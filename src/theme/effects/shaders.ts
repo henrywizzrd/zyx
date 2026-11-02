@@ -85,6 +85,56 @@ half4 main(float2 p) {
   return half4(half3(0.45, 0.66, 0.9) * half(al), half(al));
 }`;
 
+// Dark: mực đen loang ra từ chỗ giọt mực rơi xuống. Mép loang có những vệt mực mảnh, màn hình cũ bị nhuộm tối dần trước khi mất hẳn
+const INK = `${COMMON}
+half4 main(float2 p) {
+  half4 c = image.eval(p);
+  float d = distance(p, origin);
+  float n = fbm(p * 0.03) * 0.6 + fbm(p * 0.11 + 5.0) * 0.4;
+  float r = progress * (maxR + 230.0);
+  float edge = d + n * 220.0 - r;
+  float a = smoothstep(0.0, 2.5, edge);
+  float bleed = 1.0 - smoothstep(0.0, 45.0, edge);
+  half3 col = mix(c.rgb, half3(0.03, 0.03, 0.04), half(bleed * 0.92));
+  return half4(col * half(a), half(a));
+}`;
+
+// Light: vòng sáng lan ra như mặt trời mọc. Phía trước mép có quầng nắng ấm và các tia sáng chiếu lên màn hình cũ
+const SUN = `${COMMON}
+half4 main(float2 p) {
+  half4 c = image.eval(p);
+  float2 v = p - origin;
+  float d = length(v);
+  float r = progress * (maxR + 200.0);
+  float edge = d + fbm(p * 0.01) * 30.0 - r;
+  float a = smoothstep(0.0, 26.0, edge);
+  float ang = atan(v.y, v.x);
+  float rays = pow(0.5 + 0.5 * sin(ang * 11.0 + progress * 5.0), 6.0);
+  float glow = exp(-max(edge, 0.0) / 110.0);
+  float k = glow * (0.5 + 0.5 * rays) * (1.0 - progress * 0.3);
+  half3 col = mix(c.rgb, half3(1.0, 0.93, 0.74), half(min(k, 1.0) * 0.9));
+  return half4(col * half(a), half(a));
+}`;
+
+// Latte: giọt cà phê rơi rồi loang xoáy như rót sữa vào cà phê. Sát mép là viền cà phê đậm, sau đó là dải kem sữa
+const COFFEE = `${COMMON}
+half4 main(float2 p) {
+  half4 c = image.eval(p);
+  float2 v = p - origin;
+  float d = length(v);
+  float ang = d * 0.012 + progress * 2.2;
+  float2 q = float2(v.x * cos(ang) - v.y * sin(ang), v.x * sin(ang) + v.y * cos(ang));
+  float n = fbm(q * 0.02);
+  float r = progress * (maxR + 150.0);
+  float edge = d + n * 140.0 - r;
+  float a = smoothstep(0.0, 3.0, edge);
+  float coffee = 1.0 - smoothstep(0.0, 14.0, edge);
+  float cream = 1.0 - smoothstep(10.0, 70.0, edge);
+  half3 col = mix(c.rgb, half3(0.9, 0.8, 0.65), half(cream * 0.85));
+  col = mix(col, half3(0.42, 0.27, 0.17), half(coffee * 0.9));
+  return half4(col * half(a), half(a));
+}`;
+
 const cache: Record<string, SkRuntimeEffect | null> = {};
 function make(name: string, src: string) {
   if (!(name in cache)) {
@@ -97,3 +147,6 @@ function make(name: string, src: string) {
 export const snowRevealShader = () => make('snow', SNOW);
 export const leafRevealShader = () => make('leaf', LEAF);
 export const rippleRevealShader = () => make('ripple', RIPPLE);
+export const inkRevealShader = () => make('ink', INK);
+export const sunRevealShader = () => make('sun', SUN);
+export const coffeeRevealShader = () => make('coffee', COFFEE);

@@ -6,6 +6,7 @@ export const defaultTheme: Theme = {
   name: 'Default Dark',
   language: 'vi',
   preset: 'dark',
+  followSystem: true, // người dùng mới: theo sáng/tối của điện thoại
   background: { type: 'preset', color: PRESETS.dark.bg, uri: '', dim: 0.25 },
   colors: PRESETS.dark,
   glass: { blur: 40 },

@@ -25,6 +25,7 @@ export interface Theme {
   name: string;
   language: Language; // ngôn ngữ giao diện
   preset: ThemePresetId; // bộ màu đang dùng
+  followSystem: boolean; // true: tự theo sáng/tối của điện thoại (Light ↔ Dark), preset được tính lại theo điện thoại
   // color: màu nền của bộ màu (tính tự động). uri: file ảnh/video ('' = chưa có). dim: độ tối phủ lên ảnh/video cho dễ đọc chữ (0..0.8)
   background: { type: BackgroundType; color: string; uri: string; dim: number };
   colors: Palette; // tính tự động từ preset, không tự sửa

@@ -8,12 +8,11 @@ import { useSongMenu } from '../components/useSongMenu';
 import { CollectionPage, useNav } from '../nav/Nav';
 import { Translate, useT } from '../i18n';
 import { useAnimatedBack } from '../nav/SwipeBack';
-import { PageBackground } from '../components/AppBackground';
 import type { Track } from '../data/mock';
 import { musicSupported, toTrack, ytmusic } from '../music/lazy';
 import {
-  deletePlaylist, getLikedTracks, getPlaylist, getPlaylistTracks, PlayContext, removeFromPlaylist,
-  renamePlaylist, setPlaylistPublic, useDbVersion,
+  deletePlaylist, getLikedTracks, getPlaylist, getPlaylistTracks, isSaved, PlayContext, removeFromPlaylist,
+  renamePlaylist, setPlaylistPublic, setSaved, useDbVersion,
 } from '../data/db';
 
 type Row = Track & { position?: number };
@@ -110,12 +109,22 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
       { text: t('common.delete'), style: 'destructive', onPress: () => { deletePlaylist(page.id); pop(); } },
     ]);
 
+  // Album / playlist YouTube: nút lưu vào Thư viện
+  const saved = useMemo(() => page.source === 'yt' && isSaved(page.kind, page.id), [page, dbv]);
+  const toggleSaved = () =>
+    setSaved({ kind: page.kind, id: page.id, title: info.title, subtitle: info.subtitle, thumb: info.thumb }, !saved);
+
   const Header = (
     <View style={{ paddingTop: pad.top + 8 }}>
       <View style={styles.topBar}>
         <Pressable onPress={goBack} hitSlop={10} style={[styles.circle, { backgroundColor: surface }]}>
           <Ionicons name="chevron-back" size={24} color={text} />
         </Pressable>
+        {page.source === 'yt' && (
+          <Pressable onPress={toggleSaved} hitSlop={10} accessibilityLabel={t(saved ? 'col.saved' : 'col.save')} style={[styles.circle, { backgroundColor: surface }]}>
+            <Ionicons name={saved ? 'checkmark-circle' : 'add-circle-outline'} size={22} color={saved ? accent : text} />
+          </Pressable>
+        )}
         {local && (
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <Pressable onPress={rename} hitSlop={10} style={[styles.circle, { backgroundColor: surface }]}>
@@ -179,7 +188,6 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <PageBackground />
       <FlatList
         data={rows}
         keyExtractor={(r, i) => `${r.id}:${r.position ?? i}`}

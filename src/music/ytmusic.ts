@@ -311,3 +311,140 @@ export async function getCollection(kind: 'playlist' | 'album', id: string): Pro
     songs,
   };
 }
+
+// ---------- Tìm kiếm theo loại: Tất cả / Bài hát / Album / Nghệ sĩ ----------
+export type SearchKind = 'all' | 'song' | 'album' | 'artist';
+export interface SearchResults {
+  top?: Card; // "Kết quả hàng đầu" của YouTube Music (thường đúng nhất)
+  songs: Song[]; // bài hát chính thức
+  videos: Song[]; // video ca nhạc (nhiều bài Việt chỉ có dạng video, không có bản "bài hát")
+  albums: Card[];
+  artists: Card[];
+}
+
+// Một dòng kết quả (MusicResponsiveListItem) thành thẻ album / nghệ sĩ / playlist
+function listCard(n: any): Card | null {
+  if (n?.type !== 'MusicResponsiveListItem' || !n.id) return null;
+  const kind = n.item_type as CardKind;
+  if (kind !== 'album' && kind !== 'artist' && kind !== 'playlist') return null;
+  const title = str(n.title) || str(n.name) || str(n.author?.name);
+  if (!title) return null;
+  const thumb = lastThumb(n.thumbnails);
+  let subtitle = '';
+  if (kind === 'album') subtitle = [artistsOf(n), n.year].filter(Boolean).join(' • ');
+  else if (kind === 'artist') subtitle = n.subscribers || '';
+  else subtitle = artistsOf(n) || str(n.item_count);
+  return { kind, id: n.id, title, subtitle, thumb };
+}
+
+const toSong = (n: any): Song => ({
+  id: n.id,
+  title: str(n.title) || '(không tên)',
+  artist: artistsOf(n),
+  album: n.album?.name,
+  duration: n.duration?.seconds,
+  thumb: lastThumb(n.thumbnails),
+});
+
+// Chia các dòng kết quả vào bài hát / video / album / nghệ sĩ theo loại của từng dòng
+// (không dựa vào tên kệ "Songs", "Albums"... vì tên kệ đổi theo ngôn ngữ)
+function collect(nodes: any[], into: SearchResults) {
+  for (const n of nodes) {
+    if (n?.type !== 'MusicResponsiveListItem' || !n.id) continue;
+    if (n.item_type === 'song' || n.item_type === 'video') {
+      const list = n.item_type === 'song' ? into.songs : into.videos;
+      if (!list.some((s) => s.id === n.id)) list.push(toSong(n));
+      continue;
+    }
+    const c = listCard(n);
+    if (!c) continue;
+    const list = c.kind === 'album' ? into.albums : c.kind === 'artist' ? into.artists : null;
+    if (list && !list.some((x) => x.id === c.id)) list.push(c);
+  }
+}
+
+// Thẻ "Kết quả hàng đầu" (MusicCardShelf): đọc xem nó là bài/video (có videoId) hay nghệ sĩ/album (có browseId)
+function topCard(shelf: any): Card | undefined {
+  const p = shelf?.on_tap?.payload ?? {};
+  const title = str(shelf?.title);
+  if (!title) return undefined;
+  const subtitle = str(shelf?.subtitle);
+  const thumb = lastThumb(shelf?.thumbnail?.contents ?? shelf?.thumbnail);
+  if (p.videoId) {
+    // Dòng phụ dạng "Bài hát • Ca sĩ • Album" hoặc "Video • Ca sĩ • 12 Tr lượt xem"
+    const parts = subtitle.split(' • ');
+    const artist = parts.length > 1 ? parts[1] : parts[0] ?? '';
+    return { kind: 'song', id: p.videoId, title, subtitle, thumb, song: { id: p.videoId, title, artist, thumb } };
+  }
+  const pageType: string = p.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType ?? '';
+  if (p.browseId && pageType.includes('ARTIST')) return { kind: 'artist', id: p.browseId, title, subtitle, thumb };
+  if (p.browseId && pageType.includes('ALBUM')) return { kind: 'album', id: p.browseId, title, subtitle, thumb };
+  return undefined;
+}
+
+// Tìm theo một loại, kèm thêm một trang nữa nếu có (mỗi trang YouTube trả khoảng 20 kết quả)
+async function searchFiltered(yt: Innertube, query: string, type: 'song' | 'video' | 'album' | 'artist', into: SearchResults, pages = 1) {
+  let res: any = await yt.music.search(query, { type });
+  for (const section of (res.contents ?? []) as any[]) {
+    if (section?.type === 'MusicShelf') collect(section.contents ?? [], into);
+  }
+  for (let i = 1; i < pages && res?.has_continuation; i++) {
+    try {
+      res = await res.getContinuation();
+      collect((res.contents?.contents ?? []) as any[], into);
+    } catch {
+      break;
+    }
+  }
+}
+
+export async function searchMusic(query: string, kind: SearchKind): Promise<SearchResults> {
+  const out: SearchResults = { songs: [], videos: [], albums: [], artists: [] };
+  const yt = await getSession();
+  if (kind === 'song') {
+    // Bài hát và video ca nhạc tìm song song: nhiều bài chỉ có trên YouTube dưới dạng video
+    await Promise.all([
+      searchFiltered(yt, query, 'song', out, 2).catch(() => {}),
+      searchFiltered(yt, query, 'video', out, 1).catch(() => {}),
+    ]);
+    if (!out.songs.length && !out.videos.length) throw new Error('Không tìm được');
+    return out;
+  }
+  if (kind === 'album' || kind === 'artist') {
+    await searchFiltered(yt, query, kind, out, 2);
+    return out;
+  }
+  const res: any = await yt.music.search(query);
+  for (const section of (res.contents ?? []) as any[]) {
+    if (section?.type === 'MusicCardShelf') {
+      out.top = out.top ?? topCard(section);
+      collect(section.contents ?? [], out);
+    } else if (section?.type === 'MusicShelf') {
+      collect(section.contents ?? [], out);
+    }
+  }
+  return out;
+}
+
+// ---------- Trang nghệ sĩ ----------
+export interface ArtistPage {
+  name: string;
+  thumb?: string;
+  songs: Song[]; // bài nổi bật
+  shelves: Shelf[]; // Album, Đĩa đơn, Video, Nghệ sĩ tương tự...
+}
+
+export async function getArtist(id: string): Promise<ArtistPage> {
+  const yt = await getSession();
+  const a: any = await yt.music.getArtist(id);
+  const h = a.header;
+  const thumb = lastThumb(h?.thumbnail?.contents ?? h?.thumbnail) ?? lastThumb(h?.foreground_thumbnail);
+  const sections = (a.sections ?? []) as any[];
+  const songShelf = sections.find((s) => s?.type === 'MusicShelf');
+  return {
+    name: str(h?.title),
+    thumb,
+    songs: songsFrom(songShelf?.contents).slice(0, 10),
+    shelves: toShelves(sections),
+  };
+}

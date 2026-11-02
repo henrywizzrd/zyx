@@ -131,7 +131,7 @@ function deleteFile(uri: string) {
 // Cách làm: cắt đúng vùng sau chữ, thu nhỏ còn 32px cho nhẹ, rồi dùng Skia đọc màu từng điểm ảnh và tính độ sáng trung bình.
 // ---------------------------------------------------------------------------
 // Vùng chữ nằm trên ảnh bìa (tính theo tỉ lệ khung ảnh bìa): bên phải avatar, khoảng giữa chiều cao
-const TEXT_REGION = { x: 0.3, y: 0.22, w: 0.7, h: 0.45 };
+const TEXT_REGION = { x: 0.3, y: 0.14, w: 0.7, h: 0.28 };
 // Độ sáng (0..1) từ ngưỡng này trở lên thì coi là ảnh sáng. Để hơi cao vì chữ trắng có bóng đổ nên vẫn đọc được trên nền trung tính
 const LIGHT_THRESHOLD = 0.6;
 

@@ -1,16 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AppState, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { Canvas, Picture, Skia, useClock } from '@shopify/react-native-skia';
+import { Canvas, Group, Path, Picture, Skia, useClock } from '@shopify/react-native-skia';
 import { useDerivedValue } from 'react-native-reanimated';
 import { useTheme } from '../ThemeProvider';
 import { drawFlake, FLAKE_SVGS } from './snowflakes';
 import { drawLeaf, LEAF_COLORS, LEAF_SVGS, makeLeafPaths } from './leaves';
+import { BEAN_COLORS, BEAN_SVG, BEANS } from './beans';
 import { drawBubble, drawFish, FISH_BODY, FISH_COLORS, FISH_FIN, FISH_TAIL } from './ocean';
 
 // Hiệu ứng rơi nhẹ liên tục phía sau nội dung (bật/tắt trong trang Giao diện):
 //  - bộ Snow: bông tuyết
 //  - bộ Green: lá cây
 //  - bộ Ocean: bong bóng oxy như bể cá + vài chú cá bơi qua lại
+//  - bộ Latte: vài hạt cà phê trang trí đứng yên (vẽ một lần, không tốn pin)
 // Không chạy (không tốn pin) khi: bộ màu khác, đã tắt, đang mở Player (paused), hoặc app đang ở nền.
 export function AmbientEffect({ paused }: { paused?: boolean }) {
   const { theme } = useTheme();
@@ -28,6 +30,7 @@ export function AmbientEffect({ paused }: { paused?: boolean }) {
   }
   if (theme.preset === 'green' && on.green) return <LeafCanvas />;
   if (theme.preset === 'ocean' && on.ocean) return <OceanCanvas onMedia={onMedia} />;
+  if (theme.preset === 'latte' && on.latte) return <CoffeeBeans />;
   return null;
 }
 
@@ -229,4 +232,28 @@ function OceanCanvas({ onMedia }: { onMedia: boolean }) {
     return rec.finishRecordingAsPicture();
   });
   return <Layer picture={picture} />;
+}
+
+// Bộ Latte: hạt cà phê đứng yên quanh mép màn hình. Không có đồng hồ chạy nên chỉ vẽ một lần
+function CoffeeBeans() {
+  const { width, height } = useWindowDimensions();
+  const bean = useMemo(() => {
+    const p = Skia.Path.MakeFromSVGString(BEAN_SVG);
+    return p ? Skia.PathBuilder.MakeFromPath(p).setFillType(1).build() : null; // even-odd: rãnh giữa thành khe rỗng
+  }, []);
+  if (!bean) return null;
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Canvas style={StyleSheet.absoluteFill}>
+        {BEANS.map(([x, y, rot, size], i) => (
+          <Group
+            key={i}
+            transform={[{ translateX: x * width }, { translateY: y * height }, { rotate: (rot * Math.PI) / 180 }, { scale: size }]}
+          >
+            <Path path={bean} color={BEAN_COLORS[i % BEAN_COLORS.length]} opacity={0.55} />
+          </Group>
+        ))}
+      </Canvas>
+    </View>
+  );
 }

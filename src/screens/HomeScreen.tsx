@@ -239,6 +239,7 @@ function useOpenContext() {
     if (r.kind === 'local') return push({ type: 'collection', source: 'local', kind: 'playlist', id: r.id, title: r.title, thumb: r.thumb });
     if (r.kind === 'album') return push({ type: 'collection', source: 'yt', kind: 'album', id: r.id, title: r.title, thumb: r.thumb });
     if (r.kind === 'playlist' || r.kind === 'chart') return push({ type: 'collection', source: 'yt', kind: 'playlist', id: r.id, title: r.title, thumb: r.thumb });
+    if (r.kind === 'artist') return push({ type: 'artist', id: r.id, name: r.title, thumb: r.thumb });
     if (r.kind === 'mix') return startMix({ id: r.id, title: r.title, artist: '', color: '#2A2A2A', duration: 0, thumb: r.thumb }, r.title);
   };
   return { open, startMix };

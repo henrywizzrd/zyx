@@ -8,14 +8,16 @@ import type { ThemeEffect } from './effects/EffectOverlay';
 const USE_NATIVE = Platform.OS !== 'web';
 const FADE_MS = 650;
 
-// Hiệu ứng riêng của từng bộ màu (bộ chưa có thì mờ dần như cũ). Đợt sau thêm dark, light, latte
-const EFFECT_OF: Partial<Record<ThemePresetId, ThemeEffect>> = { snow: 'snow', green: 'leaves', ocean: 'ripple' };
+// Hiệu ứng riêng của từng bộ màu (Skia lỗi hoặc web thì mờ dần)
+const EFFECT_OF: Record<ThemePresetId, ThemeEffect> = {
+  dark: 'ink', light: 'sun', green: 'leaves', ocean: 'ripple', latte: 'coffee', snow: 'snow',
+};
 
 // Skia chỉ nạp trên iOS/Android (web chưa cài CanvasKit)
 const effects = Platform.OS === 'web' ? null : (require('./effects/EffectOverlay') as typeof import('./effects/EffectOverlay'));
 
 export type Point = { x: number; y: number };
-type Ctx = { changePreset: (id: ThemePresetId, origin?: Point) => void; busy: boolean };
+type Ctx = { changePreset: (id: ThemePresetId, origin?: Point, followSystem?: boolean) => void; busy: boolean };
 const TransitionContext = createContext<Ctx | null>(null);
 export const useThemeTransition = () => {
   const c = useContext(TransitionContext);
@@ -65,6 +67,7 @@ export function ThemeTransition({ children }: { children: React.ReactNode }) {
   const [shot, setShot] = useState<Shot | null>(null);
   const [holdImage, setHoldImage] = useState(true); // ảnh chụp kiểu thường che màn hình trong lúc chờ đổi theme
   const pending = useRef<ThemePresetId | null>(null);
+  const pendingFollow = useRef(false); // bộ mới được chọn qua thẻ "Theo hệ thống"
   const switched = useRef(false);
   const fade = useRef(new Animated.Value(1)).current;
   const progress = useSharedValue(0);
@@ -82,18 +85,24 @@ export function ThemeTransition({ children }: { children: React.ReactNode }) {
   const applyPreset = useCallback(
     (id: ThemePresetId) => {
       switched.current = true;
-      setPreset(id);
+      setPreset(id, pendingFollow.current);
     },
     [setPreset]
   );
 
   const changePreset = useCallback(
-    async (id: ThemePresetId, origin?: Point) => {
+    async (id: ThemePresetId, origin?: Point, followSystem = false) => {
       const t = themeRef.current;
-      if (id === t.preset || pending.current) return;
+      if (pending.current) return;
+      // Cùng bộ màu (ví dụ đang Dark, bấm "Theo hệ thống" khi điện thoại cũng đang tối): chỉ đổi cờ, không cần hiệu ứng
+      if (id === t.preset) {
+        if (followSystem !== t.followSystem) setPreset(id, followSystem);
+        return;
+      }
+      pendingFollow.current = followSystem;
       // Nền video: ảnh chụp thường ra đen ở phần video, nên đổi thẳng (nền vẫn là video nên không thấy giật)
       const canShot = Platform.OS !== 'web' && !(t.background.type === 'video' && t.background.uri);
-      if (!canShot) return setPreset(id);
+      if (!canShot) return setPreset(id, followSystem);
       pending.current = id;
       switched.current = false;
       try {
@@ -101,7 +110,7 @@ export function ThemeTransition({ children }: { children: React.ReactNode }) {
         const uri = await captureRef(root as any, { format: 'jpg', quality: 0.92, result: 'tmpfile' });
 
         // Bộ có hiệu ứng riêng: nạp ảnh chụp vào Skia để shader "xoá" dần
-        let effect = EFFECT_OF[id] ?? null;
+        let effect: ThemeEffect | null = EFFECT_OF[id];
         let image: Shot['image'] = null;
         if (effect && effects && !effects.effectReady(effect)) {
           console.warn('[theme] effect skipped: shader not available');
@@ -128,7 +137,7 @@ export function ThemeTransition({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.warn('[theme] capture', e);
         pending.current = null;
-        setPreset(id);
+        setPreset(id, followSystem);
       }
     },
     [setPreset, applyPreset, finish, fade, progress, width, height]

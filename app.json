@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true
     },
@@ -29,9 +29,7 @@
           "photosPermission": "ZYX cần truy cập ảnh để bạn chọn ảnh đại diện và ảnh bìa cho profile.",
           "cameraPermission": "ZYX cần dùng camera để bạn chụp ảnh đại diện và ảnh bìa cho profile."
         }
-      ],
-      "expo-video",
-      "expo-image"
+      ]
     ]
   }
 }

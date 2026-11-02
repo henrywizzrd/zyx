@@ -5,8 +5,7 @@ export type ThemePresetId = 'dark' | 'light' | 'green' | 'ocean' | 'latte' | 'sn
 
 // Các bộ có hiệu ứng nền chạy liên tục (bật/tắt bằng công tắc Hiệu ứng nền, nhớ riêng từng bộ)
 export type AmbientPresetId = 'snow' | 'green' | 'ocean' | 'latte';
-// Bộ đã có hiệu ứng nền (Latte: hạt cà phê trang trí, làm ở đợt sau)
-export const AMBIENT_PRESETS: AmbientPresetId[] = ['snow', 'green', 'ocean'];
+export const AMBIENT_PRESETS: AmbientPresetId[] = ['snow', 'green', 'ocean', 'latte'];
 
 export interface Palette {
   bg: string; // nền của app

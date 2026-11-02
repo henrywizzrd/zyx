@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Appearance, useColorScheme, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { defaultTheme } from './defaultTheme';
 import { AmbientPresetId, PRESETS, ThemePresetId } from './presets';
@@ -31,10 +31,15 @@ function derive(t: Theme): Theme {
   const colors = media ? { ...palette, surface: palette.card } : palette;
   return { ...t, preset, colors, background: { ...t.background, color: palette.bg } };
 }
+// Bộ màu ứng với chế độ sáng/tối của điện thoại
+export const systemPreset = (scheme: string | null | undefined): ThemePresetId => (scheme === 'light' ? 'light' : 'dark');
+
 const LIBRARY_LAYOUTS: LibraryLayout[] = ['list', 'columns', 'covers2', 'covers3'];
 
 // Bản lưu cũ có miniPlayer.position (8 vị trí cố định): đổi sang vị trí tự do theo viền
 function migrate(saved: unknown): unknown {
+  // Bản lưu từ trước khi có tuỳ chọn "Theo hệ thống": giữ nguyên bộ màu người dùng đã chọn
+  if (isPlainObject(saved) && !('followSystem' in saved)) saved = { ...saved, followSystem: false };
   if (!isPlainObject(saved) || !isPlainObject(saved.miniPlayer)) return saved;
   const mp = saved.miniPlayer;
   if (mp.anchor || typeof mp.position !== 'string') return saved;
@@ -124,7 +129,7 @@ interface ThemeContextValue {
   setLibraryOrder: (ids: string[]) => void;
   setHome: (patch: Partial<Theme['home']>) => void;
   setLanguage: (l: Theme['language']) => void;
-  setPreset: (id: ThemePresetId) => void;
+  setPreset: (id: ThemePresetId, followSystem?: boolean) => void;
   setBackground: (patch: Partial<Theme['background']>) => void;
   setGlassBlur: (blur: number) => void;
   setAmbient: (preset: AmbientPresetId, on: boolean) => void;
@@ -133,7 +138,8 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(defaultTheme);
+  // Người dùng mới (theo hệ thống): mở app lên đã đúng sáng/tối của điện thoại
+  const [theme, setThemeState] = useState<Theme>(() => derive({ ...defaultTheme, preset: systemPreset(Appearance.getColorScheme()) }));
   const [ready, setReady] = useState(false);
 
   // Đọc theme đã lưu khi mở app
@@ -151,6 +157,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       alive = false;
     };
   }, []);
+
+  // "Theo hệ thống": điện thoại đổi sáng/tối (kể cả lúc app đang mở) thì đổi Light/Dark theo
+  const scheme = useColorScheme();
+  useEffect(() => {
+    if (!theme.followSystem) return;
+    const want = systemPreset(scheme);
+    if (theme.preset !== want) setThemeState((t) => derive({ ...t, preset: want }));
+  }, [scheme, theme.followSystem, theme.preset]);
 
   // Lưu lại mỗi khi theme đổi (chờ 300ms để không ghi liên tục)
   useEffect(() => {
@@ -181,7 +195,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setThemeState((t) => ({ ...t, library: { ...t.library, order } })),
       setHome: (patch) => setThemeState((t) => ({ ...t, home: { ...t.home, ...patch } })),
       setLanguage: (language) => setThemeState((t) => ({ ...t, language })),
-      setPreset: (preset) => setThemeState((t) => derive({ ...t, preset })),
+      // Chọn một bộ màu cụ thể thì thôi theo hệ thống; chọn "Theo hệ thống" thì followSystem = true
+      setPreset: (preset, followSystem = false) => setThemeState((t) => derive({ ...t, preset, followSystem })),
       setBackground: (patch) => setThemeState((t) => derive({ ...t, background: { ...t.background, ...patch } })),
       setGlassBlur: (blur) => setThemeState((t) => ({ ...t, glass: { blur: Math.max(0, Math.min(100, blur)) } })),
       setAmbient: (preset, on) =>

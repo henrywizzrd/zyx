@@ -1,12 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, GestureResponderEvent, Pressable, ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Alert, GestureResponderEvent, Pressable, ScrollView, StyleSheet, Switch, Text, useColorScheme, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme/ThemeProvider';
+import { systemPreset, useTheme } from '../theme/ThemeProvider';
 import { useThemeTransition } from '../theme/ThemeTransition';
-import { AMBIENT_PRESETS, AmbientPresetId, PRESET_ORDER, PRESETS, ThemePresetId } from '../theme/presets';
+import { AMBIENT_PRESETS, AmbientPresetId, Palette, PRESET_ORDER, PRESETS, ThemePresetId } from '../theme/presets';
 import type { BackgroundType } from '../theme/types';
 import { useContentInsets } from '../components/FloatingDock';
-import { PageBackground } from '../components/AppBackground';
 import { Slider } from '../components/Slider';
 import { useNav } from '../nav/Nav';
 import { useAnimatedBack } from '../nav/SwipeBack';
@@ -32,41 +31,67 @@ function useThrottle<T>(fn: (v: T) => void, ms = 120) {
   };
 }
 
-// Thẻ xem trước một bộ màu: vẽ thu nhỏ một màn hình của app bằng đúng màu của bộ đó
-function PresetCard({ id, selected, width, onPress }: { id: ThemePresetId; selected: boolean; width: number; onPress: (e: GestureResponderEvent) => void }) {
+// Màn hình thu nhỏ vẽ bằng màu của một bộ màu (tiêu đề, hai thẻ, hai dòng chữ, dock)
+function MiniScreen({ p, id, width, h }: { p: Palette; id: ThemePresetId; width: number; h: number }) {
+  return (
+    <View style={{ width, height: h, backgroundColor: p.bg, padding: 12 }}>
+      {/* Bộ Snow: vài bông tuyết; Latte: vài hạt cà phê; Ocean: vài bong bóng */}
+      {id === 'snow' &&
+        [[0.15, 0.1], [0.7, 0.18], [0.45, 0.32], [0.85, 0.45], [0.25, 0.55], [0.6, 0.62]].map(([x, y], i) => (
+          <View key={i} style={{ position: 'absolute', left: x * width, top: y * h, width: 5, height: 5, borderRadius: 3, backgroundColor: '#C9D9EA' }} />
+        ))}
+      {id === 'latte' &&
+        [[0.08, 0.06, 30], [0.82, 0.5, -20], [0.12, 0.66, 70]].map(([x, y, r], i) => (
+          <View key={i} style={{ position: 'absolute', left: x * width, top: y * h, width: 7, height: 10, borderRadius: 5, backgroundColor: '#8A5A3B', opacity: 0.6, transform: [{ rotate: `${r}deg` }] }} />
+        ))}
+      {id === 'ocean' &&
+        [[0.85, 0.62, 6], [0.8, 0.5, 4], [0.86, 0.4, 3], [0.1, 0.58, 5]].map(([x, y, r], i) => (
+          <View key={i} style={{ position: 'absolute', left: x * width, top: y * h, width: r, height: r, borderRadius: r, borderWidth: 1, borderColor: '#5B8FC9' }} />
+        ))}
+      <View style={{ width: '55%', height: 9, borderRadius: 5, backgroundColor: p.text }} />
+      <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
+        <View style={{ flex: 1, height: 28, borderRadius: 6, backgroundColor: p.surface }} />
+        <View style={{ flex: 1, height: 28, borderRadius: 6, backgroundColor: p.surface }} />
+      </View>
+      <View style={{ width: '80%', height: 6, borderRadius: 3, backgroundColor: p.textSecondary, marginTop: 12, opacity: 0.7 }} />
+      <View style={{ width: '60%', height: 6, borderRadius: 3, backgroundColor: p.textSecondary, marginTop: 6, opacity: 0.7 }} />
+      {/* Dock thu nhỏ */}
+      <View style={[styles.miniDock, { backgroundColor: p.glass, borderColor: p.border }]}>
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: p.accent }} />
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: p.textSecondary }} />
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: p.textSecondary }} />
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: p.textSecondary }} />
+      </View>
+    </View>
+  );
+}
+
+// Thẻ chọn bộ màu. id = 'system': nửa trái là Dark, nửa phải là Light (theo sáng/tối của điện thoại)
+function PresetCard({ id, selected, width, onPress }: {
+  id: ThemePresetId | 'system'; selected: boolean; width: number; onPress: (e: GestureResponderEvent) => void;
+}) {
   const { theme } = useTheme();
   const t = useT();
-  const p = PRESETS[id];
   const h = width * 1.2;
   return (
     <Pressable onPress={onPress} style={{ width }}>
-      <View
-        style={[
-          styles.preview,
-          { height: h, backgroundColor: p.bg, borderColor: selected ? theme.colors.accent : theme.colors.border, borderWidth: selected ? 2.5 : 1 },
-        ]}
-      >
-        {/* Bộ Snow: vài bông tuyết trang trí */}
-        {id === 'snow' &&
-          [
-            [0.15, 0.1], [0.7, 0.18], [0.45, 0.32], [0.85, 0.45], [0.25, 0.55], [0.6, 0.62],
-          ].map(([x, y], i) => (
-            <View key={i} style={{ position: 'absolute', left: x * width, top: y * h, width: 5, height: 5, borderRadius: 3, backgroundColor: '#C9D9EA' }} />
-          ))}
-        <View style={{ width: '55%', height: 9, borderRadius: 5, backgroundColor: p.text }} />
-        <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
-          <View style={{ flex: 1, height: 28, borderRadius: 6, backgroundColor: p.surface }} />
-          <View style={{ flex: 1, height: 28, borderRadius: 6, backgroundColor: p.surface }} />
-        </View>
-        <View style={{ width: '80%', height: 6, borderRadius: 3, backgroundColor: p.textSecondary, marginTop: 12, opacity: 0.7 }} />
-        <View style={{ width: '60%', height: 6, borderRadius: 3, backgroundColor: p.textSecondary, marginTop: 6, opacity: 0.7 }} />
-        {/* Dock thu nhỏ */}
-        <View style={[styles.miniDock, { backgroundColor: p.glass, borderColor: p.border }]}>
-          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: p.accent }} />
-          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: p.textSecondary }} />
-          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: p.textSecondary }} />
-          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: p.textSecondary }} />
-        </View>
+      <View style={[styles.preview, { height: h, borderColor: selected ? theme.colors.accent : theme.colors.border, borderWidth: selected ? 2.5 : 1 }]}>
+        {id === 'system' ? (
+          <>
+            <MiniScreen p={PRESETS.dark} id="dark" width={width} h={h} />
+            {/* Nửa phải: cùng màn hình đó ở chế độ sáng */}
+            <View style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: width / 2, overflow: 'hidden' }}>
+              <View style={{ position: 'absolute', top: 0, right: 0 }}>
+                <MiniScreen p={PRESETS.light} id="light" width={width} h={h} />
+              </View>
+            </View>
+            <View style={[styles.systemBadge, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+              <Ionicons name="phone-portrait-outline" size={14} color={theme.colors.text} />
+            </View>
+          </>
+        ) : (
+          <MiniScreen p={PRESETS[id]} id={id} width={width} h={h} />
+        )}
         {selected && (
           <View style={[styles.check, { backgroundColor: theme.colors.accent }]}>
             <Ionicons name="checkmark" size={14} color={theme.colors.onAccent} />
@@ -82,6 +107,7 @@ function PresetCard({ id, selected, width, onPress }: { id: ThemePresetId; selec
 export function ThemeStudioScreen() {
   const { theme, setBackground, setGlassBlur, setAmbient } = useTheme();
   const { changePreset } = useThemeTransition();
+  const scheme = useColorScheme();
   const t = useT();
   const pad = useContentInsets();
   const { width } = useWindowDimensions();
@@ -141,7 +167,6 @@ export function ThemeStudioScreen() {
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <PageBackground />
       <ScrollView
         bounces={false}
         overScrollMode="never"
@@ -166,8 +191,21 @@ export function ThemeStudioScreen() {
         <Text style={[styles.section, { color: text }]}>{t('studio.presets')}</Text>
         <Text style={{ color: textSecondary, fontSize: 13, marginBottom: 12 }}>{t('studio.presetsHint')}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
+          {/* Theo hệ thống: Light hoặc Dark tuỳ điện thoại đang để sáng hay tối */}
+          <PresetCard
+            id="system"
+            width={cardW}
+            selected={theme.followSystem}
+            onPress={(e) => changePreset(systemPreset(scheme), { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY }, true)}
+          />
           {PRESET_ORDER.map((id) => (
-            <PresetCard key={id} id={id} width={cardW} selected={theme.preset === id} onPress={(e) => changePreset(id, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY })} />
+            <PresetCard
+              key={id}
+              id={id}
+              width={cardW}
+              selected={!theme.followSystem && theme.preset === id}
+              onPress={(e) => changePreset(id, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY })}
+            />
           ))}
         </View>
 
@@ -225,7 +263,11 @@ const styles = StyleSheet.create({
   circle: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 20, fontWeight: '800' },
   section: { fontSize: 18, fontWeight: '800', marginTop: 26, marginBottom: 6 },
-  preview: { borderRadius: 14, padding: 12, overflow: 'hidden' },
+  preview: { borderRadius: 14, overflow: 'hidden' },
+  systemBadge: {
+    position: 'absolute', left: '50%', top: '42%', marginLeft: -14, width: 28, height: 28, borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center',
+  },
   miniDock: {
     position: 'absolute', left: 12, right: 12, bottom: 12, height: 24, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around',

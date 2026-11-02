@@ -1,8 +1,6 @@
 import React, { useEffect } from 'react';
-import { AppState, Platform, StyleSheet, View } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { AppState, StyleSheet, View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
-import { AmbientEffect } from './AmbientLayer';
 
 // Nền chung của cả app, nằm sau mọi màn hình (trừ Player):
 //  - 'preset': màu nền của bộ màu
@@ -48,35 +46,4 @@ function VideoBg({ uri }: { uri: string }) {
     return () => sub.remove();
   }, [player]);
   return <VideoView player={player} contentFit="cover" nativeControls={false} style={StyleSheet.absoluteFill} />;
-}
-
-// Nền cho trang mở chồng (playlist, album...):
-//  - nền theo bộ màu: màu đặc
-//  - nền ảnh/GIF: vẽ lại đúng ảnh nền chung (ảnh đã có sẵn trong bộ nhớ nên rất nhẹ)
-//  - nền video: kính mờ dày phủ lên màn hình phía dưới (không mở thêm một video thứ hai)
-export function PageBackground() {
-  const { theme } = useTheme();
-  const { type, uri } = theme.background;
-  if (type === 'preset' || !uri) {
-    return (
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.bg }]}>
-        <AmbientEffect />
-      </View>
-    );
-  }
-  if (type === 'image') {
-    return (
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.bg }]}>
-        <AppBackground />
-        <AmbientEffect />
-      </View>
-    );
-  }
-  return (
-    <View style={StyleSheet.absoluteFill}>
-      {Platform.OS !== 'web' && <BlurView intensity={90} tint={theme.colors.glassTint} style={StyleSheet.absoluteFill} />}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.glass }]} />
-      <AmbientEffect />
-    </View>
-  );
 }

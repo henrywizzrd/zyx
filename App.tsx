@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { StatusBar, StyleSheet, Text, View } from 'react-native';
+import React, { useLayoutEffect, useRef, useState } from 'react';
+import { Animated, StatusBar, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
@@ -17,6 +17,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { PlayerTransition } from './src/components/PlayerTransition';
 import { NavProvider, useNav } from './src/nav/Nav';
 import { CollectionScreen } from './src/screens/CollectionScreen';
+import { ArtistScreen } from './src/screens/ArtistScreen';
 import { SwipeBack } from './src/nav/SwipeBack';
 import { AppBackground } from './src/components/AppBackground';
 import { AmbientEffect } from './src/components/AmbientLayer';
@@ -40,6 +41,25 @@ function Root() {
   const [tab, setTab] = useState<TabId>('home');
   const [lastTab, setLastTab] = useState<TabId>('home');
   const nav = useNav();
+  const { width } = useWindowDimensions();
+  // Vị trí ngang của trang mở chồng (0 = đã mở hẳn, width = đã đóng): dùng chung giữa SwipeBack và lớp tab
+  const pageX = useRef(new Animated.Value(width)).current;
+  // 1 khi đang có từ 2 trang chồng nhau trở lên (tab bên dưới ẩn hẳn)
+  const deep = useRef(new Animated.Value(0)).current;
+  const depth = nav.stack.length;
+  useLayoutEffect(() => {
+    deep.setValue(depth > 1 ? 1 : 0);
+    // Đóng hết trang (đổi tab, hoặc quay lại tới tab): đưa vị trí trang về "đã đóng" để tab hiện rõ.
+    // Phải đặt lại giá trị chứ không thay opacity bằng số 1: giá trị đang chạy bằng native driver,
+    // đổi sang số thường thì phía native vẫn giữ opacity 0 cũ → tab trắng trơn
+    if (depth === 0) pageX.setValue(width);
+  }, [depth, width, deep, pageX]);
+  const tabOpacity = useRef(
+    Animated.multiply(
+      pageX.interpolate({ inputRange: [0, width], outputRange: [0, 1], extrapolate: 'clamp' }),
+      Animated.subtract(1, deep)
+    )
+  ).current;
   const go = (t: TabId) => {
     if (t !== 'player') {
       setLastTab(t);
@@ -55,17 +75,34 @@ function Root() {
       <StatusBar barStyle={theme.colors.statusBar} />
       {/* Nền chung: màu của bộ màu, ảnh/GIF hoặc video người dùng chọn */}
       <AppBackground />
-      {/* Tuyết rơi (Snow) / lá rơi (Green): dừng khi mở Player hoặc khi có trang mở chồng (trang đó tự có lớp riêng) */}
-      <AmbientEffect paused={tab === 'player' || !!page} />
+      {/* Hiệu ứng nền (tuyết, lá, cá, hạt cà phê): chạy liên tục sau mọi trang, chỉ dừng khi mở Player */}
+      <AmbientEffect paused={tab === 'player'} />
       <View style={{ flex: 1 }}>
-        {shown === 'home' && <HomeScreen />}
-        {shown === 'search' && <SearchScreen />}
-        {shown === 'library' && <LibraryScreen />}
-        {shown === 'settings' && <SettingsScreen />}
+        {/* Tab hiện tại. Có trang mở chồng thì tab mờ dần đi theo vị trí trang (vuốt quay lại thì hiện lại dần),
+            để trang trong suốt phía trên chỉ thấy nền chung, không thấy chữ của tab chồng lên */}
+        <Animated.View
+          pointerEvents={page ? 'none' : 'auto'}
+          style={{ flex: 1, opacity: tabOpacity }}
+        >
+          {shown === 'home' && <HomeScreen />}
+          {shown === 'search' && <SearchScreen />}
+          {shown === 'library' && <LibraryScreen />}
+          {shown === 'settings' && <SettingsScreen />}
+        </Animated.View>
         {/* Trang playlist/album mở chồng lên tab, dock và mini player vẫn nằm trên */}
         {page && (
-          <SwipeBack key={page.type === 'collection' ? `${page.source}:${page.id}:${nav.stack.length}` : `${page.type}:${nav.stack.length}`} onBack={nav.pop}>
-            {page.type === 'collection' ? <CollectionScreen page={page} /> : <ThemeStudioScreen />}
+          <SwipeBack
+            key={page.type === 'collection' ? `${page.source}:${page.id}:${nav.stack.length}` : page.type === 'artist' ? `artist:${page.id}:${nav.stack.length}` : `${page.type}:${nav.stack.length}`}
+            onBack={nav.pop}
+            x={pageX}
+          >
+            {page.type === 'collection' ? (
+              <CollectionScreen page={page} />
+            ) : page.type === 'artist' ? (
+              <ArtistScreen page={page} />
+            ) : (
+              <ThemeStudioScreen />
+            )}
           </SwipeBack>
         )}
         <DropPreview />
