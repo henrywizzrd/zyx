@@ -15,7 +15,8 @@ import { ReorderableScrollView } from './ReorderableScrollView';
 
 const SOFT = 'rgba(255,255,255,0.6)';
 const PAD = 16;
-const ROW_H = 60; // mỗi bài trong hàng đợi cao đúng chừng này (ảnh 48 + đệm 6 trên dưới)
+const ROW_H = 60;
+const PAGE = 40; // số bài chờ dựng mỗi lần // mỗi bài trong hàng đợi cao đúng chừng này (ảnh 48 + đệm 6 trên dưới)
 
 // Lò xo mềm, không nảy quá đà: mở / kéo lên xem hết / thả về đều trượt êm
 const SPRING = { damping: 32, stiffness: 210, mass: 1, overshootClamping: true };
@@ -75,7 +76,10 @@ export function QueueSheet({ visible, onClose }: { visible: boolean; onClose: ()
       isFull.value = false;
       setFull(false);
       y.value = withTiming(CLOSED, { duration: 260, easing: Easing.out(Easing.cubic) }, (done) => {
-        if (done) scheduleOnRN(setGlass, false);
+        if (done) {
+          scheduleOnRN(setGlass, false);
+          scheduleOnRN(setLimit, PAGE);
+        }
       });
     }
   }, [visible, sheetH]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -151,7 +155,12 @@ export function QueueSheet({ visible, onClose }: { visible: boolean; onClose: ()
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: interpolate(y.value, [0, Math.max(1, half.value), closed.value], [0.35, 0.18, 0], 'clamp'),
   }));
-  const upNext = useMemo(() => queue.slice(index + 1).map((q) => ({ id: q.qid, item: q })), [queue, index]);
+  // Chỉ dựng một phần danh sách chờ (mỗi bài là một ô kéo thả, khá nặng): phát cả playlist 200 bài
+  // mà dựng hết thì luồng JS bận vài giây, làm khựng cả hiệu ứng đóng / mở player.
+  // Bài phía sau vẫn nằm trong hàng chờ, bấm "Hiện thêm" để xem tiếp
+  const [limit, setLimit] = useState(PAGE);
+  const allNext = queue.length - index - 1;
+  const upNext = useMemo(() => queue.slice(index + 1, index + 1 + limit).map((q) => ({ id: q.qid, item: q })), [queue, index, limit]);
   const listW = Math.max(0, Math.min(box.width, 520) - PAD * 2);
 
   const row = (q: QueueItem, current: boolean) => (
@@ -215,7 +224,7 @@ export function QueueSheet({ visible, onClose }: { visible: boolean; onClose: ()
               {t(autoplay ? 'queue.endAuto' : 'queue.end')}
             </Text>
           )}
-          {listW > 0 && upNext.length > 0 && (
+          {glass && listW > 0 && upNext.length > 0 && (
             <Reorderable
               key={`${Math.round(listW)}`}
               data={upNext}
@@ -237,6 +246,11 @@ export function QueueSheet({ visible, onClose }: { visible: boolean; onClose: ()
                 </View>
               )}
             />
+          )}
+          {glass && allNext > upNext.length && (
+            <Pressable onPress={() => setLimit((l) => l + PAGE)} style={{ paddingVertical: 12, alignItems: 'center' }}>
+              <Text style={{ color: SOFT, fontSize: 14, fontWeight: '700' }}>{t('queue.more', { n: allNext - upNext.length })}</Text>
+            </Pressable>
           )}
           {radioLoading && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 }}>

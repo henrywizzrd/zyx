@@ -96,7 +96,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const pad = useContentInsets();
   const songMenu = useSongMenu();
   const {
-    track, isPlaying, progress, duration, loading,
+    track, isPlaying, progress, duration, loading, failed,
     togglePlay, next, prev, seekTo, shuffle, repeat, toggleShuffle, cycleRepeat, liked, toggleLike,
   } = usePlayer();
   const accent = theme.colors.accent;
@@ -234,7 +234,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
       />
       <View style={styles.times}>
         <Text style={styles.time}>{fmt(elapsed)}</Text>
-        <Text style={styles.time}>{loading ? t('common.loading') : `-${fmt(duration - elapsed)}`}</Text>
+        <Text style={[styles.time, failed && { color: '#FF8A80' }]}>{loading ? t('common.loading') : failed ? t('np.failed') : `-${fmt(duration - elapsed)}`}</Text>
       </View>
     </View>
   );

@@ -228,6 +228,8 @@ export const vi = {
   'col.makePublic': 'Công khai trên profile',
   'col.makePrivate': 'Chuyển sang riêng tư',
   'col.deleteAction': 'Xoá playlist',
+  'queue.more': 'Hiện thêm ({n} bài nữa)',
+  'np.failed': 'Không phát được · bấm ▶ để thử lại',
 };
 
 export type StringKey = keyof typeof vi;
@@ -439,4 +441,6 @@ export const en: Record<StringKey, string> = {
   'col.makePublic': 'Make public on profile',
   'col.makePrivate': 'Make private',
   'col.deleteAction': 'Delete playlist',
+  'queue.more': 'Show more ({n} more)',
+  'np.failed': "Couldn't play · tap ▶ to retry",
 };

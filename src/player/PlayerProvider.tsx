@@ -7,6 +7,7 @@ import { audio, musicSupported, toTrack, ytmusic } from '../music/lazy';
 import { bigThumb } from '../components/Cover';
 import { getLikedIds, PlayContext, recordPlay, setLiked as saveLiked } from '../data/db';
 import { localUri } from '../data/downloads';
+import { Image as ExpoImage } from 'expo-image';
 
 export type ViewRef = React.ElementRef<typeof View>;
 export type DragState = { kind: 'dock' | 'player'; target: Position | MiniAnchor | 'merge' };
@@ -32,6 +33,7 @@ interface PlayerContextValue {
   duration: number; // tổng giây
   loading: boolean;
   togglePlay: () => void;
+  failed: boolean; // bài hiện tại không lấy được link phát (bấm nút phát để thử lại)
   next: () => void;
   prev: () => void;
   seekTo: (seconds: number) => void;
@@ -77,6 +79,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const failedRef = useRef(false);
   const [shuffle, setShuffle] = useState(false);
   const [repeat, setRepeat] = useState<Repeat>('off');
   const [liked, setLiked] = useState<Set<string>>(() => getLikedIds());
@@ -131,8 +135,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const id = ++reqId.current;
     loadingRef.current = true;
     // Tải trước ảnh bìa lớn để lúc mở player ảnh đã sẵn, không bị giật
-    if (t.thumb && musicSupported) Image.prefetch(bigThumb(t.thumb, 1200)).catch(() => {});
+    if (t.thumb && musicSupported) ExpoImage.prefetch(bigThumb(t.thumb, 1200), 'memory-disk').catch(() => {});
     setLoading(true);
+    setFailed(false);
+    failedRef.current = false;
     setProgress(0);
     setDuration(t.duration);
     try {
@@ -148,6 +154,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       recordPlay({ ...t, duration: t.duration }, t.ctx);
     } catch (e) {
       console.warn('Không phát được', t.title, e);
+      if (id === reqId.current) {
+        setFailed(true);
+        failedRef.current = true;
+      }
     } finally {
       if (id === reqId.current) {
         setLoading(false);
@@ -339,10 +349,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const togglePlay = useCallback(() => {
     if (!musicSupported || queueRef.current.length === 0) return;
+    // Bài trước đó không phát được: bấm phát là thử tải lại
+    if (failedRef.current) {
+      const cur = queueRef.current[indexRef.current];
+      if (cur) load(cur);
+      return;
+    }
     const p = audio().getPlayer();
     if (p.playing) p.pause();
     else p.play();
-  }, []);
+  }, [load]);
 
   const seekTo = useCallback((s: number) => {
     if (!musicSupported || queueRef.current.length === 0) return;
@@ -369,13 +385,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<PlayerContextValue>(
     () => ({
-      track, isPlaying, progress, duration, loading, togglePlay, next, prev, seekTo, playTrack,
+      track, isPlaying, progress, duration, loading, failed, togglePlay, next, prev, seekTo, playTrack,
       shuffle, repeat, toggleShuffle, cycleRepeat, liked, toggleLike,
       queue, index, playNext, addToQueue, removeFromQueue, reorderUpNext, jumpTo, autoplay, setAutoplay, radioLoading,
       dockRef, playerRef, emergeFrom, setEmergeFrom,
     }),
     [
-      track, isPlaying, progress, duration, loading, togglePlay, next, prev, seekTo, playTrack, shuffle, repeat, toggleShuffle,
+      track, isPlaying, progress, duration, loading, failed, togglePlay, next, prev, seekTo, playTrack, shuffle, repeat, toggleShuffle,
       cycleRepeat, liked, toggleLike, queue, index, playNext, addToQueue, removeFromQueue, reorderUpNext, jumpTo, autoplay,
       setAutoplay, radioLoading, emergeFrom,
     ]

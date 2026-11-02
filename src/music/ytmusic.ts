@@ -88,22 +88,61 @@ export async function searchSongs(query: string, log?: Log): Promise<Song[]> {
 // Việc ghi lại client nào chạy được sẽ giúp biết nên giữ cách nào về sau.
 const CLIENTS = ['IOS', 'ANDROID', 'TV', 'YTMUSIC', 'WEB'] as const;
 
-export async function getAudio(videoId: string, log?: Log, muxed = false): Promise<AudioInfo> {  const yt = await getSession(log);
+// Chạy một việc nhưng không đợi quá ms: quá thì báo lỗi để chuyển sang cách khác (trước đây có client treo mãi → "Loading..." không dứt)
+function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const id = setTimeout(() => reject(new Error(`${what}: quá ${ms / 1000}s`)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(id);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(id);
+        reject(e);
+      }
+    );
+  });
+}
+const CLIENT_TIMEOUT = 7000; // mỗi client tối đa 7 giây (lấy link + kiểm tra link)
+
+export async function getAudio(videoId: string, log?: Log, muxed = false): Promise<AudioInfo> {
+  const yt = await withTimeout(getSession(log), 15000, 'tạo phiên');
   const errors: string[] = [];
 
-  for (const client of CLIENTS) {
+  // Lần 1: mọi client với chất lượng 360p. Lần 2 (bài không có bản 360p, ví dụ vài bài trong album): lấy bản tốt nhất có sẵn
+  const attempts: { client: (typeof CLIENTS)[number]; quality: string }[] = [
+    ...CLIENTS.map((client) => ({ client, quality: '360p' })),
+    ...(muxed ? (['IOS', 'ANDROID'] as const).map((client) => ({ client, quality: 'best' })) : []),
+  ];
+  const start = Date.now();
+  for (const { client, quality } of attempts) {
+    if (Date.now() - start > 25000) break; // tổng cộng tối đa ~25 giây rồi báo lỗi
     const t0 = Date.now();
     try {
       // type 'audio' và format 'mp4' (mp4a): định dạng iPhone phát được. webm/opus thì iOS không phát.
-      const format = await yt.getStreamingData(
-        videoId,
-        muxed
-          ? { type: 'video+audio', quality: '360p', format: 'mp4', client }
-          : { type: 'audio', quality: 'best', format: 'mp4', client }
+      const format = await withTimeout(
+        yt.getStreamingData(
+          videoId,
+          muxed
+            ? { type: 'video+audio', quality, format: 'mp4', client }
+            : { type: 'audio', quality: 'best', format: 'mp4', client }
+        ),
+        CLIENT_TIMEOUT,
+        'lấy link'
       );
       const url = format.url;
       if (!url) throw new Error('không có url');
-      const probe = await fetch(url, { headers: { Range: 'bytes=0-1' } });
+      // Kiểm tra link có tải được không (lấy 2 byte đầu). Link treo thì bỏ sau vài giây
+      const ctrl = new AbortController();
+      const probe = await withTimeout(
+        fetch(url, { headers: { Range: 'bytes=0-1' }, signal: ctrl.signal }),
+        Math.max(2500, CLIENT_TIMEOUT - (Date.now() - t0)),
+        'kiểm tra link'
+      ).catch((e) => {
+        ctrl.abort();
+        throw e;
+      });
       log?.(`Client ${client}: kiểm tra link, HTTP ${probe.status}`);
       if (!probe.ok) throw new Error(`HTTP ${probe.status}`);
       const host = new URL(url).host;
@@ -111,8 +150,8 @@ export async function getAudio(videoId: string, log?: Log, muxed = false): Promi
       return { url, client, mime: format.mime_type, host };
     } catch (e) {
       const msg = String((e as Error)?.message ?? e).slice(0, 120);
-      log?.(`Client ${client}: lỗi - ${msg}`);
-      errors.push(`${client}: ${msg}`);
+      log?.(`Client ${client} (${quality}): lỗi - ${msg}`);
+      errors.push(`${client}/${quality}: ${msg}`);
     }
   }
   throw new Error('Không client nào lấy được link phát.\n' + errors.join('\n'));
@@ -292,6 +331,136 @@ export async function getChartShelves(country = 'VN'): Promise<Shelf[]> {
     parse: true,
   });
   return toShelves(res?.contents_memo?.get('MusicCarouselShelf'));
+}
+
+// ---------- Thể loại & tâm trạng (Moods & genres của YouTube Music) ----------
+export interface Genre {
+  title: string;
+  params: string; // mã để mở trang của thể loại
+  color: string; // màu dải bên trái ô trên YouTube Music, dùng làm màu ô
+}
+export interface GenreGroup {
+  title: string; // ví dụ "Moods & moments", "Genres"
+  items: Genre[];
+}
+
+const txt = (t: any): string => (t?.runs ? t.runs.map((r: any) => r?.text ?? '').join('') : t?.simpleText ?? '');
+// Màu YouTube gửi dạng số ARGB (ví dụ 4282023999) → "#rrggbb"
+const argb = (n: any): string | null => (typeof n === 'number' ? '#' + (n & 0xffffff).toString(16).padStart(6, '0') : null);
+
+function genreOf(b: any): Genre | null {
+  const ep = b?.clickCommand?.browseEndpoint;
+  const title = txt(b?.buttonText);
+  if (!ep?.params || !title) return null;
+  return { title, params: ep.params, color: argb(b?.solid?.leftStripeColor) ?? '#555555' };
+}
+
+// Danh sách thể loại và tâm trạng. Đọc thẳng dữ liệu gốc (thư viện bỏ mất màu của ô)
+export async function getGenres(): Promise<GenreGroup[]> {
+  const yt = await getBrowseSession();
+  const res: any = await yt.actions.execute('/browse', { browseId: 'FEmusic_moods_and_genres', client: 'YTMUSIC' });
+  const data = res?.data ?? res;
+  const sections: any[] =
+    data?.contents?.singleColumnBrowseResultsTabRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents ?? [];
+  const groups: GenreGroup[] = [];
+  for (const s of sections) {
+    const g = s?.gridRenderer;
+    if (!g) continue;
+    const items = (g.items ?? []).map((i: any) => genreOf(i?.musicNavigationButtonRenderer)).filter(Boolean) as Genre[];
+    if (items.length) groups.push({ title: txt(g.header?.gridHeaderRenderer?.title), items });
+  }
+  // Cấu trúc khác dự kiến: gom hết các nút tìm được thành một nhóm
+  if (!groups.length) {
+    const found: Genre[] = [];
+    const walk = (o: any) => {
+      if (!o || typeof o !== 'object') return;
+      if (o.musicNavigationButtonRenderer) {
+        const g = genreOf(o.musicNavigationButtonRenderer);
+        if (g) found.push(g);
+        return;
+      }
+      for (const k in o) walk(o[k]);
+    };
+    walk(data);
+    if (found.length) groups.push({ title: '', items: found });
+  }
+  if (!groups.length) throw new Error('Không có thể loại');
+  return groups;
+}
+
+// Một ô playlist / album / nghệ sĩ dạng dữ liệu gốc (musicTwoRowItemRenderer)
+function rawCard(r: any): Card | null {
+  const ep = r?.navigationEndpoint?.browseEndpoint;
+  const id: string | undefined = ep?.browseId;
+  const flex = (i: number) => r?.flexColumns?.[i]?.musicResponsiveListItemFlexColumnRenderer?.text;
+  const title = txt(r?.title) || txt(flex(0));
+  if (!id || !title) return null;
+  const pageType: string = ep?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType ?? '';
+  const kind: CardKind | null =
+    pageType.includes('ALBUM') || id.startsWith('MPRE') ? 'album'
+    : pageType.includes('ARTIST') || id.startsWith('UC') ? 'artist'
+    : pageType.includes('PLAYLIST') || id.startsWith('VL') ? 'playlist'
+    : null;
+  if (!kind) return null;
+  const thumbs: any[] = (r?.thumbnailRenderer ?? r?.thumbnail)?.musicThumbnailRenderer?.thumbnail?.thumbnails ?? [];
+  return { kind, id: kind === 'playlist' ? id.replace(/^VL/, '') : id, title, subtitle: txt(r?.subtitle) || txt(flex(1)), thumb: thumbs[thumbs.length - 1]?.url };
+}
+
+// Tìm chữ tiêu đề đầu tiên trong phần header của một kệ (cấu trúc header mỗi loại kệ mỗi khác)
+function headerTitle(h: any): string {
+  if (!h || typeof h !== 'object') return '';
+  if (h.title && (h.title.runs || h.title.simpleText)) return txt(h.title);
+  for (const k in h) {
+    const v = headerTitle(h[k]);
+    if (v) return v;
+  }
+  return '';
+}
+
+// Đi khắp dữ liệu gốc, gom mọi danh sách có ô playlist / album (musicTwoRowItemRenderer) thành từng kệ.
+// Không phụ thuộc đường dẫn cố định nên YouTube đổi bố cục trang (một cột / hai cột, kệ thường / kệ ảnh lớn / lưới) vẫn đọc được
+function rawShelves(root: any): Shelf[] {
+  const out: Shelf[] = [];
+  const walk = (o: any) => {
+    if (!o || typeof o !== 'object') return;
+    if (Array.isArray(o)) return o.forEach(walk);
+    const list: any[] | undefined = Array.isArray(o.contents) ? o.contents : Array.isArray(o.items) ? o.items : undefined;
+    const itemOf = (i: any) => i?.musicTwoRowItemRenderer ?? i?.musicResponsiveListItemRenderer;
+    if (list && list.some(itemOf)) {
+      const cards = list.map((i) => rawCard(itemOf(i))).filter((c): c is Card => !!c);
+      if (cards.length) out.push({ title: headerTitle(o.header), cards });
+      return;
+    }
+    for (const k in o) walk(o[k]);
+  };
+  walk(root);
+  return out;
+}
+
+// Trang một thể loại: các kệ playlist (nổi bật, cộng đồng...) của thể loại đó.
+export async function getGenre(params: string): Promise<Shelf[]> {
+  const yt = await getBrowseSession();
+  const res: any = await yt.actions.execute('/browse', { browseId: 'FEmusic_moods_and_genres_category', params, client: 'YTMUSIC' });
+  const data = res?.data ?? res;
+  let shelves = rawShelves(data?.contents ?? data);
+  // Dự phòng: đọc qua thư viện
+  if (!shelves.length) {
+    try {
+      const parsed: any = await yt.actions.execute('/browse', { browseId: 'FEmusic_moods_and_genres_category', params, client: 'YTMUSIC', parse: true });
+      const memo = parsed?.contents_memo;
+      shelves = toShelves(memo?.get('MusicCarouselShelf'));
+      for (const g of (memo?.get('Grid') ?? []) as any[]) {
+        const cards = (g.items ?? []).map(toCard).filter((c: Card | null): c is Card => !!c);
+        if (cards.length) shelves.push({ title: str(g.header?.title) || '', cards });
+      }
+    } catch {}
+  }
+  if (!shelves.length) {
+    // In ra một đoạn dữ liệu để biết YouTube đang trả về gì (gửi đoạn log này để sửa)
+    console.warn('[genre] raw', JSON.stringify(data).slice(0, 1500));
+    throw new Error('Trang thể loại trống');
+  }
+  return shelves;
 }
 
 function songsFrom(items: any[] | undefined): Song[] {

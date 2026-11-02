@@ -73,27 +73,20 @@ export function PlayerTransition({ open, onClose, children }: { open: boolean; o
       });
     } else if (mountedRef.current) {
       setMoving(true);
-      const run = () => {
-        p.value = withTiming(0, { duration: 340, easing: Easing.bezier(0.32, 0.72, 0, 1) }, (done) => {
-          if (done) runOnJS(finishClose)();
-        });
-      };
-      // Đo lại vị trí mini player ngay lúc đóng, vì nó có thể đã được kéo sang chỗ khác kể từ lúc mở
-      if (!playerOrigin.measureLive) {
-        run();
-      } else {
-        let ran = false;
-        const go = (r: Rect | null) => {
-          if (ran) return;
-          ran = true;
-          if (r && r.w > 0) {
-            ox.value = r.x; oy.value = r.y; ow.value = r.w; oh.value = r.h; or.value = r.r;
-          }
-          run();
-        };
-        playerOrigin.measureLive(go);
-        setTimeout(() => go(null), 120); // phòng khi không đo được thì đóng bằng vị trí cũ
-      }
+      // Thu nhỏ ngay lập tức (không đợi đo vị trí mini player): luồng JS có bận thì hiệu ứng vẫn chạy trên UI thread
+      p.value = withTiming(0, { duration: 340, easing: Easing.bezier(0.32, 0.72, 0, 1) }, (done) => {
+        if (done) runOnJS(finishClose)();
+      });
+      // Đo lại vị trí mini player (có thể đã bị kéo sang chỗ khác kể từ lúc mở).
+      // Đo xong thì đổi điểm đích ngay giữa chừng: hiệu ứng đọc điểm đích mỗi khung hình nên tự bẻ hướng mượt
+      playerOrigin.measureLive?.((r) => {
+        if (r && r.w > 0 && !openRef.current) {
+          ox.value = r.x; oy.value = r.y; ow.value = r.w; oh.value = r.h; or.value = r.r;
+        }
+      });
+      // Lưới an toàn: vì lý do gì đó hiệu ứng không báo xong thì vẫn gỡ player
+      const id = setTimeout(finishClose, 900);
+      return () => clearTimeout(id);
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 

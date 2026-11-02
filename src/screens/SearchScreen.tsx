@@ -7,7 +7,9 @@ import { useContentInsets } from '../components/FloatingDock';
 import { genres, type Track } from '../data/mock';
 import { useLibrary, type LibraryEntry } from '../data/library';
 import { musicSupported, toTrack, ytmusic } from '../music/lazy';
-import type { Card, SearchKind, SearchResults, SuggestItem, Suggestions } from '../music/ytmusic';
+import type { Card, GenreGroup, SearchKind, SearchResults, SuggestItem, Suggestions } from '../music/ytmusic';
+import { cacheGet, cacheSet } from '../data/db';
+import { warmGenres } from '../music/genreCache';
 import { useFrame } from '../components/layout';
 import { useSongMenu } from '../components/useSongMenu';
 import { useNav } from '../nav/Nav';
@@ -20,6 +22,41 @@ const PREFETCH_DELAY = 450; // ms ngừng gõ thì tải sẵn kết quả đầ
 const CACHE_MAX = 60;
 
 const KINDS: SearchKind[] = ['all', 'song', 'album', 'artist'];
+
+// Thể loại & tâm trạng thật của YouTube Music (lưu lại trên máy, mỗi ngày làm mới một lần)
+const GENRES_KEY = 'genres:v1';
+const GENRES_TTL = 24 * 3600 * 1000;
+function useGenres() {
+  const [groups, setGroups] = useState<GenreGroup[] | null>(() => cacheGet<GenreGroup[]>(GENRES_KEY)?.value ?? null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (!musicSupported) return setFailed(true);
+    const c = cacheGet<GenreGroup[]>(GENRES_KEY);
+    if (c && Date.now() - c.at < GENRES_TTL) return;
+    let dead = false;
+    ytmusic()
+      .getGenres()
+      .then((g) => {
+        if (dead) return;
+        setGroups(g);
+        cacheSet(GENRES_KEY, g);
+      })
+      .catch((e) => {
+        console.warn('[genres]', e);
+        if (!dead) setFailed(true);
+      });
+    return () => {
+      dead = true;
+    };
+  }, []);
+  // Tải sẵn trang của vài thể loại đầu mỗi nhóm (chạy ngầm, từng cái một) để bấm vào là hiện ngay
+  useEffect(() => {
+    if (!groups) return;
+    const id = setTimeout(() => warmGenres(groups.flatMap((g) => g.items.slice(0, 4).map((i) => i.params))), 1500);
+    return () => clearTimeout(id);
+  }, [groups]);
+  return { groups, failed };
+}
 
 // ---------- Bộ nhớ đệm dùng chung cho cả app (sống tới khi tắt app) ----------
 // Lưu Promise thay vì kết quả: gõ lại đúng chữ đang chờ thì dùng chung request, không gửi thêm.
@@ -67,6 +104,7 @@ export function SearchScreen() {
   const { push } = useNav();
   const pad = useContentInsets();
   const { width } = useFrame();
+  const genreList = useGenres();
 
   const [query, setQuery] = useState('');
   // 'typing': đang gõ, hiện gợi ý. 'results': đã bấm Search hoặc chọn một gợi ý, hiện kết quả đầy đủ.
@@ -247,21 +285,46 @@ export function SearchScreen() {
 
         {!searching ? (
           <>
-            <Text style={{ color: text, fontSize: 18, fontWeight: '700', marginTop: 28, marginBottom: 14 }}>
-              {tr('search.browseAll')}
-            </Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
-              {genres.map((g) => (
-                <Pressable
-                  key={g.id}
-                  onPress={() => runSearch(g.title)}
-                  style={[styles.tile, { width: tileW, backgroundColor: g.color }]}
-                >
-                  <Text style={styles.tileTitle}>{g.title}</Text>
-                  <View style={styles.tileDeco} />
-                </Pressable>
-              ))}
-            </View>
+            {/* Thể loại & tâm trạng của YouTube Music: bấm vào mở trang thể loại (các playlist đúng thể loại đó) */}
+            {genreList.groups ? (
+              genreList.groups.map((grp, gi) => (
+                <View key={`${gi}:${grp.title}`}>
+                  <Text style={{ color: text, fontSize: 18, fontWeight: '700', marginTop: 28, marginBottom: 14 }}>
+                    {grp.title || tr('search.browseAll')}
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
+                    {grp.items.map((g) => (
+                      <Pressable
+                        key={g.params}
+                        onPress={() => push({ type: 'genre', title: g.title, params: g.params, color: g.color })}
+                        style={({ pressed }) => [styles.tile, { width: tileW, backgroundColor: g.color, opacity: pressed ? 0.8 : 1 }]}
+                      >
+                        <Text numberOfLines={2} style={styles.tileTitle}>{g.title}</Text>
+                        <View style={styles.tileDeco} />
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              ))
+            ) : genreList.failed ? (
+              // Không tải được (mất mạng...): ô cố định, bấm vào thì tìm theo tên
+              <>
+                <Text style={{ color: text, fontSize: 18, fontWeight: '700', marginTop: 28, marginBottom: 14 }}>{tr('search.browseAll')}</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
+                  {genres.map((g) => (
+                    <Pressable key={g.id} onPress={() => runSearch(g.title)} style={[styles.tile, { width: tileW, backgroundColor: g.color }]}>
+                      <Text style={styles.tileTitle}>{g.title}</Text>
+                      <View style={styles.tileDeco} />
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={{ color: text, fontSize: 18, fontWeight: '700', marginTop: 28, marginBottom: 14 }}>{tr('search.browseAll')}</Text>
+                <ActivityIndicator color={textSecondary} style={{ marginTop: 12 }} />
+              </>
+            )}
           </>
         ) : !showResults ? (
           // ---------- Đang gõ: gợi ý ----------

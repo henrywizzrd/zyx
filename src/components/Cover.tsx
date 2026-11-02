@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Image, StyleProp, View, ViewStyle } from 'react-native';
+import { StyleProp, View, ViewStyle } from 'react-native';
+import { Image } from 'expo-image';
 import type { Track } from '../data/mock';
 
 // Ảnh video YouTube: i.ytimg.com/vi/<id>/<tên>.jpg (default, mqdefault, hqdefault, sddefault...)
@@ -22,7 +23,15 @@ export function bigThumb(url: string, size: number) {
   return thumbCandidates(url, size)[0];
 }
 
-// Ảnh có dự phòng: link đầu lỗi thì thử link sau
+// Tải trước ảnh (ví dụ ảnh các playlist của trang vừa tải xong) vào bộ nhớ đệm của expo-image
+export function prefetchThumbs(urls: (string | undefined)[], size: number) {
+  const list = urls.filter((u): u is string => !!u).map((u) => thumbCandidates(u, size)[0]);
+  if (list.length) Image.prefetch(list, 'memory-disk').catch(() => {});
+}
+
+// Ảnh có dự phòng: link đầu lỗi thì thử link sau.
+// Dùng expo-image: lưu ảnh vào bộ nhớ + ổ đĩa (mở lại trang / mở lại app là hiện ngay, không tải lại),
+// giải mã ảnh ở luồng nền, và hiện mờ dần thay vì bật ra
 export function SmartImage({ url, size, style }: { url: string; size: number; style?: any }) {
   const list = thumbCandidates(url, size);
   const [state, setState] = useState({ url, i: 0 });
@@ -30,7 +39,10 @@ export function SmartImage({ url, size, style }: { url: string; size: number; st
   return (
     <Image
       source={{ uri: list[Math.min(i, list.length - 1)] }}
-      resizeMode="cover"
+      contentFit="cover"
+      cachePolicy="memory-disk"
+      transition={160}
+      recyclingKey={url}
       style={style}
       onError={() => i < list.length - 1 && setState({ url, i: i + 1 })}
     />
@@ -45,7 +57,7 @@ export function Cover({ track, size, style, children }: { track: Track; size?: n
         size ? (
           <SmartImage url={track.thumb} size={size} style={{ width: '100%', height: '100%' }} />
         ) : (
-          <Image source={{ uri: track.thumb }} resizeMode="cover" style={{ width: '100%', height: '100%' }} />
+          <Image source={{ uri: track.thumb }} contentFit="cover" cachePolicy="memory-disk" style={{ width: '100%', height: '100%' }} />
         )
       ) : (
         children

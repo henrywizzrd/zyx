@@ -10,13 +10,14 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { NowPlayingScreen } from './src/screens/NowPlayingScreen';
 import { ActionSheetProvider } from './src/components/ActionSheet';
+import { GenreScreen } from './src/screens/GenreScreen';
 import { TabId } from './src/theme/types';
 import { DropPreview } from './src/components/DropPreview';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { PlayerTransition } from './src/components/PlayerTransition';
-import { NavProvider, useNav } from './src/nav/Nav';
+import { NavProvider, Page, useNav } from './src/nav/Nav';
 import { CollectionScreen } from './src/screens/CollectionScreen';
 import { ArtistScreen } from './src/screens/ArtistScreen';
 import { SwipeBack } from './src/nav/SwipeBack';
@@ -45,6 +46,14 @@ function Placeholder({ name }: { name: string }) {
   );
 }
 
+// Khoá cố định cho mỗi trang trong chồng (theo vị trí + nội dung), để mở thêm trang không làm trang cũ bị dựng lại
+function pageKey(pg: Page, i: number) {
+  if (pg.type === 'collection') return `${i}:col:${pg.source}:${pg.id}`;
+  if (pg.type === 'artist') return `${i}:artist:${pg.id}`;
+  if (pg.type === 'genre') return `${i}:genre:${pg.params}`;
+  return `${i}:${pg.type}`;
+}
+
 function Root() {
   const { theme } = useTheme();
   const [tab, setTab] = useState<TabId>('home');
@@ -55,6 +64,21 @@ function Root() {
   // mỗi lần app vẽ lại (đổi theme...), làm tab trắng trơn khi quay ra
   const tabFade = useRef(new Animated.Value(1)).current;
   const depth = nav.stack.length;
+  // Độ hiện của từng trang trong chồng (trang phía trên điều khiển độ hiện của trang ngay dưới nó)
+  const pageFades = useRef(new Map<string, Animated.Value>()).current;
+  const fadeOf = (k: string) => {
+    let v = pageFades.get(k);
+    if (!v) {
+      v = new Animated.Value(1);
+      pageFades.set(k, v);
+    }
+    return v;
+  };
+  // Trang đã đóng thì bỏ giá trị của nó (mở lại sẽ hiện đầy đủ từ đầu)
+  useEffect(() => {
+    const alive = new Set(nav.stack.map((pg, i) => pageKey(pg, i)));
+    for (const k of [...pageFades.keys()]) if (!alive.has(k)) pageFades.delete(k);
+  }, [nav.stack, pageFades]);
   useLayoutEffect(() => {
     // Đóng hết trang (đổi tab trên dock, hoặc quay lại tới tab): tab hiện rõ ngay
     if (depth === 0) {
@@ -103,23 +127,29 @@ function Root() {
           {tabLayer('library', <LibraryTab />)}
           {tabLayer('settings', <SettingsTab />)}
         </Animated.View>
-        {/* Trang playlist/album mở chồng lên tab, dock và mini player vẫn nằm trên */}
-        {page && (
-          <SwipeBack
-            key={page.type === 'collection' ? `${page.source}:${page.id}:${nav.stack.length}` : page.type === 'artist' ? `artist:${page.id}:${nav.stack.length}` : `${page.type}:${nav.stack.length}`}
-            onBack={nav.pop}
-            fade={tabFade}
-            bottom={nav.stack.length === 1}
-          >
-            {page.type === 'collection' ? (
-              <CollectionScreen page={page} />
-            ) : page.type === 'artist' ? (
-              <ArtistScreen page={page} />
-            ) : (
-              <ThemeStudioScreen />
-            )}
-          </SwipeBack>
-        )}
+        {/* Các trang mở chồng lên tab (playlist, album, nghệ sĩ, thể loại...). Dock và mini player vẫn nằm trên.
+            Mọi trang trong chồng đều được giữ lại (không dựng lại khi quay về), nhưng chỉ trang trên cùng hiện rõ:
+            trang bên dưới mờ hẳn đi, và hiện lại dần theo ngón tay khi vuốt trang trên cùng để quay lại.
+            (Trước đây chỉ vẽ trang trên cùng: vuốt quay lại thì phía dưới trống trơn, thả tay ra trang cũ mới dựng lại → giật) */}
+        {nav.stack.map((pg, i) => {
+          const k = pageKey(pg, i);
+          const top = i === nav.stack.length - 1;
+          return (
+            <Animated.View key={k} pointerEvents={top ? 'box-none' : 'none'} style={[StyleSheet.absoluteFill, { opacity: fadeOf(k) }]}>
+              <SwipeBack onBack={nav.pop} fade={i === 0 ? tabFade : fadeOf(pageKey(nav.stack[i - 1], i - 1))} bottom>
+                {pg.type === 'collection' ? (
+                  <CollectionScreen page={pg} />
+                ) : pg.type === 'artist' ? (
+                  <ArtistScreen page={pg} />
+                ) : pg.type === 'genre' ? (
+                  <GenreScreen page={pg} />
+                ) : (
+                  <ThemeStudioScreen />
+                )}
+              </SwipeBack>
+            </Animated.View>
+          );
+        })}
         <DropPreview />
         <MiniPlayer hidden={tab === 'player'} onOpen={() => setTab('player')} />
           <FloatingDock active={tab} onChange={go} hidden={tab === 'player'} />
