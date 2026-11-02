@@ -15,8 +15,10 @@ export type CollectionPage = {
 };
 // Trang nghệ sĩ (mở từ Search, Thư viện, hoặc từ trang nghệ sĩ khác)
 export type ArtistPage = { type: 'artist'; id: string; name: string; thumb?: string };
+// Trang một thể loại / tâm trạng (mở từ lưới ô ở Search)
+export type GenrePage = { type: 'genre'; title: string; params: string; color: string };
 // Theme Studio: chọn bộ màu, nền, độ mờ kính (mở từ Cài đặt)
-export type Page = CollectionPage | ArtistPage | { type: 'themeStudio' };
+export type Page = CollectionPage | ArtistPage | GenrePage | { type: 'themeStudio' };
 
 interface NavValue {
   stack: Page[];
