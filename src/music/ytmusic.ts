@@ -25,7 +25,23 @@ Platform.shim.eval = async (data: any) => {
   return new Function(data.output)();
 };
 
+// Hai phiên YouTube:
+//  - phiên "duyệt" (nhẹ): tìm kiếm, gợi ý, Home, album, nghệ sĩ... Không tải "player" của YouTube nên tạo gần như tức thì.
+//  - phiên "phát" (nặng): chỉ dùng để lấy link phát nhạc. Phải tải và phân tích mã JavaScript player của YouTube
+//    (để giải mã link) — việc này làm luồng JS bận khoảng 1 giây, nên chỉ làm khi thật sự phát bài đầu tiên,
+//    không làm lúc mở app (trước đây làm lúc mở app nên vừa vào app là dock bị đơ một lúc).
+let browsePromise: Promise<Innertube> | null = null;
 let sessionPromise: Promise<Innertube> | null = null;
+
+export function getBrowseSession(): Promise<Innertube> {
+  if (!browsePromise) {
+    browsePromise = Innertube.create({ retrieve_player: false }).catch((e) => {
+      browsePromise = null; // cho phép thử lại
+      throw e;
+    });
+  }
+  return browsePromise;
+}
 
 export function getSession(log?: Log): Promise<Innertube> {
   if (!sessionPromise) {
@@ -45,7 +61,7 @@ export function getSession(log?: Log): Promise<Innertube> {
 }
 
 export async function searchSongs(query: string, log?: Log): Promise<Song[]> {
-  const yt = await getSession(log);
+  const yt = await getBrowseSession();
   const t0 = Date.now();
   const res = await yt.music.search(query, { type: 'song' });
   const items = res.songs?.contents ?? [];
@@ -121,7 +137,7 @@ export interface Suggestions {
 const SUGGEST_KINDS: SuggestKind[] = ['song', 'video', 'artist', 'album', 'playlist'];
 
 export async function getSuggestions(input: string): Promise<Suggestions> {
-  const yt = await getSession();
+  const yt = await getBrowseSession();
   const sections = await yt.music.getSearchSuggestions(input);
   const queries: string[] = [];
   const items: SuggestItem[] = [];
@@ -157,7 +173,7 @@ export async function getSuggestions(input: string): Promise<Suggestions> {
 // ---------- Danh sách "Up next" / radio của YouTube Music ----------
 // Dùng để tự phát tiếp các bài liên quan khi hết hàng đợi. Bài đầu tiên thường chính là bài đang phát.
 export async function getUpNext(videoId: string): Promise<Song[]> {
-  const yt = await getSession();
+  const yt = await getBrowseSession();
   const panel = await yt.music.getUpNext(videoId, true);
   const out: Song[] = [];
   for (const raw of (panel?.contents ?? []) as any[]) {
@@ -240,21 +256,21 @@ function toShelves(sections: any[] | undefined): Shelf[] {
 
 // Trang chủ YouTube Music (chưa đăng nhập: nội dung chung theo khu vực)
 export async function getHomeShelves(): Promise<Shelf[]> {
-  const yt = await getSession();
+  const yt = await getBrowseSession();
   const feed = await yt.music.getHomeFeed();
   return toShelves(feed.sections as any[]);
 }
 
 // Trang Khám phá: mới phát hành, tâm trạng & thể loại...
 export async function getExploreShelves(): Promise<Shelf[]> {
-  const yt = await getSession();
+  const yt = await getBrowseSession();
   const ex = await yt.music.getExplore();
   return toShelves(ex.sections as any[]);
 }
 
 // Bảng xếp hạng theo quốc gia (mặc định Việt Nam). Trả về các kệ trên trang Charts của YouTube Music.
 export async function getChartShelves(country = 'VN'): Promise<Shelf[]> {
-  const yt = await getSession();
+  const yt = await getBrowseSession();
   const res: any = await yt.actions.execute('/browse', {
     browseId: 'FEmusic_charts',
     formData: { selectedValues: [country] },
@@ -282,7 +298,7 @@ function songsFrom(items: any[] | undefined): Song[] {
 
 // Danh sách bài của một playlist hoặc album trên YouTube Music
 export async function getCollection(kind: 'playlist' | 'album', id: string): Promise<Collection> {
-  const yt = await getSession();
+  const yt = await getBrowseSession();
   if (kind === 'album') {
     const a: any = await yt.music.getAlbum(id);
     const h = a.header;
@@ -400,7 +416,7 @@ async function searchFiltered(yt: Innertube, query: string, type: 'song' | 'vide
 
 export async function searchMusic(query: string, kind: SearchKind): Promise<SearchResults> {
   const out: SearchResults = { songs: [], videos: [], albums: [], artists: [] };
-  const yt = await getSession();
+  const yt = await getBrowseSession();
   if (kind === 'song') {
     // Bài hát và video ca nhạc tìm song song: nhiều bài chỉ có trên YouTube dưới dạng video
     await Promise.all([
@@ -435,7 +451,7 @@ export interface ArtistPage {
 }
 
 export async function getArtist(id: string): Promise<ArtistPage> {
-  const yt = await getSession();
+  const yt = await getBrowseSession();
   const a: any = await yt.music.getArtist(id);
   const h = a.header;
   const thumb = lastThumb(h?.thumbnail?.contents ?? h?.thumbnail) ?? lastThumb(h?.foreground_thumbnail);

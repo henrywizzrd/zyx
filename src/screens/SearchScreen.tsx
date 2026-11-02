@@ -52,7 +52,7 @@ let warmed = false;
 function warmUp() {
   if (warmed || !musicSupported) return;
   warmed = true;
-  ytmusic().getSession().catch(() => (warmed = false));
+  ytmusic().getBrowseSession().catch(() => (warmed = false));
 }
 
 export function SearchScreen() {

@@ -11,22 +11,25 @@ import { usePlayer, ViewRef } from '../player/PlayerProvider';
 import { TabId } from '../theme/types';
 import { useDraggable } from './useDraggable';
 import {
-  computeLayout, DOCK_GAP, DOCK_PADDING, DOCK_THICKNESS, ITEM_SIZE,
+  computeLayout, DOCK_GAP, DOCK_PADDING, DOCK_THICKNESS, dockCell,
   isVertical, MP_THICKNESS, STACK_GAP,
 } from './layout';
 
 const USE_NATIVE = Platform.OS !== 'web';
+// Màu "#RRGGBB" thêm độ trong suốt (0..1)
+const withAlpha = (hex: string, a: number) => hex.slice(0, 7) + Math.round(a * 255).toString(16).padStart(2, '0');
 
 type Origin = { cx: number; cy: number };
 
-const ICONS: Record<Exclude<TabId, 'player'>, { on: keyof typeof Ionicons.glyphMap; off: keyof typeof Ionicons.glyphMap }> = {
-  home: { on: 'home', off: 'home-outline' },
-  search: { on: 'search', off: 'search-outline' },
-  library: { on: 'library', off: 'library-outline' },
-  settings: { on: 'settings', off: 'settings-outline' },
+// Icon đặc cho mọi tab (kiểu Apple Music): tab đang mở tô màu nhấn, các tab khác màu chữ chính của theme
+const ICONS: Record<Exclude<TabId, 'player'>, keyof typeof Ionicons.glyphMap> = {
+  home: 'home',
+  search: 'search',
+  library: 'library',
+  settings: 'settings',
 };
 
-// Nhãn dưới icon (khi bật hiện nhãn) lấy từ bộ chữ theo ngôn ngữ
+// Nhãn dưới icon lấy từ bộ chữ theo ngôn ngữ
 const LABELS = { home: 'tab.home', search: 'tab.search', library: 'tab.library', settings: 'tab.settings' } as const;
 
 // Dock và mini player nổi trên nội dung, nên chỉ trả về safe area.
@@ -45,10 +48,14 @@ export function useContentInsets() {
 
 function PlayerItem({
   active,
+  cellW,
+  cellH,
   onPress,
   onDetach,
 }: {
   active: boolean;
+  cellW: number;
+  cellH: number;
   onPress: () => void;
   onDetach: (origin: Origin | null) => void;
 }) {
@@ -82,7 +89,7 @@ function PlayerItem({
       onPress={open}
       onLongPress={detach}
       delayLongPress={350}
-      style={{ width: ITEM_SIZE, height: ITEM_SIZE, alignItems: 'center', justifyContent: 'center' }}
+      style={{ width: cellW, height: cellH, alignItems: 'center', justifyContent: 'center' }}
     >
       <Animated.View
         style={{
@@ -110,7 +117,7 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
   const insets = useSafeAreaInsets();
   const d = useDraggable('dock');
   const { dockStyle } = computeLayout(theme, insets);
-  const { position, items, style } = theme.dock;
+  const { position, items, labels } = theme.dock;
 
   const ids: TabId[] = theme.miniPlayer.merged ? [...items, 'player'] : items;
   const vertical = isVertical(position);
@@ -142,22 +149,31 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
     prevCount.current = ids.length;
   }, [ids.length, squash]);
 
+  // Ô sáng phía sau tab đang mở: trượt mượt sang tab mới khi đổi tab
+  const activeIndex = ids.indexOf(active);
+  const hi = useRef(new Animated.Value(Math.max(0, activeIndex))).current;
+  useEffect(() => {
+    if (activeIndex < 0) return;
+    Animated.spring(hi, { toValue: activeIndex, friction: 8, tension: 90, useNativeDriver: USE_NATIVE }).start();
+  }, [activeIndex, hi]);
+  const cell = dockCell(position, labels);
+  const cellW = vertical ? cell.cross : cell.main;
+  const cellH = vertical ? cell.main : cell.cross;
+  const step = cell.main + DOCK_GAP;
+  const hiMove = hi.interpolate({ inputRange: [0, 10], outputRange: [0, step * 10] });
+  const radius = (cell.cross + DOCK_PADDING * 2) / 2; // dạng viên thuốc bo tròn hẳn hai đầu
+  const hiColor = withAlpha(theme.colors.text, theme.colors.glassTint === 'dark' ? 0.12 : 0.08);
+
   const detachPlayer = (origin: Origin | null) => {
     setEmergeFrom(origin);
     if (Platform.OS !== 'web') LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
     setMerged(false);
   };
 
-  // Đang kéo: nổi lên với bóng đổ mờ, không viền
+  // Bóng đổ nhẹ để dock tách khỏi nội dung phía sau; đang kéo thì nổi cao hơn
   const glow = lit
-    ? {
-        shadowColor: '#000',
-        shadowOpacity: 0.45,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 10 },
-        elevation: 14,
-      }
-    : null;
+    ? { shadowColor: '#000', shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 14 }
+    : { shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 8 };
 
   return (
     <View pointerEvents={hidden ? 'none' : 'box-none'} style={[styles.layer, dockStyle, { zIndex: d.zIndex }]}>
@@ -165,7 +181,7 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
         <Animated.View
           {...d.panHandlers}
           style={{
-            borderRadius: style.radius,
+            borderRadius: radius,
             opacity: d.opacity,
             transform: [
               { translateX: slideX },
@@ -178,13 +194,28 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
             ...glow,
           }}
         >
-          {/* Nền kính mờ theo theme */}
-          <GlassFill radius={style.radius} />
+          {/* Nền kính mờ theo theme, đậm hơn các chỗ khác để dock luôn rõ */}
+          <GlassFill radius={radius} solid={0.72} />
           {/* Giữ lâu vào khoảng trống giữa các nút cũng kéo được dock */}
           <Pressable
             {...d.pressProps}
             style={{ flexDirection: vertical ? 'column' : 'row', padding: DOCK_PADDING, gap: DOCK_GAP }}
           >
+            {/* Ô sáng của tab đang mở */}
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                left: DOCK_PADDING,
+                top: DOCK_PADDING,
+                width: cellW,
+                height: cellH,
+                borderRadius: Math.min(cellW, cellH) / 2,
+                backgroundColor: hiColor,
+                opacity: activeIndex < 0 ? 0 : 1,
+                transform: vertical ? [{ translateY: hiMove }] : [{ translateX: hiMove }],
+              }}
+            />
             {ids.map((id) => {
               const isActive = id === active;
               if (id === 'player') {
@@ -192,21 +223,23 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
                   <PlayerItem
                     key={id}
                     active={isActive}
+                    cellW={cellW}
+                    cellH={cellH}
                     onPress={() => onChange('player')}
                     onDetach={detachPlayer} // giữ lâu để tách player ra khỏi dock
                   />
                 );
               }
-              const color = isActive ? theme.colors.accent : theme.colors.textSecondary;
+              const color = isActive ? theme.colors.accent : theme.colors.text;
               return (
                 <Pressable
                   key={id}
                   {...d.pressProps}
                   onPress={() => onChange(id)}
-                  style={{ width: ITEM_SIZE, height: ITEM_SIZE, alignItems: 'center', justifyContent: 'center' }}
+                  style={{ width: cellW, height: cellH, alignItems: 'center', justifyContent: 'center' }}
                 >
-                  <Ionicons name={isActive ? ICONS[id].on : ICONS[id].off} size={24} color={color} />
-                  {style.showLabels && <Text style={{ color, fontSize: 10, marginTop: 2 }}>{t(LABELS[id])}</Text>}
+                  <Ionicons name={ICONS[id]} size={labels ? 23 : 25} color={color} />
+                  {labels && <Text numberOfLines={1} style={{ color, fontSize: 10, fontWeight: '600', marginTop: 3 }}>{t(LABELS[id])}</Text>}
                 </Pressable>
               );
             })}

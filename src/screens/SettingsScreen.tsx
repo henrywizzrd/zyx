@@ -33,7 +33,7 @@ function Chips<T extends string>({ options, value, onSelect, labels }: { options
 }
 
 export function SettingsScreen() {
-  const { theme, resetTheme, setMiniPlayerVariant, setMerged, setLanguage } = useTheme();
+  const { theme, resetTheme, setMiniPlayerVariant, setMerged, setLanguage, setDockLabels } = useTheme();
   const t = useT();
   const { push } = useNav();
   const pad = useContentInsets();
@@ -72,6 +72,14 @@ export function SettingsScreen() {
         value={theme.language}
         onSelect={setLanguage}
         labels={Object.fromEntries(LANGUAGES.map((l) => [l.id, l.label]))}
+      />
+
+      <Text style={label}>{t('settings.dockLabels')}</Text>
+      <Chips
+        options={['on', 'off'] as const}
+        value={theme.dock.labels ? 'on' : 'off'}
+        onSelect={(v) => setDockLabels(v === 'on')}
+        labels={{ on: t('common.on'), off: t('common.off') }}
       />
 
       <Text style={label}>{t('settings.miniStyle')}</Text>

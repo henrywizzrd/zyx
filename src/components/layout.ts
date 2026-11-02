@@ -7,10 +7,17 @@ export function useFrame() {
   return { width, height, left: 0 };
 }
 
-export const ITEM_SIZE = 52;
-export const DOCK_PADDING = 8;
-export const DOCK_GAP = 6;
-export const DOCK_THICKNESS = ITEM_SIZE + DOCK_PADDING * 2;
+// Ô của mỗi tab trên dock (kiểu Apple Music): ô dài theo chiều của dock để thanh trông thon dài, không vuông vức.
+// main = dọc theo dock, cross = bề dày dock. Có nhãn thì ô cao hơn để đủ chỗ cho chữ.
+export const DOCK_PADDING = 6;
+export const DOCK_GAP = 2;
+export function dockCell(position: Position, labels: boolean) {
+  const vertical = position !== 'top' && position !== 'bottom';
+  if (vertical) return labels ? { main: 56, cross: 68 } : { main: 52, cross: 56 };
+  return labels ? { main: 76, cross: 56 } : { main: 68, cross: 50 };
+}
+// Bề dày lớn nhất của dock (dùng để chừa chỗ cuối danh sách cuộn)
+export const DOCK_THICKNESS = 56 + DOCK_PADDING * 2;
 
 export const MP_ALBUM = 44;
 export const MP_BUTTON = 40;
@@ -23,11 +30,11 @@ export const STACK_GAP = 10;
 // Chỉ top và bottom nằm ngang, mọi vị trí còn lại xếp dọc
 export const isVertical = (p: Position) => p !== 'top' && p !== 'bottom';
 
-export function dockSize(count: number, position: Position) {
-  const length = count * ITEM_SIZE + (count - 1) * DOCK_GAP + DOCK_PADDING * 2;
-  return isVertical(position)
-    ? { width: DOCK_THICKNESS, height: length }
-    : { width: length, height: DOCK_THICKNESS };
+export function dockSize(count: number, position: Position, labels: boolean) {
+  const c = dockCell(position, labels);
+  const length = count * c.main + (count - 1) * DOCK_GAP + DOCK_PADDING * 2;
+  const thick = c.cross + DOCK_PADDING * 2;
+  return isVertical(position) ? { width: thick, height: length } : { width: length, height: thick };
 }
 
 // offset: đẩy thêm theo trục dọc (dùng khi xếp chồng 2 khối cùng vị trí)
@@ -75,7 +82,7 @@ export function dockRect(theme: Theme, insets: EdgeInsets, W: number, H: number)
   const { dock, miniPlayer } = theme;
   const m = dock.style.margin;
   const count = dock.items.length + (miniPlayer.merged ? 1 : 0);
-  const { width: w, height: h } = dockSize(count, dock.position);
+  const { width: w, height: h } = dockSize(count, dock.position, dock.labels);
   const L = insets.left + m, R = W - insets.right - m, T = insets.top + m, B = H - insets.bottom - m;
   switch (dock.position) {
     case 'bottom': return { x: (W - w) / 2, y: B - h, w, h };

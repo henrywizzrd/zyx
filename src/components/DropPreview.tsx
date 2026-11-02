@@ -31,10 +31,10 @@ export function DropPreview() {
     const hypothetical: Theme = { ...theme, dock: { ...theme.dock, position: target } };
     const { dockStyle } = computeLayout(hypothetical, insets);
     const count = theme.dock.items.length + (theme.miniPlayer.merged ? 1 : 0);
-    const size = dockSize(count, target);
+    const size = dockSize(count, target, theme.dock.labels);
     return (
       <View pointerEvents="none" style={[{ position: 'absolute', zIndex: 1 }, dockStyle]}>
-        <View style={{ width: size.width, height: size.height, borderRadius: theme.dock.style.radius, ...box }} />
+        <View style={{ width: size.width, height: size.height, borderRadius: Math.min(size.width, size.height) / 2, ...box }} />
       </View>
     );
   }

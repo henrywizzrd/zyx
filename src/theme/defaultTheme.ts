@@ -14,7 +14,8 @@ export const defaultTheme: Theme = {
   dock: {
     position: 'bottom',
     items: ['home', 'search', 'library', 'settings'],
-    style: { background: '#242424F2', radius: 28, margin: 12, showLabels: false },
+    labels: true,
+    style: { background: '#242424F2', radius: 28, margin: 12 },
   },
   miniPlayer: {
     variant: 'pill',

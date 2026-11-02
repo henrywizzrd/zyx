@@ -35,7 +35,8 @@ export interface Theme {
   dock: {
     position: Position;
     items: TabId[];
-    style: { background: string; radius: number; margin: number; showLabels: boolean };
+    labels: boolean; // hiện chữ dưới icon (Trang chủ, Tìm kiếm...)
+    style: { background: string; radius: number; margin: number };
   };
   miniPlayer: {
     variant: MiniPlayerVariant;

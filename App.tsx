@@ -1,5 +1,5 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
-import { Animated, StatusBar, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Animated, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
@@ -21,8 +21,16 @@ import { ArtistScreen } from './src/screens/ArtistScreen';
 import { SwipeBack } from './src/nav/SwipeBack';
 import { AppBackground } from './src/components/AppBackground';
 import { AmbientEffect } from './src/components/AmbientLayer';
+import { musicSupported, ytmusic } from './src/music/lazy';
 import { ThemeTransition } from './src/theme/ThemeTransition';
 import { ThemeStudioScreen } from './src/screens/ThemeStudioScreen';
+
+// Các màn hình tab không nhận props: bọc memo để App vẽ lại (đổi tab, mở trang...) thì chúng không phải vẽ lại theo.
+// Chúng vẫn tự cập nhật khi theme, dữ liệu, player... đổi (qua context)
+const HomeTab = React.memo(HomeScreen);
+const SearchTab = React.memo(SearchScreen);
+const LibraryTab = React.memo(LibraryScreen);
+const SettingsTab = React.memo(SettingsScreen);
 
 ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
 
@@ -41,25 +49,18 @@ function Root() {
   const [tab, setTab] = useState<TabId>('home');
   const [lastTab, setLastTab] = useState<TabId>('home');
   const nav = useNav();
-  const { width } = useWindowDimensions();
-  // Vị trí ngang của trang mở chồng (0 = đã mở hẳn, width = đã đóng): dùng chung giữa SwipeBack và lớp tab
-  const pageX = useRef(new Animated.Value(width)).current;
-  // 1 khi đang có từ 2 trang chồng nhau trở lên (tab bên dưới ẩn hẳn)
-  const deep = useRef(new Animated.Value(0)).current;
+  // Độ hiện của tab phía dưới các trang mở chồng (1 = hiện rõ, 0 = ẩn). SwipeBack điều khiển giá trị này.
+  // Chạy bằng luồng JS chứ không phải native driver: giá trị native có thể bị React ghi đè bằng giá trị cũ
+  // mỗi lần app vẽ lại (đổi theme...), làm tab trắng trơn khi quay ra
+  const tabFade = useRef(new Animated.Value(1)).current;
   const depth = nav.stack.length;
   useLayoutEffect(() => {
-    deep.setValue(depth > 1 ? 1 : 0);
-    // Đóng hết trang (đổi tab, hoặc quay lại tới tab): đưa vị trí trang về "đã đóng" để tab hiện rõ.
-    // Phải đặt lại giá trị chứ không thay opacity bằng số 1: giá trị đang chạy bằng native driver,
-    // đổi sang số thường thì phía native vẫn giữ opacity 0 cũ → tab trắng trơn
-    if (depth === 0) pageX.setValue(width);
-  }, [depth, width, deep, pageX]);
-  const tabOpacity = useRef(
-    Animated.multiply(
-      pageX.interpolate({ inputRange: [0, width], outputRange: [0, 1], extrapolate: 'clamp' }),
-      Animated.subtract(1, deep)
-    )
-  ).current;
+    // Đóng hết trang (đổi tab trên dock, hoặc quay lại tới tab): tab hiện rõ ngay
+    if (depth === 0) {
+      tabFade.stopAnimation();
+      tabFade.setValue(1);
+    }
+  }, [depth, tabFade]);
   const go = (t: TabId) => {
     if (t !== 'player') {
       setLastTab(t);
@@ -69,6 +70,16 @@ function Root() {
   };
   const page = nav.stack[nav.stack.length - 1];
   const shown = tab === 'player' ? lastTab : tab; // đang mở player thì vẫn vẽ tab phía sau
+  // Tab đã mở thì giữ lại (chỉ ẩn đi), không dựng lại từ đầu mỗi lần bấm dock.
+  // Trước đây mỗi lần đổi tab là dựng lại cả màn hình (Home, Thư viện...), luồng JS bận một lúc nên bấm dock tiếp bị "đơ"
+  const visited = useRef(new Set<TabId>()).current;
+  visited.add(shown);
+  const tabLayer = (id: TabId, el: React.ReactNode) =>
+    visited.has(id) ? (
+      <View key={id} pointerEvents={shown === id ? 'auto' : 'none'} style={[StyleSheet.absoluteFill, { display: shown === id ? 'flex' : 'none' }]}>
+        {el}
+      </View>
+    ) : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background.color }}>
@@ -82,19 +93,20 @@ function Root() {
             để trang trong suốt phía trên chỉ thấy nền chung, không thấy chữ của tab chồng lên */}
         <Animated.View
           pointerEvents={page ? 'none' : 'auto'}
-          style={{ flex: 1, opacity: tabOpacity }}
+          style={{ flex: 1, opacity: tabFade }}
         >
-          {shown === 'home' && <HomeScreen />}
-          {shown === 'search' && <SearchScreen />}
-          {shown === 'library' && <LibraryScreen />}
-          {shown === 'settings' && <SettingsScreen />}
+          {tabLayer('home', <HomeTab />)}
+          {tabLayer('search', <SearchTab />)}
+          {tabLayer('library', <LibraryTab />)}
+          {tabLayer('settings', <SettingsTab />)}
         </Animated.View>
         {/* Trang playlist/album mở chồng lên tab, dock và mini player vẫn nằm trên */}
         {page && (
           <SwipeBack
             key={page.type === 'collection' ? `${page.source}:${page.id}:${nav.stack.length}` : page.type === 'artist' ? `artist:${page.id}:${nav.stack.length}` : `${page.type}:${nav.stack.length}`}
             onBack={nav.pop}
-            x={pageX}
+            fade={tabFade}
+            bottom={nav.stack.length === 1}
           >
             {page.type === 'collection' ? (
               <CollectionScreen page={page} />
@@ -116,6 +128,30 @@ function Root() {
   );
 }
 
+// Nạp sẵn thư viện YouTube Music (youtubei.js) ngay lúc mở app, khi màn hình còn trống.
+// Thư viện này nặng: lần đầu nạp làm luồng JS bận khoảng 1 giây. Trước đây nó được nạp lúc vào tab Tìm kiếm
+// hoặc vài giây sau khi mở app, đúng lúc người dùng đang bấm dock → dock "đơ". Giờ chịu chờ thêm chút lúc mở app,
+// đổi lại dùng app không còn bị khựng giữa chừng.
+function Boot({ children }: { children: React.ReactNode }) {
+  const { theme } = useTheme();
+  const [ready, setReady] = useState(!musicSupported);
+  useEffect(() => {
+    if (ready) return;
+    // Chờ một khung hình để màn hình nền hiện ra trước, rồi mới nạp
+    const id = setTimeout(() => {
+      try {
+        ytmusic().getBrowseSession().catch(() => {}); // tạo phiên duyệt luôn (nhẹ, chạy nền qua mạng)
+      } catch (e) {
+        console.warn('[boot] preload', e);
+      }
+      setReady(true);
+    }, 16);
+    return () => clearTimeout(id);
+  }, [ready]);
+  if (!ready) return <View style={{ flex: 1, backgroundColor: theme.background.color }} />;
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -124,9 +160,11 @@ export default function App() {
           <PlayerProvider>
             <NavProvider>
               {/* Đổi bộ màu mượt cho cả app (chụp màn hình rồi tan dần) */}
-              <ThemeTransition>
-                <Root />
-              </ThemeTransition>
+              <Boot>
+                <ThemeTransition>
+                  <Root />
+                </ThemeTransition>
+              </Boot>
             </NavProvider>
           </PlayerProvider>
         </ThemeProvider>

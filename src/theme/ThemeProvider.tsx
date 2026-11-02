@@ -121,6 +121,7 @@ interface ThemeContextValue {
   setTheme: (t: Theme) => void;
   resetTheme: () => void;
   setDockPosition: (p: Position) => void;
+  setDockLabels: (on: boolean) => void;
   setMiniPlayerAnchor: (a: MiniAnchor) => void;
   setMiniPlayerCollapsed: (c: boolean) => void;
   setMiniPlayerVariant: (v: MiniPlayerVariant) => void;
@@ -185,6 +186,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       resetTheme: () => setThemeState((t) => ({ ...defaultTheme, language: t.language })), // giữ ngôn ngữ đang chọn
       setDockPosition: (position) =>
         setThemeState((t) => ({ ...t, dock: { ...t.dock, position } })),
+      setDockLabels: (labels) => setThemeState((t) => ({ ...t, dock: { ...t.dock, labels } })),
       setMiniPlayerAnchor: (anchor) => patchMini({ anchor }),
       setMiniPlayerCollapsed: (collapsed) => patchMini({ collapsed }),
       setMiniPlayerVariant: (variant) => patchMini({ variant }),
