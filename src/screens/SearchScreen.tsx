@@ -302,6 +302,11 @@ export function SearchScreen() {
                     {it.subtitle ? ` • ${it.subtitle}` : ''}
                   </Text>
                 </View>
+                {it.song && (
+                  <Pressable onPress={() => songMenu(toTrack(it.song!))} hitSlop={12} style={{ paddingLeft: 6 }}>
+                    <Ionicons name="ellipsis-horizontal" size={20} color={textSecondary} />
+                  </Pressable>
+                )}
               </Pressable>
             ))}
           </View>
@@ -362,6 +367,10 @@ export function SearchScreen() {
                       {label} • {t.artist}
                     </Text>
                   </View>
+                  {/* Nút ... : mở bảng thao tác của bài */}
+                  <Pressable onPress={() => songMenu(t)} hitSlop={12} style={{ paddingLeft: 6 }}>
+                    <Ionicons name="ellipsis-horizontal" size={20} color={textSecondary} />
+                  </Pressable>
                 </Pressable>
               );
               const cardRow = (c: Card) => (

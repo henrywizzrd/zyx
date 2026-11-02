@@ -6,6 +6,7 @@ import { MiniAnchor, Position } from '../theme/types';
 import { audio, musicSupported, toTrack, ytmusic } from '../music/lazy';
 import { bigThumb } from '../components/Cover';
 import { getLikedIds, PlayContext, recordPlay, setLiked as saveLiked } from '../data/db';
+import { localUri } from '../data/downloads';
 
 export type ViewRef = React.ElementRef<typeof View>;
 export type DragState = { kind: 'dock' | 'player'; target: Position | MiniAnchor | 'merge' };
@@ -136,10 +137,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setDuration(t.duration);
     try {
       // muxed=true: link mp4 có hình, iPhone phát được (link chỉ âm thanh bị lỗi trên iOS)
-      const info = await ytmusic().getAudio(t.id, undefined, true);
+      // Bài đã tải về máy: phát thẳng từ file, không cần mạng
+      const local = localUri(t.id);
+      const uri = local ?? (await ytmusic().getAudio(t.id, undefined, true)).url;
       if (id !== reqId.current) return; // đã bấm bài khác
       const p = audio().getPlayer();
-      p.replace({ uri: info.url, name: t.title });
+      p.replace({ uri, name: t.title });
       p.play();
       // Ghi lịch sử nghe (thêm đủ thông tin bài để Home dựng Recent / Recommend)
       recordPlay({ ...t, duration: t.duration }, t.ctx);

@@ -213,9 +213,21 @@ export interface Shelf {
 
 export interface Collection {
   title: string;
-  subtitle: string;
+  subtitle: string; // ví dụ "EP • 2025" hoặc "Playlist • 50 bài"
   thumb?: string;
   songs: Song[];
+  // Nghệ sĩ / người tạo hiện dưới tên (ảnh tròn nhỏ + tên, bấm để mở trang nghệ sĩ)
+  owner?: { name: string; id?: string; thumb?: string };
+}
+
+// Người tạo / nghệ sĩ trong phần đầu trang album / playlist
+function ownerOf(h: any): Collection['owner'] {
+  const t = h?.strapline_text_one;
+  const name = str(t);
+  if (!name) return undefined;
+  const ep = t?.endpoint ?? t?.runs?.find((r: any) => r?.endpoint)?.endpoint;
+  const id: string | undefined = ep?.payload?.browseId;
+  return { name, id, thumb: lastThumb(h?.strapline_thumbnail) };
 }
 
 const CARD_KINDS: CardKind[] = ['song', 'video', 'album', 'playlist', 'artist'];
@@ -307,7 +319,7 @@ export async function getCollection(kind: 'playlist' | 'album', id: string): Pro
     const thumb = lastThumb(h?.thumbnail);
     // Bài trong album thường không có ảnh riêng: dùng ảnh album
     const songs = songsFrom(a.contents).map((s) => ({ ...s, thumb: s.thumb ?? thumb, album: s.album ?? str(h?.title) }));
-    return { title: str(h?.title), subtitle: str(h?.subtitle) || str(h?.strapline_text_one), thumb, songs };
+    return { title: str(h?.title), subtitle: str(h?.subtitle), thumb, songs, owner: ownerOf(h) };
   }
   const p: any = await yt.music.getPlaylist(id);
   const h = p.header;
@@ -324,9 +336,10 @@ export async function getCollection(kind: 'playlist' | 'album', id: string): Pro
   }
   return {
     title: str(h?.title),
-    subtitle: str(h?.subtitle) || str(h?.strapline_text_one) || str(h?.second_subtitle),
+    subtitle: str(h?.subtitle) || str(h?.second_subtitle),
     thumb: lastThumb(h?.thumbnail),
     songs,
+    owner: ownerOf(h),
   };
 }
 

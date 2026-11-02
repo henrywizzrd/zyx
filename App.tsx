@@ -9,6 +9,7 @@ import { MiniPlayer } from './src/components/MiniPlayer';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { NowPlayingScreen } from './src/screens/NowPlayingScreen';
+import { ActionSheetProvider } from './src/components/ActionSheet';
 import { TabId } from './src/theme/types';
 import { DropPreview } from './src/components/DropPreview';
 import { LibraryScreen } from './src/screens/LibraryScreen';
@@ -82,6 +83,8 @@ function Root() {
     ) : null;
 
   return (
+    // Bảng thao tác (nút ... của bài hát / album) nằm trên cùng, kể cả trên Player
+    <ActionSheetProvider closePlayer={() => tab === 'player' && setTab(lastTab)}>
     <View style={{ flex: 1, backgroundColor: theme.background.color }}>
       <StatusBar barStyle={theme.colors.statusBar} />
       {/* Nền chung: màu của bộ màu, ảnh/GIF hoặc video người dùng chọn */}
@@ -125,6 +128,7 @@ function Root() {
         </PlayerTransition>
       </View>
     </View>
+    </ActionSheetProvider>
   );
 }
 

@@ -334,6 +334,9 @@ function Trending() {
                 <Text numberOfLines={1} style={{ color: s.id === track.id ? accent : text, fontSize: 15, fontWeight: '600' }}>{s.title}</Text>
                 <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13 }}>{s.artist}</Text>
               </View>
+              <Pressable onPress={() => songMenu(s)} hitSlop={12} style={{ paddingLeft: 6 }}>
+                <Ionicons name="ellipsis-horizontal" size={20} color={textSecondary} />
+              </Pressable>
             </Pressable>
           ))}
           {data.playlistId && (
