@@ -301,3 +301,14 @@ export function cacheGet<T>(key: string): { value: T; at: number } | null {
 export function cacheSet(key: string, value: unknown) {
   safe(undefined, (d) => d.runSync('INSERT OR REPLACE INTO kv (key, value, at) VALUES (?, ?, ?)', [key, JSON.stringify(value), Date.now()]));
 }
+
+// ---------------- Lưu trữ khoá-giá trị (cài đặt nhỏ, profile...) ----------------
+// Giống cacheGet/cacheSet nhưng báo cho màn hình cập nhật khi đổi
+export function kvGet<T>(key: string): T | null {
+  return cacheGet<T>(key)?.value ?? null;
+}
+
+export function kvSet(key: string, value: unknown) {
+  cacheSet(key, value);
+  changed();
+}

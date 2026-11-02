@@ -51,17 +51,22 @@ function useRemote<T>(key: string, load: () => Promise<T>, enabled = true, fresh
     if (disk && Date.now() - disk.at < fresh && retry === 0) return; // bản lưu còn mới: không cần tải
     let dead = false;
     if (!disk) setState({ status: 'loading' });
-    load()
-      .then((data) => {
-        if (data != null) cacheSet(`home:${key}`, data);
-        if (!dead) setState({ status: 'done', data });
-      })
-      .catch((e) => {
-        console.warn(`[home:${key}]`, e);
-        if (!dead) setState((s) => (s.data ? s : { status: 'error' }));
-      });
+    const run = () =>
+      load()
+        .then((data) => {
+          if (data != null) cacheSet(`home:${key}`, data);
+          if (!dead) setState({ status: 'done', data });
+        })
+        .catch((e) => {
+          console.warn(`[home:${key}]`, e);
+          if (!dead) setState((s) => (s.data ? s : { status: 'error' }));
+        });
+    // Đã có bản lưu (dù cũ) thì chờ 4 giây rồi mới cập nhật ngầm, để lúc vừa mở app không có việc nặng nào làm dock bị đơ.
+    // Chưa có gì để hiện thì tải ngay.
+    const timer = disk && retry === 0 ? setTimeout(run, 4000) : (run(), null);
     return () => {
       dead = true;
+      if (timer) clearTimeout(timer);
     };
   }, [key, retry, enabled]); // eslint-disable-line react-hooks/exhaustive-deps
   return { ...state, retry: () => setRetry((r) => r + 1) };

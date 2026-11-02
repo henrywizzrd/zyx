@@ -6,8 +6,8 @@ import { Translate, useT } from '../i18n';
 
 type Action = { label: string; run: () => void; destructive?: boolean };
 
-// Hiện menu chọn: iOS dùng action sheet gốc của hệ thống, Android dùng hộp thoại
-function sheet(t: Translate, title: string, message: string | undefined, actions: Action[]) {
+// Hiện menu chọn: iOS dùng action sheet gốc của hệ thống, Android dùng hộp thoại (dùng chung cho cả app)
+export function sheet(t: Translate, title: string, message: string | undefined, actions: Action[]) {
   if (Platform.OS === 'ios') {
     const destructive = actions.findIndex((a) => a.destructive);
     ActionSheetIOS.showActionSheetWithOptions(

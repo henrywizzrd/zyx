@@ -23,7 +23,13 @@
     },
     "plugins": [
       "expo-audio",
-      "expo-sqlite"
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ZYX cần truy cập ảnh để bạn chọn ảnh đại diện và ảnh bìa cho profile.",
+          "cameraPermission": "ZYX cần dùng camera để bạn chụp ảnh đại diện và ảnh bìa cho profile."
+        }
+      ]
     ]
   }
 }

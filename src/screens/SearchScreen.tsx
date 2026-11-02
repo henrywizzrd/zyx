@@ -50,16 +50,21 @@ const norm = (q: string) => q.trim().toLowerCase();
 const getSuggest = (q: string) => cached(suggestCache, norm(q), () => ytmusic().getSuggestions(q.trim()));
 const getResults = (q: string) => cached(searchCache, norm(q), async () => (await ytmusic().searchSongs(q.trim())).map(toTrack));
 
-// Tạo sẵn phiên YouTube ngay sau khi app mở xong (lần search đầu không phải chờ thêm ~1 giây).
-// Đợi 1,5 giây cho app mở xong (animation, vẽ màn hình đầu) rồi mới làm để không giật.
-if (musicSupported) {
-  setTimeout(() => {
-    ytmusic().getSession().catch(() => {});
-  }, 1500);
+// Tạo sẵn phiên YouTube khi mở tab Tìm kiếm (không làm lúc mở app nữa: nạp youtubei.js làm luồng JS bận ~1 giây,
+// trong lúc đó dock không bấm được). Mở tab Tìm kiếm là sắp gõ, nên tạo phiên lúc này vẫn kịp cho lần tìm đầu.
+let warmed = false;
+function warmUp() {
+  if (warmed || !musicSupported) return;
+  warmed = true;
+  ytmusic().getSession().catch(() => (warmed = false));
 }
 
 export function SearchScreen() {
   const { theme } = useTheme();
+  useEffect(() => {
+    const id = setTimeout(warmUp, 250); // để màn hình Tìm kiếm hiện ra trước rồi mới làm
+    return () => clearTimeout(id);
+  }, []);
   const { track, playTrack } = usePlayer();
   const tr = useT(); // chữ theo ngôn ngữ (đặt tên tr vì biến t đang dùng cho bài hát)
   const songMenu = useSongMenu(); // nhấn giữ một bài: phát tiếp, hàng đợi, thích, thêm vào playlist

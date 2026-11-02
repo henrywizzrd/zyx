@@ -1,17 +1,22 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
 import { useT } from '../i18n';
 import { useContentInsets } from '../components/FloatingDock';
 import { LibraryLayout } from '../theme/types';
-import { followers, libraryItems, LibraryItem, profile } from '../data/mock';
+import { followers, libraryItems, LibraryItem } from '../data/mock';
+import { ImageSlot, PickedImage, pickProfileImage, removeProfileImage, saveCroppedCover, updateProfile, useProfile } from '../data/profile';
+import { CoverCropper } from '../components/CoverCropper';
+import { ProfileEditSheet } from '../components/ProfileEditSheet';
+import { sheet } from '../components/useSongMenu';
 import { useFrame } from '../components/layout';
 import { Reorderable } from '../components/Reorderable';
 import { ReorderableScrollView } from '../components/ReorderableScrollView';
 
 const H_PAD = 16;
+const COVER_H = 320; // chiều cao vùng ảnh bìa ở đầu trang
 
 const LAYOUT_ORDER: LibraryLayout[] = ['list', 'columns', 'covers2', 'covers3'];
 const LAYOUT_ICON: Record<LibraryLayout, keyof typeof Ionicons.glyphMap> = {
@@ -48,6 +53,24 @@ function CoverBox({ item, size, radius }: { item: LibraryItem; size: number; rad
 export function LibraryScreen() {
   const { theme, setLibraryLayout, setLibraryOrder } = useTheme();
   const t = useT();
+  const profile = useProfile();
+  const [cropImg, setCropImg] = useState<PickedImage | null>(null); // ảnh bìa đang chờ cắt
+  const [editOpen, setEditOpen] = useState(false); // popup sửa tên / hashtag
+
+  // Bấm avatar / nút đổi ảnh bìa: chọn ảnh, chụp ảnh, hoặc xoá
+  const editImage = (slot: ImageSlot) => {
+    // iOS: chờ menu đóng hẳn rồi mới mở trình chọn ảnh, mở ngay dễ bị hệ thống chặn
+    const run = (source: 'library' | 'camera') =>
+      new Promise((ok) => setTimeout(ok, Platform.OS === 'ios' ? 350 : 0)).then(() => pickProfileImage(slot, source, setCropImg)).then((r) => {
+        if (r === 'denied') Alert.alert(t('profile.takePhoto'), t('profile.cameraDenied'));
+        else if (r === 'failed') Alert.alert(t(slot === 'avatar' ? 'profile.avatar' : 'profile.cover'), t('profile.failed'));
+      });
+    sheet(t, t(slot === 'avatar' ? 'profile.avatar' : 'profile.cover'), undefined, [
+      { label: t('profile.fromLibrary'), run: () => run('library') },
+      { label: t('profile.takePhoto'), run: () => run('camera') },
+      ...(profile[slot] ? [{ label: t('profile.remove'), destructive: true, run: () => removeProfileImage(slot) }] : []),
+    ]);
+  };
   const pad = useContentInsets();
   const { width } = useFrame();
 
@@ -165,19 +188,52 @@ export function LibraryScreen() {
   return (
     <ReorderableScrollView contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}>
       <View style={{ width: '100%' }}>
-        {/* Nền (wall) của profile, sau này cho người dùng tự chọn ảnh */}
-        <LinearGradient
-          colors={[profile.wallColor, theme.background.color]}
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 320 }}
-        />
+        {/* Ảnh bìa (wall) của profile: ảnh người dùng chọn, mờ dần xuống màu nền. Chưa có ảnh thì là dải màu như cũ */}
+        {profile.cover ? (
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: COVER_H }}>
+            <Image source={{ uri: profile.cover }} resizeMode="cover" style={StyleSheet.absoluteFill} />
+            <LinearGradient
+              colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.35)', theme.background.color]}
+              locations={[0, 0.55, 1]}
+              style={StyleSheet.absoluteFill}
+            />
+          </View>
+        ) : (
+          <LinearGradient
+            colors={[profile.wallColor, theme.background.color]}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 320 }}
+          />
+        )}
+        {/* Nút đổi ảnh bìa */}
+        <Pressable
+          onPress={() => editImage('cover')}
+          hitSlop={8}
+          style={[styles.coverBtn, { top: pad.top + 10, right: pad.right + H_PAD }]}
+        >
+          <Ionicons name="camera-outline" size={18} color="#FFFFFF" />
+        </Pressable>
 
         {/* Header profile */}
         <View style={{ paddingTop: pad.top + 28, paddingHorizontal: H_PAD, flexDirection: 'row', gap: 16, alignItems: 'flex-end' }}>
-          <View style={[styles.avatar, { backgroundColor: profile.avatarColor }]}>
-            <Ionicons name="person" size={52} color="rgba(255,255,255,0.85)" />
-          </View>
+          <Pressable onPress={() => editImage('avatar')} style={[styles.avatar, { backgroundColor: profile.avatarColor }]}>
+            {profile.avatar ? (
+              <Image source={{ uri: profile.avatar }} resizeMode="cover" style={StyleSheet.absoluteFill} />
+            ) : (
+              <Ionicons name="person" size={52} color="rgba(255,255,255,0.85)" />
+            )}
+            {/* Biểu tượng nhỏ cho biết bấm vào để đổi ảnh */}
+            <View style={styles.avatarEdit}>
+              <Ionicons name="camera" size={14} color="#FFFFFF" />
+            </View>
+          </Pressable>
           <View style={{ flex: 1 }}>
-            <Text style={{ color: text, fontSize: 12, fontWeight: '600' }}>{t('lib.profile')}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ color: text, fontSize: 12, fontWeight: '600' }}>{t('lib.profile')}</Text>
+              {/* Nút bút: mở popup sửa tên và hashtag */}
+              <Pressable onPress={() => setEditOpen(true)} hitSlop={8} style={styles.penBtn}>
+                <Ionicons name="pencil" size={16} color="#FFFFFF" />
+              </Pressable>
+            </View>
             <Text numberOfLines={1} style={{ color: text, fontSize: 30, fontWeight: '800', marginTop: 2 }}>
               {profile.name}
               <Text style={{ color: textSecondary, fontWeight: '600' }}> #{profile.tag}</Text>
@@ -254,12 +310,49 @@ export function LibraryScreen() {
           {renderItems()}
         </View>
       </View>
+      {cropImg && (
+        <CoverCropper
+          uri={cropImg.uri}
+          imageWidth={cropImg.width}
+          imageHeight={cropImg.height}
+          aspect={width / COVER_H}
+          onCancel={() => setCropImg(null)}
+          onDone={async (rect) => {
+            const r = await saveCroppedCover(cropImg, rect);
+            setCropImg(null);
+            if (r === 'failed') Alert.alert(t('profile.cover'), t('profile.failed'));
+          }}
+        />
+      )}
+      <ProfileEditSheet
+        visible={editOpen}
+        name={profile.name}
+        tag={profile.tag}
+        onClose={() => setEditOpen(false)}
+        onSave={(name, tag) => {
+          updateProfile({ name, tag });
+          setEditOpen(false);
+        }}
+      />
     </ReorderableScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  avatar: { width: 112, height: 112, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 112, height: 112, borderRadius: 14, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarEdit: {
+    position: 'absolute', right: 6, bottom: 6, width: 26, height: 26, borderRadius: 13,
+    backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center',
+  },
+  penBtn: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  coverBtn: {
+    position: 'absolute', zIndex: 2, width: 34, height: 34, borderRadius: 17,
+    backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center',
+  },
   followersRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
   plusBtn: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   follower: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
