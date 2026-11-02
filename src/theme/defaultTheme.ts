@@ -9,7 +9,7 @@ export const defaultTheme: Theme = {
   background: { type: 'preset', color: PRESETS.dark.bg, uri: '', dim: 0.25 },
   colors: PRESETS.dark,
   glass: { blur: 40 },
-  effects: { ambientSnow: true },
+  effects: { ambientSnow: true, ambientLeaves: true },
   dock: {
     position: 'bottom',
     items: ['home', 'search', 'library', 'settings'],

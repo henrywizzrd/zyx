@@ -80,7 +80,7 @@ function PresetCard({ id, selected, width, onPress }: { id: ThemePresetId; selec
 
 // Trang Giao diện: bộ màu, nền (màu / ảnh / GIF / video), độ tối nền, độ mờ kính
 export function ThemeStudioScreen() {
-  const { theme, setBackground, setGlassBlur, setAmbientSnow } = useTheme();
+  const { theme, setBackground, setGlassBlur, setAmbientSnow, setAmbientLeaves } = useTheme();
   const { changePreset } = useThemeTransition();
   const t = useT();
   const pad = useContentInsets();
@@ -171,14 +171,18 @@ export function ThemeStudioScreen() {
           ))}
         </View>
 
-        {/* Bộ Snow: bật/tắt tuyết rơi liên tục */}
-        {theme.preset === 'snow' && (
+        {/* Bộ Snow / Green: bật/tắt tuyết rơi / lá rơi liên tục */}
+        {(theme.preset === 'snow' || theme.preset === 'green') && (
           <View style={styles.switchRow}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: text }]}>{t('studio.snow')}</Text>
-              <Text style={{ color: textSecondary, fontSize: 12, marginTop: 2 }}>{t('studio.snowHint')}</Text>
+              <Text style={[styles.label, { color: text }]}>{t(theme.preset === 'snow' ? 'studio.snow' : 'studio.leaves')}</Text>
+              <Text style={{ color: textSecondary, fontSize: 12, marginTop: 2 }}>{t(theme.preset === 'snow' ? 'studio.snowHint' : 'studio.leavesHint')}</Text>
             </View>
-            <Switch value={theme.effects.ambientSnow} onValueChange={setAmbientSnow} trackColor={{ true: accent, false: theme.colors.switchOff }} />
+            <Switch
+              value={theme.preset === 'snow' ? theme.effects.ambientSnow : theme.effects.ambientLeaves}
+              onValueChange={theme.preset === 'snow' ? setAmbientSnow : setAmbientLeaves}
+              trackColor={{ true: accent, false: theme.colors.switchOff }}
+            />
           </View>
         )}
 

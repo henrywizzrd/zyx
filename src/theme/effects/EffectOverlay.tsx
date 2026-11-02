@@ -4,6 +4,7 @@ import { Canvas, Fill, ImageShader, Picture, Shader, Skia, type SkImage } from '
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
 import { leafRevealShader, snowRevealShader } from './shaders';
 import { drawFlake, FLAKE_SVGS } from './snowflakes';
+import { drawLeaf, LEAF_COLORS, LEAF_SVGS, makeLeafPaths } from './leaves';
 
 // Màu bông tuyết lúc chuyển theme: xanh xám vừa phải, thấy được trên cả nền tối lẫn nền trắng
 const FLAKE_COLOR = '#7C9EC4';
@@ -57,9 +58,8 @@ export function EffectOverlay({ effect, image, origin, progress, width, height }
     [effect, width, height]
   );
   // Chỉ chuyển chữ/số sang luồng UI; hình (SkPath) dựng ngay trong worklet cho chắc
-  const LEAF_SVG = 'M0 -1 C0.62 -0.55 0.62 0.55 0 1 C-0.62 0.55 -0.62 -0.55 0 -1 Z';
-  const VEIN_SVG = 'M0 -0.85 L0 0.85';
-  const LEAF_COLORS = ['#2E7D32', '#43A047', '#66BB6A', '#81C784', '#A5D6A7'];
+  const leafSvgs = LEAF_SVGS;
+  const leafColors = LEAF_COLORS;
   const flakeSvgs = FLAKE_SVGS;
 
   const picture = useDerivedValue(() => {
@@ -96,40 +96,29 @@ export function EffectOverlay({ effect, image, origin, progress, width, height }
           drawFlake(canvas, paint, shape, x, y, r, phase * 57.3 + t * 90, 1.4);
         }
       } else {
-        // Lá bay ra từ chỗ bấm, bị gió thổi sang phải và hơi lên, vừa bay vừa xoay
-        const leaf = Skia.Path.MakeFromSVGString(LEAF_SVG);
-        const vein = Skia.Path.MakeFromSVGString(VEIN_SVG);
-        if (leaf && vein) {
-          for (let i = 0; i < particles.length; i += 7) {
-            const start = particles[i];
-            const angle = particles[i + 1];
-            const speed = particles[i + 2];
-            const size = particles[i + 3];
-            const spin = particles[i + 4];
-            const ci = particles[i + 5];
-            const wind = particles[i + 6];
-            const life = 0.6;
-            const t = (p - start) / life;
-            if (t <= 0 || t >= 1) continue;
-            const x = ox + Math.cos(angle) * speed * t + wind * t * t;
-            const y = oy + Math.sin(angle) * speed * t - 60 * t + 120 * t * t;
-            const a = t < 0.12 ? t / 0.12 : t > 0.75 ? (1 - t) / 0.25 : 1;
-            const s = size * (0.6 + 0.4 * Math.min(1, t * 4));
-            canvas.save();
-            canvas.translate(x, y);
-            canvas.rotate(spin * t * 360 + angle * 57.3, 0, 0);
-            canvas.scale(s * 0.55, s);
-            paint.setStyle(0); // tô đặc
-            paint.setColor(Skia.Color(LEAF_COLORS[ci]));
-            paint.setAlphaf(a);
-            canvas.drawPath(leaf, paint);
-            paint.setStyle(1); // nét gân lá
-            paint.setStrokeWidth(0.08);
-            paint.setColor(Skia.Color('#1B5E20'));
-            paint.setAlphaf(a * 0.6);
-            canvas.drawPath(vein, paint);
-            canvas.restore();
-          }
+        // Lá (hình icon) bay ra từ chỗ bấm, bị gió thổi sang phải, vừa bay vừa xoay và lật
+        const shapes = makeLeafPaths(Skia, leafSvgs);
+        paint.setStyle(0); // tô đặc
+        for (let i = 0, k = 0; i < particles.length; i += 7, k++) {
+          const start = particles[i];
+          const angle = particles[i + 1];
+          const speed = particles[i + 2];
+          const size = particles[i + 3];
+          const spin = particles[i + 4];
+          const ci = particles[i + 5];
+          const wind = particles[i + 6];
+          const shape = shapes[k % shapes.length];
+          if (!shape) continue;
+          const life = 0.6;
+          const t = (p - start) / life;
+          if (t <= 0 || t >= 1) continue;
+          const x = ox + Math.cos(angle) * speed * t + wind * t * t;
+          const y = oy + Math.sin(angle) * speed * t - 60 * t + 120 * t * t;
+          const a = t < 0.12 ? t / 0.12 : t > 0.75 ? (1 - t) / 0.25 : 1;
+          const r = size * (0.6 + 0.4 * Math.min(1, t * 4));
+          paint.setColor(Skia.Color(leafColors[ci]));
+          paint.setAlphaf(a);
+          drawLeaf(canvas, paint, shape, x, y, r, spin * t * 360 + angle * 57.3 + 90, Math.cos(t * 9 + k));
         }
       }
     } catch (e) {

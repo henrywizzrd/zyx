@@ -126,6 +126,7 @@ interface ThemeContextValue {
   setBackground: (patch: Partial<Theme['background']>) => void;
   setGlassBlur: (blur: number) => void;
   setAmbientSnow: (on: boolean) => void;
+  setAmbientLeaves: (on: boolean) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -183,6 +184,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setBackground: (patch) => setThemeState((t) => derive({ ...t, background: { ...t.background, ...patch } })),
       setGlassBlur: (blur) => setThemeState((t) => ({ ...t, glass: { blur: Math.max(0, Math.min(100, blur)) } })),
       setAmbientSnow: (on) => setThemeState((t) => ({ ...t, effects: { ...t.effects, ambientSnow: on } })),
+      setAmbientLeaves: (on) => setThemeState((t) => ({ ...t, effects: { ...t.effects, ambientLeaves: on } })),
     };
   }, [theme]);
 

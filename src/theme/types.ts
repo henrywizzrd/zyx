@@ -29,7 +29,7 @@ export interface Theme {
   background: { type: BackgroundType; color: string; uri: string; dim: number };
   colors: Palette; // tính tự động từ preset, không tự sửa
   glass: { blur: number }; // độ mờ kính của dock, mini player, popup (0..100)
-  effects: { ambientSnow: boolean }; // tuyết rơi nhẹ ở nền khi dùng bộ Snow
+  effects: { ambientSnow: boolean; ambientLeaves: boolean }; // tuyết rơi (bộ Snow) / lá rơi (bộ Green) ở nền
   dock: {
     position: Position;
     items: TabId[];
