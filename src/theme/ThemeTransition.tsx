@@ -36,6 +36,28 @@ type Shot = {
 //  3. Gỡ ảnh chụp bằng hiệu ứng của bộ màu mới: Snow = băng giá lan ra + tuyết rơi, Green = lá bay;
 //     các bộ khác: ảnh chụp mờ dần. Hiệu ứng bắt đầu từ chỗ ngón tay bấm (origin)
 // Lớp hiệu ứng không chặn ngón tay, nên đang chuyển vẫn bấm / đổi tab bình thường.
+// Nạp ảnh chụp màn hình vào Skia. view-shot có khi trả đường dẫn không có "file://" (Skia cần có),
+// nên thử lần lượt: đường dẫn đã chuẩn hoá → đọc file thành base64
+async function loadSkiaImage(uri: string) {
+  const { Skia } = require('@shopify/react-native-skia') as typeof import('@shopify/react-native-skia');
+  const fileUri = uri.startsWith('file://') ? uri : `file://${uri}`;
+  try {
+    const img = Skia.Image.MakeImageFromEncoded(await Skia.Data.fromURI(fileUri));
+    if (img) return img;
+  } catch (e) {
+    console.warn('[theme] load shot (uri)', e);
+  }
+  try {
+    const { File } = require('expo-file-system') as typeof import('expo-file-system');
+    const b64 = await new File(fileUri).base64();
+    const img = Skia.Image.MakeImageFromEncoded(Skia.Data.fromBase64(b64));
+    if (img) return img;
+  } catch (e) {
+    console.warn('[theme] load shot (base64)', e);
+  }
+  return null;
+}
+
 export function ThemeTransition({ children }: { children: React.ReactNode }) {
   const { theme, setPreset } = useTheme();
   const { width, height } = useWindowDimensions();
@@ -81,15 +103,16 @@ export function ThemeTransition({ children }: { children: React.ReactNode }) {
         // Bộ có hiệu ứng riêng: nạp ảnh chụp vào Skia để shader "xoá" dần
         let effect = EFFECT_OF[id] ?? null;
         let image: Shot['image'] = null;
+        if (effect && effects && !effects.effectReady(effect)) {
+          console.warn('[theme] effect skipped: shader not available');
+          effect = null;
+        }
         if (effect && effects) {
-          try {
-            const { Skia } = require('@shopify/react-native-skia') as typeof import('@shopify/react-native-skia');
-            const data = await Skia.Data.fromURI(uri);
-            image = Skia.Image.MakeImageFromEncoded(data);
-          } catch (e) {
-            console.warn('[theme] load shot', e);
+          image = await loadSkiaImage(uri);
+          if (!image) {
+            console.warn('[theme] effect skipped: could not load screenshot into Skia');
+            effect = null;
           }
-          if (!image) effect = null;
         } else effect = null;
 
         fade.setValue(1);
