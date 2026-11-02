@@ -5,7 +5,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useT } from '../i18n';
-import { usePlayer, ViewRef } from '../player/PlayerProvider';
+import { usePlayer } from '../player/PlayerProvider';
 import { useContentInsets } from '../components/FloatingDock';
 import { Cover } from '../components/Cover';
 import { usePlayerTransition } from '../components/PlayerTransition';
@@ -15,6 +15,11 @@ import { useLyrics } from '../music/lyrics';
 import { audio, musicSupported } from '../music/lazy';
 import { QueueSheet } from '../components/QueueSheet';
 import { useSongMenu } from '../components/useSongMenu';
+import RNMaskedView from '@react-native-masked-view/masked-view';
+import { LinearGradient } from 'expo-linear-gradient';
+
+// Kiểu khai báo của thư viện chưa khớp React 19, ép kiểu để dùng như component bình thường
+const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
 
 const USE_NATIVE = Platform.OS !== 'web';
 
@@ -30,6 +35,7 @@ const REPEAT_PATH = 'M4 12.5V8.5A3.5 3.5 0 0 1 7.5 5H18.5M15.5 2L18.5 5L15.5 8M2
 const skia = Platform.OS === 'web' ? null : (require('@shopify/react-native-skia') as typeof import('@shopify/react-native-skia'));
 // Mọi icon ở hàng dưới cùng dùng chung một cỡ khung để nhìn đều nhau
 const ICON = 24;
+const PLAY = 66; // đường kính nút phát
 const REPEAT_SIZE = ICON;
 
 // Nút lời bài hát: khung chat bo góc có đuôi, bên trong là hai dấu ngoặc kép (giống Apple Music)
@@ -102,18 +108,12 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   // Báo vị trí ảnh bìa lớn để lúc mở player, ảnh album từ mini player bay tới đúng chỗ này.
   // Vùng gắn swipe.panHandlers cho phép vuốt xuống để thoát.
   const swipe = usePlayerTransition();
-  const coverRef = useRef<ViewRef>(null);
-  const reportCover = () =>
-    coverRef.current?.measureInWindow((x, y, w, h) => {
-      if (w > 0) swipe.reportCover({ x, y, w, h, r: 10 });
-    });
 
   const [showLyrics, setShowLyricsState] = useState(() => lyricsOpen);
   const setShowLyrics = (v: boolean | ((p: boolean) => boolean)) =>
     setShowLyricsState((p) => (lyricsOpen = typeof v === 'function' ? v(p) : v));
   const [scrub, setScrub] = useState<number | null>(null); // 0..1 khi đang kéo thanh tiến trình
   const [vol, setVol] = useState(() => (musicSupported ? audio().getPlayer().volume : 1));
-  const [box, setBox] = useState({ width: 0, height: 0 });
   const [queueOpen, setQueueOpen] = useState(false);
 
   // Màn hình ngang: bấm nút điện thoại để xoay. Rời player thì luôn quay về dọc.
@@ -143,18 +143,11 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const shownPct = scrub ?? pct;
   const elapsed = shownPct * duration;
   const isLiked = liked.has(track.id);
-  const coverSize = Math.max(0, Math.min(box.width, box.height - 16));
 
   const onVolume = (v: number) => {
     setVol(v);
     if (musicSupported) audio().getPlayer().volume = v;
   };
-
-  // Ảnh bìa thu nhỏ lại khi tạm dừng, phóng to lại khi phát (giống Apple Music)
-  const artScale = useRef(new Animated.Value(isPlaying ? 1 : 0.86)).current;
-  useEffect(() => {
-    Animated.spring(artScale, { toValue: isPlaying || loading ? 1 : 0.86, friction: 7, tension: 60, useNativeDriver: USE_NATIVE }).start();
-  }, [isPlaying, loading, artScale]);
 
   const LikeButton = (
     <Pressable onPress={() => track.id !== 'none' && toggleLike(track.id)} hitSlop={10} style={styles.roundBtn}>
@@ -167,14 +160,42 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     </Pressable>
   );
 
+  // Kiểu Spotify: đã thích = vòng tròn xanh có dấu tích, chưa thích = vòng tròn viền có dấu cộng
+  const SaveButton = (
+    <Pressable onPress={() => track.id !== 'none' && toggleLike(track.id)} hitSlop={10} style={styles.flatBtn}>
+      <Ionicons name={isLiked ? 'checkmark-circle' : 'add-circle-outline'} size={30} color={isLiked ? ON : '#FFFFFF'} />
+    </Pressable>
+  );
+  const MoreButtonFlat = (
+    <Pressable onPress={() => track.id !== 'none' && songMenu(track)} hitSlop={10} style={styles.flatBtn}>
+      <Ionicons name="ellipsis-horizontal" size={24} color="#FFFFFF" />
+    </Pressable>
+  );
+
   // Nền kiểu Apple Music: màu của ảnh bìa nhoè thành những mảng màu lớn, chậm rãi trôi xoay.
   // Hai lớp ảnh mờ xoay ngược chiều nhau nên màu cứ loang đổi liên tục mà rất nhẹ máy (chỉ là xoay ảnh)
+  // Trong lúc phóng to / thu nhỏ player thì tạm dừng xoay (màn player đang được chụp thành ảnh, có gì chuyển động là phải chụp lại mỗi khung hình)
   const spin = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const loop = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 60000, easing: Easing.linear, useNativeDriver: USE_NATIVE }));
-    loop.start();
-    return () => loop.stop();
-  }, [spin]);
+    if (swipe.moving) return;
+    let alive = true;
+    let anim: Animated.CompositeAnimation | null = null;
+    // Xoay tiếp từ chỗ đang dừng tới hết vòng, rồi mới lặp vòng mới (không bị giật ngược về góc cũ)
+    spin.stopAnimation((v) => {
+      if (!alive) return;
+      anim = Animated.timing(spin, { toValue: 1, duration: Math.max(1, (1 - v) * 60000), easing: Easing.linear, useNativeDriver: USE_NATIVE });
+      anim.start(({ finished }) => {
+        if (!finished || !alive) return;
+        spin.setValue(0); // 360° và 0° là cùng một góc nên không thấy nhảy
+        anim = Animated.loop(Animated.timing(spin, { toValue: 1, duration: 60000, easing: Easing.linear, useNativeDriver: USE_NATIVE }));
+        anim.start();
+      });
+    });
+    return () => {
+      alive = false;
+      anim?.stop();
+    };
+  }, [spin, swipe.moving]);
   const rot1 = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
   const rot2 = spin.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
   const blobSize = Math.max(win.width, win.height) * 1.9;
@@ -236,6 +257,33 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
       </Pressable>
       <Pressable onPress={next} hitSlop={12}>
         <Ionicons name="play-forward" size={big ? 40 : 32} color="#FFFFFF" />
+      </Pressable>
+    </View>
+  );
+
+  // Hàng điều khiển kiểu Spotify: trộn bài | lùi | phát (nút tròn trắng) | tới | lặp
+  const spotifyControls = (
+    <View style={styles.spotRow}>
+      <Pressable onPress={toggleShuffle} hitSlop={10} style={styles.sideBtn}>
+        <Ionicons name="shuffle" size={26} color={shuffle ? ON : SOFT} />
+        {shuffle && <View style={styles.dot} />}
+      </Pressable>
+      <Pressable onPress={prev} hitSlop={12} style={styles.skipSlot}>
+        <Ionicons name="play-skip-back" size={34} color="#FFFFFF" />
+      </Pressable>
+      <Pressable onPress={togglePlay} hitSlop={10} style={styles.playBtn}>
+        {loading ? (
+          <ActivityIndicator color="#000000" />
+        ) : (
+          <Ionicons name={isPlaying ? 'pause' : 'play'} size={34} color="#000000" style={isPlaying ? undefined : { marginLeft: 4 }} />
+        )}
+      </Pressable>
+      <Pressable onPress={next} hitSlop={12} style={styles.skipSlot}>
+        <Ionicons name="play-skip-forward" size={34} color="#FFFFFF" />
+      </Pressable>
+      <Pressable onPress={cycleRepeat} hitSlop={10} style={styles.sideBtn}>
+        <RepeatIcon mode={repeat} />
+        {repeat !== 'off' && <View style={styles.dot} />}
       </Pressable>
     </View>
   );
@@ -355,113 +403,103 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     );
   }
 
-  // ================= Màn hình dọc (kiểu Apple Music) =================
-  return (
-    <View style={{ flex: 1 }}>
-      {Background}
-      <StatusBar barStyle="light-content" />
-
-      <View
-        style={{
-          flex: 1,
-          width: '100%',
-          maxWidth: 520,
-          alignSelf: 'center',
-          paddingTop: pad.top + 4,
-          paddingBottom: pad.bottom + 8,
-          paddingLeft: pad.left + 24,
-          paddingRight: pad.right + 24,
-        }}
-      >
-        {/* Thanh kéo nhỏ ở đỉnh: vuốt xuống (hoặc bấm) để thu player lại */}
-        <Pressable onPress={close} hitSlop={14} style={styles.grabberWrap} {...swipe.panHandlers}>
-          <View style={styles.grabber} />
+  // ================= Màn hình dọc (kiểu Spotify) =================
+  // Bottom: tên bài + thích/menu, thanh thời gian, hàng điều khiển (trộn ở đầu, lặp ở cuối), âm lượng,
+  // hàng dưới cùng chỉ còn nút lời (trái) và hàng chờ (phải)
+  const PlayerBody = (
+    <>
+      <View style={{ marginTop: 20 }}>{Progress}</View>
+      <View style={{ marginTop: 10 }}>{spotifyControls}</View>
+      <View style={{ marginTop: 18 }}>{Volume}</View>
+      {/* Hàng dưới dựng y hệt khung của hàng điều khiển (cùng các ô rộng bằng nhau) nên nút lời nằm
+          thẳng dưới nút lùi, nút hàng chờ thẳng dưới nút tới, đối xứng hai bên nút phát */}
+      <View style={[styles.spotRow, { marginTop: 14 }]}>
+        <View style={styles.sideBtn} />
+        <Pressable onPress={() => setShowLyrics((v) => !v)} hitSlop={10} style={styles.skipSlot}>
+          <LyricsIcon on={showLyrics} />
+          {showLyrics && <View style={styles.dot} />}
         </Pressable>
+        <View style={{ width: PLAY }} />
+        <Pressable onPress={() => setQueueOpen(true)} hitSlop={10} style={styles.skipSlot}>
+          <Ionicons name="list" size={ICON} color={SOFT} />
+        </Pressable>
+        <View style={styles.sideBtn} />
+      </View>
+    </>
+  );
 
-        {/* Đang xem lời: ảnh nhỏ + tên bài ở trên (giống Apple Music) */}
-        {showLyrics && (
-          <View style={styles.compact} {...swipe.panHandlers}>
-            <Cover track={track} size={300} style={{ width: 56, height: 56, borderRadius: 8 }}>
+  const sidePad = { paddingLeft: pad.left + 24, paddingRight: pad.right + 24 };
+
+  // Đang xem lời: ảnh nhỏ + tên bài + thích ở trên, lời ở giữa
+  if (showLyrics) {
+    return (
+      <View style={{ flex: 1 }}>
+        {Background}
+        <StatusBar barStyle="light-content" />
+        <View style={[styles.column, sidePad, { paddingTop: pad.top + 4, paddingBottom: pad.bottom + 8 }]}>
+          {/* Cả vùng đầu (thanh kéo + ảnh nhỏ + tên bài) vuốt xuống được để thu về mini player */}
+          <View {...swipe.panHandlers}>
+          <Pressable onPress={close} hitSlop={14} style={styles.grabberWrap}>
+            <View style={styles.grabber} />
+          </Pressable>
+          <View style={styles.compact}>
+            <Cover track={track} size={300} style={{ width: 52, height: 52, borderRadius: 6 }}>
               <Ionicons name="musical-notes" size={22} color="rgba(255,255,255,0.8)" />
             </Cover>
             <View style={{ flex: 1 }}>
               <Text numberOfLines={1} style={styles.compactTitle}>{title}</Text>
               <Text numberOfLines={1} style={[styles.artist, { fontSize: 15 }]}>{artist}</Text>
             </View>
-            {LikeButton}
-            {MoreButton}
+            {SaveButton}
           </View>
-        )}
+          </View>
+          <View style={{ flex: 1 }}>
+            <LyricsView status={lyr.status} lyrics={lyr.lyrics} progress={progress} onSeek={seekTo} />
+          </View>
+          {/* Cả vùng điều khiển bên dưới cũng vuốt xuống để thoát được (kéo thanh trượt thì vẫn là kéo thanh trượt) */}
+          <View {...swipe.panHandlers}>{PlayerBody}</View>
+        </View>
+        <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} />
+      </View>
+    );
+  }
 
-        {/* Giữa: ảnh bìa lớn hoặc lời bài hát */}
-        <View
-          style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
-          onLayout={(e) => setBox(e.nativeEvent.layout)}
-          {...(showLyrics ? {} : swipe.panHandlers)}
-        >
-          {showLyrics ? (
-            <View style={{ width: '100%', height: '100%' }}>
-              <LyricsView status={lyr.status} lyrics={lyr.lyrics} progress={progress} onSeek={seekTo} />
-            </View>
-          ) : (
-            <Animated.View
-              ref={coverRef as any}
-              collapsable={false}
-              onLayout={reportCover}
-              style={{
-                width: coverSize,
-                height: coverSize,
-                shadowColor: '#000',
-                shadowOpacity: 0.45,
-                shadowRadius: 28,
-                shadowOffset: { width: 0, height: 16 },
-                transform: [{ scale: artScale }],
-              }}
-            >
-              <Cover track={track} size={1200} style={{ flex: 1, borderRadius: 12 }}>
-                <Ionicons name="musical-notes" size={64} color="rgba(255,255,255,0.8)" />
-              </Cover>
-            </Animated.View>
-          )}
+  // Xem ảnh bìa: ảnh tràn hết bề ngang ở nửa trên, cạnh dưới tan dần vào nền
+  return (
+    <View style={{ flex: 1 }}>
+      {Background}
+      <StatusBar barStyle="light-content" />
+      <View style={{ flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center' }}>
+        <View style={{ flex: 1, minHeight: 120 }} {...swipe.panHandlers}>
+          <MaskedView
+            style={StyleSheet.absoluteFill}
+            maskElement={<LinearGradient colors={['#000', '#000', 'transparent']} locations={[0, 0.72, 1]} style={{ flex: 1 }} />}
+          >
+            <Cover track={track} size={1200} style={{ flex: 1 }}>
+              <Ionicons name="musical-notes" size={72} color="rgba(255,255,255,0.8)" />
+            </Cover>
+          </MaskedView>
+          {/* Phủ tối nhẹ ở đỉnh để thanh trạng thái và thanh kéo luôn nhìn thấy */}
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(0,0,0,0.35)', 'rgba(0,0,0,0)']}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, height: pad.top + 60 }}
+          />
+          <Pressable onPress={close} hitSlop={14} style={[styles.grabberWrap, { marginTop: pad.top + 4 }]}>
+            <View style={styles.grabber} />
+          </Pressable>
         </View>
 
-        {/* Tên bài + nghệ sĩ bên trái, thích + menu bên phải */}
-        {!showLyrics && (
+        <View style={[sidePad, { paddingBottom: pad.bottom + 8 }]}>
           <View style={styles.info} {...swipe.panHandlers}>
             <View style={{ flex: 1 }}>
               <Text numberOfLines={1} style={styles.title}>{title}</Text>
               <Text numberOfLines={1} style={styles.artist}>{artist}</Text>
             </View>
-            {LikeButton}
-            {MoreButton}
+            {SaveButton}
+            {MoreButtonFlat}
           </View>
-        )}
-
-        <View style={{ marginTop: 18 }}>{Progress}</View>
-        <View style={{ marginTop: 18 }}>{controls(true)}</View>
-        <View style={{ marginTop: 22 }}>{Volume}</View>
-
-        {/* Hàng dưới: lời / trộn bài / lặp / xoay ngang / hàng chờ.
-            Nút đang bật: màu xanh lá + chấm nhỏ bên dưới (kiểu Spotify) */}
-        <View style={styles.bottom}>
-          <Pressable onPress={() => setShowLyrics((v) => !v)} hitSlop={10} style={styles.bottomBtn}>
-            <LyricsIcon on={showLyrics} />
-            {showLyrics && <View style={styles.dot} />}
-          </Pressable>
-          <Pressable onPress={toggleShuffle} hitSlop={10} style={styles.bottomBtn}>
-            <Ionicons name="shuffle" size={ICON} color={shuffle ? ON : SOFT} />
-            {shuffle && <View style={styles.dot} />}
-          </Pressable>
-          <Pressable onPress={cycleRepeat} hitSlop={10} style={styles.bottomBtn}>
-            <RepeatIcon mode={repeat} />
-            {repeat !== 'off' && <View style={styles.dot} />}
-          </Pressable>
-          <Pressable onPress={toggleLandscape} hitSlop={10} style={styles.bottomBtn}>
-            <Ionicons name="phone-landscape-outline" size={ICON} color={SOFT} />
-          </Pressable>
-          <Pressable onPress={() => setQueueOpen(true)} hitSlop={10} style={styles.bottomBtn}>
-            <Ionicons name="list" size={ICON} color={SOFT} />
-          </Pressable>
+          {PlayerBody}
         </View>
       </View>
 
@@ -474,16 +512,22 @@ const styles = StyleSheet.create({
   grabberWrap: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 24 },
   grabber: { width: 40, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.45)' },
   roundBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+  column: { flex: 1, width: '100%', maxWidth: 520, alignSelf: 'center' },
+  flatBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  spotRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sideBtn: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
+  skipSlot: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  playBtn: { width: PLAY, height: PLAY, borderRadius: PLAY / 2, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   compact: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10, marginBottom: 6 },
   compactTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '700', marginBottom: 1 },
-  info: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 22 },
-  title: { color: '#FFFFFF', fontSize: 22, fontWeight: '700', marginBottom: 2 },
+  info: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  title: { color: '#FFFFFF', fontSize: 24, fontWeight: '800', marginBottom: 2 },
   artist: { color: SOFT, fontSize: 18, fontWeight: '500' },
   times: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
   time: { color: 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: '600' },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   volume: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  bottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 22, paddingHorizontal: 8 },
+  bottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 },
   bottomBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  dot: { position: 'absolute', bottom: 2, width: 4, height: 4, borderRadius: 2, backgroundColor: ON },
+  dot: { position: 'absolute', bottom: 0, width: 4, height: 4, borderRadius: 2, backgroundColor: ON },
 });

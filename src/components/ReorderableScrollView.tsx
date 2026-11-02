@@ -58,9 +58,15 @@ interface Props {
   children: React.ReactNode;
   contentContainerStyle?: StyleProp<ViewStyle>;
   style?: StyleProp<ViewStyle>;
+  // false: tạm khoá cuộn (ví dụ tấm Hàng đợi đang mở một nửa, vuốt lên là kéo tấm chứ không cuộn)
+  scrollEnabled?: boolean;
+  // Báo vị trí cuộn ra ngoài (ví dụ tấm Hàng đợi cần biết danh sách đã ở trên cùng chưa)
+  scrollYOut?: SharedValue<number>;
+  // Báo ra ngoài: đang nhấc một ô lên để đổi thứ tự (tấm Hàng đợi khi đó phải đứng yên)
+  reorderingOut?: SharedValue<boolean>;
 }
 
-export function ReorderableScrollView({ children, contentContainerStyle, style }: Props) {
+export function ReorderableScrollView({ children, contentContainerStyle, style, scrollEnabled: allowScroll = true, scrollYOut, reorderingOut }: Props) {
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const { height: winHeight } = useWindowDimensions();
   const [scrollEnabled, setScrollEnabled] = useState(true);
@@ -83,12 +89,20 @@ export function ReorderableScrollView({ children, contentContainerStyle, style }
   const flingY = useSharedValue(0);
   const flinging = useSharedValue(false);
 
+  useAnimatedReaction(
+    () => trackedId.value >= 0,
+    (v) => {
+      if (reorderingOut) reorderingOut.value = v;
+    }
+  );
+
   useEffect(() => {
     winH.value = winHeight;
   }, [winHeight, winH]);
 
   // Chỉ lấy vị trí cuộn từ sự kiện native khi không kéo và không đang trôi theo quán tính
   const onScroll = useAnimatedScrollHandler((e) => {
+    if (scrollYOut) scrollYOut.value = e.contentOffset.y;
     if (trackedId.value >= 0 || flinging.value) return;
     scrollY.value = e.contentOffset.y;
   });
@@ -237,7 +251,7 @@ export function ReorderableScrollView({ children, contentContainerStyle, style }
         <Animated.ScrollView
           ref={scrollRef}
           style={style}
-          scrollEnabled={scrollEnabled}
+          scrollEnabled={scrollEnabled && allowScroll}
           onScroll={onScroll}
           scrollEventThrottle={16}
           bounces={false}

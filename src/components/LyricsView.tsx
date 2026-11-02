@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Platform, Pressable, ScrollView, ScrollViewInstance, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Platform, Pressable, ScrollView, ScrollViewInstance, StyleSheet, Text, View } from 'react-native';
 import type { Lyrics } from '../music/lyrics';
 import { audio, musicSupported } from '../music/lazy';
 import { usePlayer } from '../player/PlayerProvider';
 import { useT } from '../i18n';
+import { usePlayerTransition } from './PlayerTransition';
 import RNMaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -13,7 +14,25 @@ const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
 const TICK_MS = 80; // đọc thời gian bài hát ~12 lần mỗi giây
 const LEAD = 0.2; // hiện dòng mới sớm một chút, vì mắt đọc chậm hơn tai nghe
 const INTRO_MIN = 4; // câu hát đầu bắt đầu sau từng này giây thì coi đoạn trước đó là nhạc dạo
-const GAP_MIN = 10; // hai câu cách nhau từng này giây trở lên thì chèn đoạn chỉ có nhạc vào giữa
+const GAP_MIN = 10;
+const BACK_MS = 1500; // người dùng tự lướt xem lời: thả tay ra từng này mili giây thì tự lướt về câu đang hát // hai câu cách nhau từng này giây trở lên thì chèn đoạn chỉ có nhạc vào giữa
+
+// Dòng không hát thì nhoè (kiểu Spotify): chữ mờ đi và toả bóng trắng mềm ra xung quanh,
+// càng xa dòng đang hát càng nhoè. Dùng bóng chữ nên rất nhẹ máy, không cần lớp blur thật
+const GLOW = 24; // chỗ trống quanh chữ cho quầng sáng
+const styles = StyleSheet.create({
+  // Chữ có khoảng đệm rộng (rồi lùi lại bằng lề âm nên vị trí chữ không đổi) để quầng sáng có chỗ toả ra.
+  // Không có đệm thì bóng chữ bị cắt theo khung chữ nhật của dòng → nhìn vuông vức
+  line: { fontSize: 30, lineHeight: 38, fontWeight: '800', paddingHorizontal: GLOW, marginHorizontal: -GLOW, paddingVertical: GLOW, marginVertical: -GLOW },
+  // Câu đang hát: trắng sáng + quầng sáng toả ra xung quanh (chói như đèn)
+  active: { color: '#FFFFFF', textShadowColor: 'rgba(255,255,255,0.55)', textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } },
+  plain: { color: '#FFFFFF' },
+  // Đang tự lướt xem lời: các câu khác hết nhoè để đọc được
+  browse: { color: 'rgba(255,255,255,0.5)' },
+  near: { color: 'rgba(255,255,255,0.32)', textShadowColor: 'rgba(255,255,255,0.45)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 0 } },
+  far: { color: 'rgba(255,255,255,0.2)', textShadowColor: 'rgba(255,255,255,0.4)', textShadowRadius: 9, textShadowOffset: { width: 0, height: 0 } },
+});
+const blurFor = (d: number) => (d <= 1 ? styles.near : styles.far);
 
 // Một dòng hiển thị: câu hát, hoặc đoạn chỉ có nhạc (hiện nốt nhạc)
 type Row = { t: number | null; text: string; music?: boolean };
@@ -99,11 +118,13 @@ export function LyricsView({
   onSeek: (seconds: number) => void;
 }) {
   const { track, duration } = usePlayer();
+  const { moving } = usePlayerTransition();
   const t = useT();
   // Không còn chỉnh lệch tay: lời được chọn theo đúng videoId / độ dài thật nên khớp sẵn
   const offset = 0;
   const scroll = useRef<ScrollViewInstance>(null);
   const ys = useRef<number[]>([]);
+  const hs = useRef<number[]>([]); // chiều cao từng dòng, để đặt câu đang hát đúng giữa khung
   const [h, setH] = useState(0);
 
   const rows = useMemo(() => (lyrics ? buildRows(lyrics, duration) : []), [lyrics, duration]);
@@ -115,6 +136,7 @@ export function LyricsView({
   if (last.current !== rows) {
     last.current = rows;
     ys.current = [];
+    hs.current = [];
     placed.current = false;
   }
 
@@ -153,8 +175,43 @@ export function LyricsView({
   const scrollToLine = (i: number, animated: boolean) => {
     const y = ys.current[i];
     if (y == null || !h) return false;
-    scroll.current?.scrollTo({ y: Math.max(0, y - h * 0.22), animated });
+    // Đặt tâm của dòng vào đúng giữa khung lời
+    scroll.current?.scrollTo({ y: Math.max(0, y + (hs.current[i] ?? 0) / 2 - h / 2), animated });
     return true;
+  };
+
+  // Người dùng tự lướt xem lời: tạm ngưng tự cuộn. Thả tay ra (và lời đã dừng trôi) mà 1,5 giây không chạm lại
+  // thì tự lướt về câu đang hát. Chạm lại / lướt tiếp thì huỷ hẹn giờ.
+  const [browsing, setBrowsing] = useState(false);
+  const browsingRef = useRef(false);
+  const backTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelBack = () => {
+    if (backTimer.current) clearTimeout(backTimer.current);
+    backTimer.current = null;
+  };
+  const startBrowse = () => {
+    cancelBack();
+    if (!browsingRef.current) {
+      browsingRef.current = true;
+      setBrowsing(true);
+    }
+  };
+  const scheduleBack = () => {
+    if (!browsingRef.current) return;
+    cancelBack();
+    backTimer.current = setTimeout(() => {
+      backTimer.current = null;
+      browsingRef.current = false;
+      setBrowsing(false);
+      if (curRef.current >= 0) scrollToLine(curRef.current, true);
+    }, BACK_MS);
+  };
+  useEffect(() => cancelBack, []);
+  // Bấm vào một dòng để tua: về chế độ theo lời ngay
+  const stopBrowse = () => {
+    cancelBack();
+    browsingRef.current = false;
+    setBrowsing(false);
   };
 
   // Lần đầu: nhảy tức thì. Sau đó: cuộn mượt theo câu đang hát.
@@ -167,7 +224,7 @@ export function LyricsView({
       }
       return;
     }
-    if (cur >= 0) scrollToLine(cur, true);
+    if (cur >= 0 && !browsingRef.current) scrollToLine(cur, true);
   }, [cur, h]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lưới an toàn: nếu vì lý do nào đó chưa đặt được vị trí thì vẫn hiện sau 400ms
@@ -193,14 +250,15 @@ export function LyricsView({
 
 
   return (
-    <View style={{ flex: 1 }}>
+    // Khung lời rộng ra hai bên GLOW px (nội dung lùi vào lại đúng bằng chừng đó) để quầng sáng ở mép trái/phải không bị cắt
+    <View style={{ flex: 1, marginHorizontal: -GLOW }}>
       {/* Mép trên và mép dưới của khung lời mờ dần (chữ tan dần khi trôi ra khỏi khung, không bị cắt ngang) */}
       <MaskedView
         style={{ flex: 1 }}
         maskElement={
           <LinearGradient
             colors={['transparent', '#000', '#000', 'transparent']}
-            locations={[0, 0.14, 0.8, 1]}
+            locations={[0, 0.12, 0.88, 1]}
             style={{ flex: 1 }}
           />
         }
@@ -211,8 +269,13 @@ export function LyricsView({
         overScrollMode="never"
         showsVerticalScrollIndicator={false}
         onLayout={(e) => setH(e.nativeEvent.layout.height)}
+        scrollEventThrottle={16}
+        onScrollBeginDrag={startBrowse}
+        onMomentumScrollBegin={cancelBack}
+        onScrollEndDrag={scheduleBack}
+        onMomentumScrollEnd={scheduleBack}
         style={{ flex: 1, opacity: ready ? 1 : 0 }}
-        contentContainerStyle={{ paddingTop: h * 0.12 + 8, paddingBottom: h * 0.6 }}
+        contentContainerStyle={{ paddingTop: h * 0.5, paddingBottom: h * 0.5, paddingHorizontal: GLOW }}
       >
         {!synced && (
           <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13, marginBottom: 12 }}>
@@ -222,6 +285,7 @@ export function LyricsView({
         {rows.map((l, i) => {
           const onLayout = (e: any) => {
             ys.current[i] = e.nativeEvent.layout.y;
+            hs.current[i] = e.nativeEvent.layout.height;
             // Dòng đang hát vừa đo xong mà chưa đặt vị trí lần đầu: nhảy tới luôn
             if (!placed.current && i === curRef.current && scrollToLine(i, false)) {
               placed.current = true;
@@ -231,8 +295,13 @@ export function LyricsView({
           const active = synced ? i === cur : true;
           if (l.music) {
             return (
-              <Pressable key={i} onLayout={onLayout} onPress={() => l.t != null && onSeek(Math.max(0, l.t - offset))} style={{ paddingVertical: 6 }}>
-                <MusicNotes active={active} />
+              <Pressable key={i} onLayout={onLayout} onPress={() => {
+                if (l.t == null) return;
+                stopBrowse();
+                onSeek(Math.max(0, l.t - offset));
+                scrollToLine(i, true);
+              }} style={{ paddingVertical: 6 }}>
+                <MusicNotes active={active && !moving} />
               </Pressable>
             );
           }
@@ -243,12 +312,15 @@ export function LyricsView({
               onLayout={onLayout}
               disabled={l.t == null}
               // Bấm vào dòng: tua tới đúng lúc dòng đó hiện (đã tính độ lệch)
-              onPress={() => l.t != null && onSeek(Math.max(0, l.t - offset))}
+              onPress={() => {
+                if (l.t == null) return;
+                stopBrowse();
+                onSeek(Math.max(0, l.t - offset));
+                scrollToLine(i, true);
+              }}
               style={{ paddingVertical: 6 }}
             >
-              <Text style={{ color: '#FFFFFF', fontSize: 30, lineHeight: 38, fontWeight: '800', opacity: active ? 1 : 0.35 }}>
-                {l.text}
-              </Text>
+              <Text style={[styles.line, !synced ? styles.plain : active ? styles.active : browsing ? styles.browse : blurFor(Math.abs(i - cur))]}>{l.text}</Text>
             </Pressable>
           );
         })}

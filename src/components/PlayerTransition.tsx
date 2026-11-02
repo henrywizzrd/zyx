@@ -17,8 +17,10 @@ export const playerOrigin: {
 type Ctx = {
   reportCover: (r: Rect) => void; // không còn dùng, giữ lại để các file cũ không lỗi
   panHandlers: PanResponderInstance['panHandlers']; // gắn vào vùng cho phép vuốt xuống để thoát
+  // true trong lúc đang phóng to / thu nhỏ (hoặc đang vuốt xuống): màn player nên tạm dừng mọi chuyển động bên trong
+  moving: boolean;
 };
-const TransitionContext = createContext<Ctx>({ reportCover: () => {}, panHandlers: {} as Ctx['panHandlers'] });
+const TransitionContext = createContext<Ctx>({ reportCover: () => {}, panHandlers: {} as Ctx['panHandlers'], moving: false });
 export const usePlayerTransition = () => useContext(TransitionContext);
 
 const SPRING = { damping: 28, stiffness: 230, mass: 1 };
@@ -51,6 +53,11 @@ export function PlayerTransition({ open, onClose, children }: { open: boolean; o
   onCloseRef.current = onClose;
 
   const reportCover = useCallback(() => {}, []);
+  // Trong lúc chuyển cảnh, cả màn player được "chụp" thành một ảnh (rasterize) rồi chỉ việc phóng to / thu nhỏ ảnh đó.
+  // Không làm vậy thì mỗi khung hình máy phải vẽ lại toàn bộ: ảnh bìa có mép mờ (mask), chữ phát sáng, nền mờ...
+  // bên trong một khung bo góc đang đổi kích thước → tụt khung hình
+  const [moving, setMoving] = useState(open);
+  const stopMoving = useCallback(() => setMoving(false), []);
 
   useEffect(() => {
     if (open) {
@@ -60,8 +67,12 @@ export function PlayerTransition({ open, onClose, children }: { open: boolean; o
         p.value = 0;
         setMounted(true);
       }
-      p.value = withSpring(1, SPRING);
+      setMoving(true);
+      p.value = withSpring(1, SPRING, (done) => {
+        if (done) runOnJS(stopMoving)();
+      });
     } else if (mountedRef.current) {
+      setMoving(true);
       const run = () => {
         p.value = withTiming(0, { duration: 340, easing: Easing.bezier(0.32, 0.72, 0, 1) }, (done) => {
           if (done) runOnJS(finishClose)();
@@ -92,21 +103,27 @@ export function PlayerTransition({ open, onClose, children }: { open: boolean; o
       PanResponder.create({
         onMoveShouldSetPanResponder: (_, g) => g.dy > 8 && g.dy > Math.abs(g.dx) * 1.5,
         onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: () => setMoving(true),
         onPanResponderMove: (_, g) => {
           p.value = 1 - Math.min(1, Math.max(0, g.dy / (hRef.current * 0.9)));
         },
         onPanResponderRelease: (_, g) => {
           if (g.dy > 120 || g.vy > 0.9) onCloseRef.current();
-          else p.value = withSpring(1, SPRING);
+          else
+            p.value = withSpring(1, SPRING, (done) => {
+              if (done) runOnJS(stopMoving)();
+            });
         },
         onPanResponderTerminate: () => {
-          p.value = withSpring(1, SPRING);
+          p.value = withSpring(1, SPRING, (done) => {
+            if (done) runOnJS(stopMoving)();
+          });
         },
       }),
     [] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const ctx = useMemo<Ctx>(() => ({ reportCover, panHandlers: pan.panHandlers }), [reportCover, pan]);
+  const ctx = useMemo<Ctx>(() => ({ reportCover, panHandlers: pan.panHandlers, moving }), [reportCover, pan, moving]);
 
   // Ô cửa sổ: từ khung ảnh album ở mini player lớn dần tới toàn màn hình
   const win = useAnimatedStyle(() => ({
@@ -141,7 +158,9 @@ export function PlayerTransition({ open, onClose, children }: { open: boolean; o
     <View style={[StyleSheet.absoluteFill, { zIndex: 50 }]} pointerEvents={open ? 'auto' : 'none'}>
       <Animated.View style={[win, { backgroundColor: track.color }]}>
         <TransitionContext.Provider value={ctx}>
-          <Animated.View style={screen}>{children}</Animated.View>
+          <Animated.View style={screen} shouldRasterizeIOS={moving} renderToHardwareTextureAndroid={moving}>
+            {children}
+          </Animated.View>
         </TransitionContext.Provider>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, art]}>
           {track.thumb ? (
