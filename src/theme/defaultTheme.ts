@@ -3,6 +3,7 @@ import { Theme } from './types';
 export const defaultTheme: Theme = {
   version: 1,
   name: 'Default Dark',
+  language: 'vi',
   background: { type: 'solid', color: '#000000' },
   colors: {
     text: '#FFFFFF',
@@ -23,5 +24,9 @@ export const defaultTheme: Theme = {
     style: { background: '#242424F2', rectRadius: 18 },
   },
   library: { layout: 'list', order: [] },
-  home: { sections: ['recentlyPlayed', 'madeForYou', 'newReleases'] },
+  home: {
+    sections: ['myPlaylists', 'recent', 'trending', 'recommended', 'playlistPicks'],
+    hidden: [],
+    trendingRange: 'week',
+  },
 };

@@ -175,3 +175,139 @@ export async function getUpNext(videoId: string): Promise<Song[]> {
   }
   return out;
 }
+// ---------- Dữ liệu cho Home và trang playlist/album ----------
+// Viết kiểu "chịu lỗi": YouTube đổi cấu trúc thì phần nào không đọc được sẽ bị bỏ qua, không làm sập cả trang.
+export type CardKind = 'song' | 'video' | 'album' | 'playlist' | 'artist';
+
+export interface Card {
+  kind: CardKind;
+  id: string;
+  title: string;
+  subtitle: string;
+  thumb?: string;
+  song?: Song; // chỉ có với bài hát / video
+}
+
+export interface Shelf {
+  title: string;
+  cards: Card[];
+}
+
+export interface Collection {
+  title: string;
+  subtitle: string;
+  thumb?: string;
+  songs: Song[];
+}
+
+const CARD_KINDS: CardKind[] = ['song', 'video', 'album', 'playlist', 'artist'];
+const str = (v: any): string => (v == null ? '' : typeof v === 'string' ? v : v.toString?.() ?? '');
+const lastThumb = (v: any): string | undefined => {
+  const arr: any[] = Array.isArray(v) ? v : v?.contents ?? [];
+  return arr[arr.length - 1]?.url;
+};
+const artistsOf = (n: any): string =>
+  n?.artists?.map((a: { name: string }) => a.name).join(', ') || n?.author?.name || n?.authors?.map((a: { name: string }) => a.name).join(', ') || '';
+
+function toCard(n: any): Card | null {
+  if (!n || (n.type !== 'MusicTwoRowItem' && n.type !== 'MusicResponsiveListItem')) return null;
+  const kind = n.item_type as CardKind;
+  if (!CARD_KINDS.includes(kind) || !n.id) return null;
+  const title = str(n.title) || str(n.name);
+  const artist = artistsOf(n);
+  const thumb = n.type === 'MusicTwoRowItem' ? lastThumb(n.thumbnail) : lastThumb(n.thumbnails);
+  const subtitle = str(n.subtitle) || artist;
+  const playable = kind === 'song' || kind === 'video';
+  return {
+    kind,
+    id: n.id,
+    title,
+    subtitle,
+    thumb,
+    song: playable ? { id: n.id, title, artist, duration: n.duration?.seconds, thumb } : undefined,
+  };
+}
+
+function toShelves(sections: any[] | undefined): Shelf[] {
+  const out: Shelf[] = [];
+  for (const s of sections ?? []) {
+    if (s?.type !== 'MusicCarouselShelf') continue;
+    const cards = (s.contents ?? []).map(toCard).filter((c: Card | null): c is Card => !!c);
+    if (cards.length) out.push({ title: str(s.header?.title) || 'YouTube Music', cards });
+  }
+  return out;
+}
+
+// Trang chủ YouTube Music (chưa đăng nhập: nội dung chung theo khu vực)
+export async function getHomeShelves(): Promise<Shelf[]> {
+  const yt = await getSession();
+  const feed = await yt.music.getHomeFeed();
+  return toShelves(feed.sections as any[]);
+}
+
+// Trang Khám phá: mới phát hành, tâm trạng & thể loại...
+export async function getExploreShelves(): Promise<Shelf[]> {
+  const yt = await getSession();
+  const ex = await yt.music.getExplore();
+  return toShelves(ex.sections as any[]);
+}
+
+// Bảng xếp hạng theo quốc gia (mặc định Việt Nam). Trả về các kệ trên trang Charts của YouTube Music.
+export async function getChartShelves(country = 'VN'): Promise<Shelf[]> {
+  const yt = await getSession();
+  const res: any = await yt.actions.execute('/browse', {
+    browseId: 'FEmusic_charts',
+    formData: { selectedValues: [country] },
+    client: 'YTMUSIC',
+    parse: true,
+  });
+  return toShelves(res?.contents_memo?.get('MusicCarouselShelf'));
+}
+
+function songsFrom(items: any[] | undefined): Song[] {
+  const out: Song[] = [];
+  for (const n of items ?? []) {
+    if (n?.type !== 'MusicResponsiveListItem' || !n.id) continue;
+    out.push({
+      id: n.id,
+      title: str(n.title),
+      artist: artistsOf(n),
+      album: n.album?.name,
+      duration: n.duration?.seconds,
+      thumb: lastThumb(n.thumbnails),
+    });
+  }
+  return out;
+}
+
+// Danh sách bài của một playlist hoặc album trên YouTube Music
+export async function getCollection(kind: 'playlist' | 'album', id: string): Promise<Collection> {
+  const yt = await getSession();
+  if (kind === 'album') {
+    const a: any = await yt.music.getAlbum(id);
+    const h = a.header;
+    const thumb = lastThumb(h?.thumbnail);
+    // Bài trong album thường không có ảnh riêng: dùng ảnh album
+    const songs = songsFrom(a.contents).map((s) => ({ ...s, thumb: s.thumb ?? thumb, album: s.album ?? str(h?.title) }));
+    return { title: str(h?.title), subtitle: str(h?.subtitle) || str(h?.strapline_text_one), thumb, songs };
+  }
+  const p: any = await yt.music.getPlaylist(id);
+  const h = p.header;
+  let songs = songsFrom(p.items);
+  // Playlist dài: tải thêm vài trang (tối đa ~200 bài) để đủ dùng mà không quá chậm
+  let page = p;
+  for (let i = 0; i < 2 && page.has_continuation && songs.length < 200; i++) {
+    try {
+      page = await page.getContinuation();
+      songs = songs.concat(songsFrom(page.items));
+    } catch {
+      break;
+    }
+  }
+  return {
+    title: str(h?.title),
+    subtitle: str(h?.subtitle) || str(h?.strapline_text_one) || str(h?.second_subtitle),
+    thumb: lastThumb(h?.thumbnail),
+    songs,
+  };
+}

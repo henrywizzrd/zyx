@@ -5,6 +5,7 @@ import { Animated, Easing, LayoutAnimation, Platform, Pressable, StyleSheet, Tex
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
+import { useT } from '../i18n';
 import { usePlayer, ViewRef } from '../player/PlayerProvider';
 import { TabId } from '../theme/types';
 import { useDraggable } from './useDraggable';
@@ -24,12 +25,8 @@ const ICONS: Record<Exclude<TabId, 'player'>, { on: keyof typeof Ionicons.glyphM
   settings: { on: 'settings', off: 'settings-outline' },
 };
 
-const LABELS: Record<Exclude<TabId, 'player'>, string> = {
-  home: 'Home',
-  search: 'Search',
-  library: 'Library',
-  settings: 'Settings',
-};
+// Nhãn dưới icon (khi bật hiện nhãn) lấy từ bộ chữ theo ngôn ngữ
+const LABELS = { home: 'tab.home', search: 'tab.search', library: 'tab.library', settings: 'tab.settings' } as const;
 
 // Dock và mini player nổi trên nội dung, nên chỉ trả về safe area.
 // endPadding dùng để màn hình cuộn kéo được mục cuối lên khỏi các khối nổi ở đáy.
@@ -107,6 +104,7 @@ function PlayerItem({
 
 export function FloatingDock({ active, onChange, hidden = false }: { active: TabId; onChange: (t: TabId) => void; hidden?: boolean }) {
   const { theme, setMerged } = useTheme();
+  const t = useT();
   const { dockRef, setEmergeFrom } = usePlayer();
   const insets = useSafeAreaInsets();
   const d = useDraggable('dock');
@@ -206,7 +204,7 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
                   style={{ width: ITEM_SIZE, height: ITEM_SIZE, alignItems: 'center', justifyContent: 'center' }}
                 >
                   <Ionicons name={isActive ? ICONS[id].on : ICONS[id].off} size={24} color={color} />
-                  {style.showLabels && <Text style={{ color, fontSize: 10, marginTop: 2 }}>{LABELS[id]}</Text>}
+                  {style.showLabels && <Text style={{ color, fontSize: 10, marginTop: 2 }}>{t(LABELS[id])}</Text>}
                 </Pressable>
               );
             })}

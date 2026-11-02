@@ -4,6 +4,7 @@ import type { Lyrics } from '../music/lyrics';
 import { useLyricOffset } from '../music/lyrics';
 import { audio, musicSupported } from '../music/lazy';
 import { usePlayer } from '../player/PlayerProvider';
+import { useT } from '../i18n';
 
 const USE_NATIVE = Platform.OS !== 'web';
 const TICK_MS = 80; // đọc thời gian bài hát ~12 lần mỗi giây
@@ -96,6 +97,7 @@ export function LyricsView({
   onSeek: (seconds: number) => void;
 }) {
   const { track, duration } = usePlayer();
+  const t = useT();
   const [offset, setOffset] = useLyricOffset(track.id);
   const scroll = useRef<ScrollViewInstance>(null);
   const ys = useRef<number[]>([]);
@@ -181,7 +183,7 @@ export function LyricsView({
   if (!lyrics) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 16 }}>Chưa tìm thấy lời cho bài này.</Text>
+        <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 16 }}>{t('lyrics.notFound')}</Text>
       </View>
     );
   }
@@ -202,7 +204,7 @@ export function LyricsView({
       >
         {!synced && (
           <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13, marginBottom: 12 }}>
-            Bài này chỉ có lời thường, chưa có lời chạy theo nhạc.
+            {t('lyrics.plainOnly')}
           </Text>
         )}
         {rows.map((l, i) => {

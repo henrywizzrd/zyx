@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
+import { useT } from '../i18n';
 import { useContentInsets } from '../components/FloatingDock';
 import { LibraryLayout } from '../theme/types';
 import { followers, libraryItems, LibraryItem, profile } from '../data/mock';
@@ -46,6 +47,7 @@ function CoverBox({ item, size, radius }: { item: LibraryItem; size: number; rad
 
 export function LibraryScreen() {
   const { theme, setLibraryLayout, setLibraryOrder } = useTheme();
+  const t = useT();
   const pad = useContentInsets();
   const { width } = useFrame();
 
@@ -98,7 +100,7 @@ export function LibraryScreen() {
   // ----- Các kiểu hiển thị -----
   const renderItems = () => {
     if (items.length === 0) {
-      return <Text style={{ color: textSecondary, marginTop: 24 }}>Không có kết quả</Text>;
+      return <Text style={{ color: textSecondary, marginTop: 24 }}>{t('lib.noResults')}</Text>;
     }
 
     // Mô tả lưới cho Reorderable (columns = 1 là dạng danh sách)
@@ -175,7 +177,7 @@ export function LibraryScreen() {
             <Ionicons name="person" size={52} color="rgba(255,255,255,0.85)" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ color: text, fontSize: 12, fontWeight: '600' }}>Profile</Text>
+            <Text style={{ color: text, fontSize: 12, fontWeight: '600' }}>{t('lib.profile')}</Text>
             <Text numberOfLines={1} style={{ color: text, fontSize: 30, fontWeight: '800', marginTop: 2 }}>
               {profile.name}
               <Text style={{ color: textSecondary, fontWeight: '600' }}> #{profile.tag}</Text>
@@ -203,8 +205,8 @@ export function LibraryScreen() {
 
         {/* Chip lọc */}
         <View style={{ paddingHorizontal: H_PAD, marginTop: 28, flexDirection: 'row', gap: 8 }}>
-          {chip('Playlists', filter === 'playlist', () => toggleFilter('playlist'))}
-          {chip('Albums', filter === 'album', () => toggleFilter('album'))}
+          {chip(t('lib.playlists'), filter === 'playlist', () => toggleFilter('playlist'))}
+          {chip(t('lib.albums'), filter === 'album', () => toggleFilter('album'))}
         </View>
 
         {/* Tìm kiếm, sắp xếp, đổi kiểu hiển thị */}
@@ -216,7 +218,7 @@ export function LibraryScreen() {
                 autoFocus
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Tìm trong thư viện"
+                placeholder={t('lib.searchPlaceholder')}
                 placeholderTextColor={textSecondary}
                 style={{ color: text, flex: 1, paddingVertical: 8, marginLeft: 8 }}
               />
@@ -239,7 +241,7 @@ export function LibraryScreen() {
           )}
           <Pressable onPress={() => setSort((s) => (s === 'recents' ? 'alpha' : 'recents'))}>
             <Text style={{ color: textSecondary, fontSize: 13, fontWeight: '600' }}>
-              {sort === 'recents' ? 'Custom order' : 'A–Z'}
+              {t(sort === 'recents' ? 'lib.customOrder' : 'lib.az')}
             </Text>
           </Pressable>
           <Pressable onPress={cycleLayout} hitSlop={8}>

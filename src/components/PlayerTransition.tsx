@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { Image, PanResponder, PanResponderInstance, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, { Easing, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { usePlayer } from '../player/PlayerProvider';
-import { bigThumb } from './Cover';
+import { SmartImage } from './Cover';
 
 export type Rect = { x: number; y: number; w: number; h: number; r: number };
 
@@ -147,7 +147,7 @@ export function PlayerTransition({ open, onClose, children }: { open: boolean; o
           {track.thumb ? (
             <>
               <Image source={{ uri: track.thumb }} resizeMode="cover" style={StyleSheet.absoluteFill} />
-              <Image source={{ uri: bigThumb(track.thumb, 600) }} resizeMode="cover" style={StyleSheet.absoluteFill} />
+              <SmartImage url={track.thumb} size={600} style={StyleSheet.absoluteFill} />
             </>
           ) : (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: track.color }]} />

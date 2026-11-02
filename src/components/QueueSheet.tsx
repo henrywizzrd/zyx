@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, PanResponder, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
+import { useT } from '../i18n';
 import { QueueItem, usePlayer } from '../player/PlayerProvider';
 import { Cover } from './Cover';
 import { Reorderable } from './Reorderable';
@@ -18,6 +19,7 @@ const PAD = 16;
 //  - Vuốt thanh trên cùng xuống, hoặc bấm ra ngoài: đóng
 export function QueueSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { theme } = useTheme();
+  const t = useT();
   const { queue, index, track, jumpTo, removeFromQueue, reorderUpNext, autoplay, setAutoplay, radioLoading } = usePlayer();
   const accent = theme.colors.accent;
 
@@ -101,20 +103,20 @@ export function QueueSheet({ visible, onClose }: { visible: boolean; onClose: ()
         <View {...headerPan.panHandlers} style={{ paddingHorizontal: PAD, paddingBottom: 8 }}>
           <View style={styles.grab} />
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ flex: 1, color: '#FFFFFF', fontSize: 20, fontWeight: '800' }}>Hàng đợi</Text>
-            <Text style={{ color: SOFT, fontSize: 13, fontWeight: '600', marginRight: 8 }}>Tự phát</Text>
+            <Text style={{ flex: 1, color: '#FFFFFF', fontSize: 20, fontWeight: '800' }}>{t('queue.title')}</Text>
+            <Text style={{ color: SOFT, fontSize: 13, fontWeight: '600', marginRight: 8 }}>{t('queue.autoplay')}</Text>
             <Switch value={autoplay} onValueChange={setAutoplay} trackColor={{ true: accent, false: '#3A3A3A' }} />
           </View>
         </View>
 
         <ReorderableScrollView contentContainerStyle={{ paddingHorizontal: PAD, paddingBottom: 32 }}>
-          <Text style={styles.section}>Đang phát</Text>
-          {current ? row(current, true) : <Text style={{ color: SOFT }}>Chưa phát bài nào</Text>}
+          <Text style={styles.section}>{t('queue.nowPlaying')}</Text>
+          {current ? row(current, true) : <Text style={{ color: SOFT }}>{t('queue.nothing')}</Text>}
 
-          <Text style={[styles.section, { marginTop: 20 }]}>Tiếp theo</Text>
+          <Text style={[styles.section, { marginTop: 20 }]}>{t('queue.next')}</Text>
           {upNext.length === 0 && !radioLoading && (
             <Text style={{ color: SOFT, fontSize: 14 }}>
-              {autoplay ? 'Hết hàng đợi. Bài liên quan sẽ được thêm tự động.' : 'Hết hàng đợi.'}
+              {t(autoplay ? 'queue.endAuto' : 'queue.end')}
             </Text>
           )}
           {listW > 0 && upNext.length > 0 && (
@@ -142,11 +144,11 @@ export function QueueSheet({ visible, onClose }: { visible: boolean; onClose: ()
           {radioLoading && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 }}>
               <ActivityIndicator color={SOFT} />
-              <Text style={{ color: SOFT, fontSize: 13 }}>Đang tìm bài liên quan...</Text>
+              <Text style={{ color: SOFT, fontSize: 13 }}>{t('queue.finding')}</Text>
             </View>
           )}
           {upNext.some((x) => x.item.auto) && (
-            <Text style={{ color: SOFT, fontSize: 12, marginTop: 14 }}>✦ Bài liên quan do app tự thêm. Nhấn giữ một bài để kéo đổi thứ tự.</Text>
+            <Text style={{ color: SOFT, fontSize: 12, marginTop: 14 }}>{t('queue.note')}</Text>
           )}
         </ReorderableScrollView>
       </Animated.View>

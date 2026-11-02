@@ -5,6 +5,7 @@ import type { Track } from '../data/mock';
 import { MiniAnchor, Position } from '../theme/types';
 import { audio, musicSupported, toTrack, ytmusic } from '../music/lazy';
 import { bigThumb } from '../components/Cover';
+import { getLikedIds, PlayContext, recordPlay, setLiked as saveLiked } from '../data/db';
 
 export type ViewRef = React.ElementRef<typeof View>;
 export type DragState = { kind: 'dock' | 'player'; target: Position | MiniAnchor | 'merge' };
@@ -16,9 +17,11 @@ export type Repeat = 'off' | 'all' | 'one';
 
 // Một bài trong hàng đợi. qid là mã riêng của lần xếp hàng này (cùng một bài thêm 2 lần vẫn phân biệt được).
 // auto = bài do app tự thêm (radio khi hết hàng đợi).
-export type QueueItem = Track & { qid: string; auto?: boolean };
+// ctx = bài này được phát từ đâu (playlist, album, mix...), để ghi vào lịch sử nghe.
+export type QueueItem = Track & { qid: string; auto?: boolean; ctx: PlayContext };
 let qidSeq = 0;
-const enqueue = (t: Track, auto = false): QueueItem => ({ ...t, qid: `q${++qidSeq}`, auto });
+const single = (t: Track): PlayContext => ({ kind: 'search', id: t.id, title: t.title, thumb: t.thumb });
+const enqueue = (t: Track, ctx: PlayContext, auto = false): QueueItem => ({ ...t, qid: `q${++qidSeq}`, auto, ctx });
 const AUTOPLAY_KEY = 'zyx:autoplay';
 
 interface PlayerContextValue {
@@ -36,8 +39,9 @@ interface PlayerContextValue {
   toggleShuffle: () => void;
   cycleRepeat: () => void;
   liked: Set<string>;
-  toggleLike: (id: string) => void;
-  playTrack: (t: Track, list?: Track[]) => void;
+  toggleLike: (id: string, t?: Track) => void; // t: thông tin bài (khi bài không nằm trong hàng đợi)
+  // ctx: phát từ đâu (để hiện ở mục Recent). Bỏ trống = bài lẻ.
+  playTrack: (t: Track, list?: Track[], ctx?: PlayContext) => void;
   // Hàng đợi
   queue: QueueItem[];
   index: number; // vị trí bài đang phát trong queue
@@ -74,7 +78,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [shuffle, setShuffle] = useState(false);
   const [repeat, setRepeat] = useState<Repeat>('off');
-  const [liked, setLiked] = useState<Set<string>>(new Set());
+  const [liked, setLiked] = useState<Set<string>>(() => getLikedIds());
   const [drag, setDrag] = useState<DragState | null>(null);
   const [emergeFrom, setEmergeFrom] = useState<{ cx: number; cy: number } | null>(null);
   const [autoplay, setAutoplayState] = useState(true);
@@ -121,7 +125,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const track = queue[index] ?? IDLE;
 
-  const load = useCallback(async (t: Track) => {
+  const load = useCallback(async (t: QueueItem) => {
     if (!musicSupported) return;
     const id = ++reqId.current;
     loadingRef.current = true;
@@ -137,6 +141,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const p = audio().getPlayer();
       p.replace({ uri: info.url, name: t.title });
       p.play();
+      // Ghi lịch sử nghe (thêm đủ thông tin bài để Home dựng Recent / Recommend)
+      recordPlay({ ...t, duration: t.duration }, t.ctx);
     } catch (e) {
       console.warn('Không phát được', t.title, e);
     } finally {
@@ -160,8 +166,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   );
 
   const playTrack = useCallback(
-    (t: Track, list?: Track[]) => {
-      const l = (list ?? [t]).map((x) => enqueue(x));
+    (t: Track, list?: Track[], ctx?: PlayContext) => {
+            const l = (list ?? [t]).map((x) => enqueue(x, ctx ?? single(x)));
       const i = Math.max(0, l.findIndex((x) => x.id === t.id));
       commitQueue(l, i);
       goTo(i);
@@ -174,7 +180,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const q = queueRef.current;
       if (q.length === 0) return playTrack(t);
       const i = indexRef.current;
-      commitQueue([...q.slice(0, i + 1), enqueue(t), ...q.slice(i + 1)]);
+      commitQueue([...q.slice(0, i + 1), enqueue(t, single(t)), ...q.slice(i + 1)]);
     },
     [playTrack, commitQueue]
   );
@@ -187,7 +193,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const i = indexRef.current;
       let at = q.findIndex((x, k) => k > i && x.auto);
       if (at < 0) at = q.length;
-      commitQueue([...q.slice(0, at), enqueue(t), ...q.slice(at)]);
+      commitQueue([...q.slice(0, at), enqueue(t, single(t)), ...q.slice(at)]);
     },
     [playTrack, commitQueue]
   );
@@ -240,7 +246,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       .then((songs) => {
         const cur = queueRef.current;
         const have = new Set(cur.map((x) => x.id));
-        const add = songs.filter((s) => !have.has(s.id)).slice(0, 25).map((s) => enqueue(toTrack(s), true));
+        const add = songs.filter((s) => !have.has(s.id)).slice(0, 25).map((s) => enqueue(toTrack(s), { kind: 'mix', id: seed.id, title: `Mix ${seed.artist.split(',')[0]}`, thumb: seed.thumb }, true));
         if (add.length) commitQueue([...cur, ...add]);
         return add.length > 0;
       })
@@ -307,13 +313,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     // Lặp một bài: để chính trình phát lặp, chắc chắn hơn tự tua về đầu
     if (musicSupported) audio().getPlayer().loop = repeatRef.current === 'one';
   }, []);
-  const toggleLike = useCallback((id: string) => {
-    setLiked((prev) => {
-      const n = new Set(prev);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      return n;
-    });
+  // Thả tim: lưu vào máy (SQLite) để tắt app mở lại vẫn còn, và để có playlist Liked Songs
+  const likedRef = useRef(liked);
+  likedRef.current = liked;
+  const toggleLike = useCallback((id: string, track?: Track) => {
+    const t = track ?? queueRef.current.find((x) => x.id === id);
+    const n = new Set(likedRef.current);
+    const on = !n.has(id);
+    if (on) n.add(id);
+    else n.delete(id);
+    likedRef.current = n;
+    setLiked(n);
+    if (t) saveLiked(t, on);
   }, []);
 
   const prev = useCallback(() => {

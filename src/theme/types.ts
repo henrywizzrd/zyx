@@ -8,13 +8,18 @@ export type Edge = 'top' | 'bottom' | 'left' | 'right';
 export interface MiniAnchor { edge: Edge; t: number }
 
 export type TabId = 'home' | 'search' | 'library' | 'settings' | 'player';
-export type HomeSection = 'recentlyPlayed' | 'madeForYou' | 'newReleases';
+// Các khối của Home (thứ tự trong home.sections = thứ tự hiển thị)
+export type HomeSection = 'myPlaylists' | 'recent' | 'trending' | 'recommended' | 'playlistPicks';
+export type TrendingRange = 'week' | 'month' | 'year';
 export type MiniPlayerVariant = 'pill' | 'rect';
 export type LibraryLayout = 'list' | 'columns' | 'covers2' | 'covers3';
+
+import type { Language } from '../i18n/strings';
 
 export interface Theme {
   version: number;
   name: string;
+  language: Language; // ngôn ngữ giao diện
   background: { type: 'solid'; color: string };
   colors: { text: string; textSecondary: string; accent: string; surface: string };
   dock: {
@@ -30,5 +35,5 @@ export interface Theme {
     style: { background: string; rectRadius: number };
   };
   library: { layout: LibraryLayout; order: string[] };
-  home: { sections: HomeSection[] };
+  home: { sections: HomeSection[]; hidden: HomeSection[]; trendingRange: TrendingRange };
 }

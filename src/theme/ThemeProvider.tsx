@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { defaultTheme } from './defaultTheme';
-import { Edge, HomeSection, LibraryLayout, MiniAnchor, MiniPlayerVariant, Position, TabId, Theme } from './types';
+import { Edge, HomeSection, LibraryLayout, MiniAnchor, MiniPlayerVariant, Position, TabId, Theme, TrendingRange } from './types';
 
 const STORAGE_KEY = 'zyx:theme';
 
@@ -13,7 +13,9 @@ const POSITIONS: Position[] = [
 const EDGES: Edge[] = ['top', 'bottom', 'left', 'right'];
 const VARIANTS: MiniPlayerVariant[] = ['pill', 'rect'];
 const TABS: TabId[] = ['home', 'search', 'library', 'settings'];
-const SECTIONS: HomeSection[] = ['recentlyPlayed', 'madeForYou', 'newReleases'];
+const SECTIONS: HomeSection[] = ['myPlaylists', 'recent', 'trending', 'recommended', 'playlistPicks'];
+const RANGES: TrendingRange[] = ['week', 'month', 'year'];
+const LANGS = ['vi', 'en'] as const;
 const LIBRARY_LAYOUTS: LibraryLayout[] = ['list', 'columns', 'covers2', 'covers3'];
 
 // Bản lưu cũ có miniPlayer.position (8 vị trí cố định): đổi sang vị trí tự do theo viền
@@ -54,9 +56,12 @@ function merge<T>(base: T, saved: unknown): T {
 function sanitize(t: Theme): Theme {
   const d = defaultTheme;
   const items = t.dock.items.filter((i) => TABS.includes(i));
-  const sections = t.home.sections.filter((s) => SECTIONS.includes(s));
+  // Giữ thứ tự đã lưu, bỏ khối lạ (bản cũ), thêm khối mới chưa có vào cuối
+  const kept = t.home.sections.filter((s, i, a) => SECTIONS.includes(s) && a.indexOf(s) === i);
+  const sections = kept.length ? [...kept, ...SECTIONS.filter((s) => !kept.includes(s))] : d.home.sections;
   return {
     ...t,
+    language: (LANGS as readonly string[]).includes(t.language) ? t.language : d.language,
     dock: {
       ...t.dock,
       position: POSITIONS.includes(t.dock.position) ? t.dock.position : d.dock.position,
@@ -75,7 +80,12 @@ function sanitize(t: Theme): Theme {
       layout: LIBRARY_LAYOUTS.includes(t.library.layout) ? t.library.layout : d.library.layout,
       order: t.library.order.filter((id) => typeof id === 'string'),
     },
-    home: { ...t.home, sections: sections.length ? sections : d.home.sections },
+    home: {
+      ...t.home,
+      sections,
+      hidden: t.home.hidden.filter((s) => SECTIONS.includes(s)),
+      trendingRange: RANGES.includes(t.home.trendingRange) ? t.home.trendingRange : d.home.trendingRange,
+    },
   };
 }
 
@@ -90,6 +100,8 @@ interface ThemeContextValue {
   setMerged: (merged: boolean) => void;
   setLibraryLayout: (l: LibraryLayout) => void;
   setLibraryOrder: (ids: string[]) => void;
+  setHome: (patch: Partial<Theme['home']>) => void;
+  setLanguage: (l: Theme['language']) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -130,7 +142,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return {
       theme,
       setTheme: setThemeState,
-      resetTheme: () => setThemeState(defaultTheme),
+      resetTheme: () => setThemeState((t) => ({ ...defaultTheme, language: t.language })), // giữ ngôn ngữ đang chọn
       setDockPosition: (position) =>
         setThemeState((t) => ({ ...t, dock: { ...t.dock, position } })),
       setMiniPlayerAnchor: (anchor) => patchMini({ anchor }),
@@ -141,6 +153,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setThemeState((t) => ({ ...t, library: { ...t.library, layout } })),
       setLibraryOrder: (order) =>
         setThemeState((t) => ({ ...t, library: { ...t.library, order } })),
+      setHome: (patch) => setThemeState((t) => ({ ...t, home: { ...t.home, ...patch } })),
+      setLanguage: (language) => setThemeState((t) => ({ ...t, language })),
     };
   }, [theme]);
 

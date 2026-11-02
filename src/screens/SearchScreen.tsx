@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActionSheetIOS, ActivityIndicator, Alert, Image, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { usePlayer } from '../player/PlayerProvider';
@@ -8,6 +8,9 @@ import { genres, libraryItems, Track } from '../data/mock';
 import { musicSupported, toTrack, ytmusic } from '../music/lazy';
 import type { SuggestItem, Suggestions } from '../music/ytmusic';
 import { useFrame } from '../components/layout';
+import { useSongMenu } from '../components/useSongMenu';
+import { useNav } from '../nav/Nav';
+import { useT } from '../i18n';
 
 const H_PAD = 16;
 const GAP = 12;
@@ -57,7 +60,10 @@ if (musicSupported) {
 
 export function SearchScreen() {
   const { theme } = useTheme();
-  const { track, playTrack, playNext, addToQueue } = usePlayer();
+  const { track, playTrack } = usePlayer();
+  const tr = useT(); // chữ theo ngôn ngữ (đặt tên tr vì biến t đang dùng cho bài hát)
+  const songMenu = useSongMenu(); // nhấn giữ một bài: phát tiếp, hàng đợi, thích, thêm vào playlist
+  const { push } = useNav();
   const pad = useContentInsets();
   const { width } = useFrame();
 
@@ -149,24 +155,12 @@ export function SearchScreen() {
       playTrack(toTrack(it.song), playable);
       return;
     }
-    runSearch(it.title);
-  };
-
-  // Nhấn giữ một bài: phát tiếp theo / thêm vào cuối hàng đợi
-  const songMenu = (t: Track) => {
-    Keyboard.dismiss();
-    const actions = [
-      { label: 'Phát tiếp theo', run: () => playNext(t) },
-      { label: 'Thêm vào hàng đợi', run: () => addToQueue(t) },
-    ];
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { title: t.title, message: t.artist, options: [...actions.map((a) => a.label), 'Huỷ'], cancelButtonIndex: actions.length },
-        (i) => actions[i]?.run()
-      );
-    } else {
-      Alert.alert(t.title, t.artist, [...actions.map((a) => ({ text: a.label, onPress: a.run })), { text: 'Huỷ', style: 'cancel' as const }]);
+    // Album / playlist: mở trang danh sách bài. Nghệ sĩ: tạm tìm theo tên (trang nghệ sĩ làm sau)
+    if (it.kind === 'album' || it.kind === 'playlist') {
+      push({ type: 'collection', source: 'yt', kind: it.kind, id: it.id, title: it.title, thumb: it.thumb });
+      return;
     }
+    runSearch(it.title);
   };
 
   const { text, textSecondary, accent } = theme.colors;
@@ -188,11 +182,11 @@ export function SearchScreen() {
   const resultsReady = showResults && resultsFor === query.trim() && !resultsBusy;
 
   const kindLabel: Record<SuggestItem['kind'], string> = {
-    song: 'Song',
-    video: 'Video',
-    artist: 'Artist',
-    album: 'Album',
-    playlist: 'Playlist',
+    song: tr('kind.song'),
+    video: tr('kind.video'),
+    artist: tr('kind.artist'),
+    album: tr('kind.album'),
+    playlist: tr('kind.playlist'),
   };
 
   return (
@@ -204,7 +198,7 @@ export function SearchScreen() {
       contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}
     >
       <View style={{ width: '100%', paddingHorizontal: H_PAD }}>
-        <Text style={{ color: text, fontSize: 26, fontWeight: '700', marginTop: pad.top + 16 }}>Search</Text>
+        <Text style={{ color: text, fontSize: 26, fontWeight: '700', marginTop: pad.top + 16 }}>{tr('search.title')}</Text>
 
         {/* Ô tìm kiếm kiểu Spotify */}
         <View style={[styles.searchBox, { backgroundColor: text }]}>
@@ -216,7 +210,7 @@ export function SearchScreen() {
             returnKeyType="search"
             autoCorrect={false}
             autoCapitalize="none"
-            placeholder="What do you want to listen to?"
+            placeholder={tr('search.placeholder')}
             placeholderTextColor="#6B6B6B"
             style={[styles.input, { color: theme.background.color }]}
           />
@@ -231,7 +225,7 @@ export function SearchScreen() {
         {!searching ? (
           <>
             <Text style={{ color: text, fontSize: 18, fontWeight: '700', marginTop: 28, marginBottom: 14 }}>
-              Browse all
+              {tr('search.browseAll')}
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
               {genres.map((g) => (
@@ -249,7 +243,7 @@ export function SearchScreen() {
         ) : !showResults ? (
           // ---------- Đang gõ: gợi ý ----------
           <View style={{ marginTop: 12 }}>
-            {!musicSupported && <Text style={{ color: textSecondary }}>Tìm trên YouTube Music chỉ chạy trên điện thoại</Text>}
+            {!musicSupported && <Text style={{ color: textSecondary }}>{tr('search.phoneOnly')}</Text>}
             {(suggest?.queries ?? []).slice(0, 6).map((q) => (
               <Pressable key={`q-${q}`} onPress={() => runSearch(q)} style={styles.queryRow}>
                 <Ionicons name="search" size={18} color={textSecondary} />
@@ -291,7 +285,7 @@ export function SearchScreen() {
         ) : (
           // ---------- Đã bấm Search: kết quả đầy đủ ----------
           <View style={{ marginTop: 20, gap: 4 }}>
-            {error && <Text style={{ color: textSecondary }}>Lỗi tìm kiếm: {error}</Text>}
+            {error && <Text style={{ color: textSecondary }}>{tr('search.error', { msg: error })}</Text>}
             {!resultsReady && !error &&
               // Khung chờ: giữ chỗ đúng hình dạng kết quả để màn hình không bị trống
               Array.from({ length: 6 }).map((_, i) => (
@@ -304,7 +298,7 @@ export function SearchScreen() {
                 </View>
               ))}
             {resultsReady && results.length === 0 && (
-              <Text style={{ color: textSecondary }}>Không tìm thấy bài nào cho "{resultsFor}"</Text>
+              <Text style={{ color: textSecondary }}>{tr('search.noResults', { q: resultsFor ?? '' })}</Text>
             )}
             {resultsReady &&
               results.map((t) => (
@@ -315,7 +309,7 @@ export function SearchScreen() {
                       {t.title}
                     </Text>
                     <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>
-                      Song • {t.artist}
+                      {tr('kind.song')} • {t.artist}
                     </Text>
                   </View>
                 </Pressable>

@@ -15,6 +15,9 @@ import { LibraryScreen } from './src/screens/LibraryScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { PlayerTransition } from './src/components/PlayerTransition';
+import { NavProvider, useNav } from './src/nav/Nav';
+import { CollectionScreen } from './src/screens/CollectionScreen';
+import { SwipeBack } from './src/nav/SwipeBack';
 
 ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
 
@@ -32,10 +35,15 @@ function Root() {
   const { theme } = useTheme();
   const [tab, setTab] = useState<TabId>('home');
   const [lastTab, setLastTab] = useState<TabId>('home');
+  const nav = useNav();
   const go = (t: TabId) => {
-    if (t !== 'player') setLastTab(t);
+    if (t !== 'player') {
+      setLastTab(t);
+      nav.reset(); // đổi tab thì đóng các trang đang mở (playlist, album...)
+    }
     setTab(t);
   };
+  const page = nav.stack[nav.stack.length - 1];
   const shown = tab === 'player' ? lastTab : tab; // đang mở player thì vẫn vẽ tab phía sau
 
   return (
@@ -46,6 +54,12 @@ function Root() {
         {shown === 'search' && <SearchScreen />}
         {shown === 'library' && <LibraryScreen />}
         {shown === 'settings' && <SettingsScreen />}
+        {/* Trang playlist/album mở chồng lên tab, dock và mini player vẫn nằm trên */}
+        {page && (
+          <SwipeBack key={`${page.source}:${page.id}:${nav.stack.length}`} onBack={nav.pop}>
+            <CollectionScreen page={page} />
+          </SwipeBack>
+        )}
         <DropPreview />
         <MiniPlayer hidden={tab === 'player'} onOpen={() => setTab('player')} />
           <FloatingDock active={tab} onChange={go} hidden={tab === 'player'} />
@@ -63,7 +77,9 @@ export default function App() {
       <SafeAreaProvider>
         <ThemeProvider>
           <PlayerProvider>
-            <Root />
+            <NavProvider>
+              <Root />
+            </NavProvider>
           </PlayerProvider>
         </ThemeProvider>
       </SafeAreaProvider>

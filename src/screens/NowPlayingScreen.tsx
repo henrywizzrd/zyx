@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
+import { useT } from '../i18n';
 import { usePlayer, ViewRef } from '../player/PlayerProvider';
 import { useContentInsets } from '../components/FloatingDock';
 import { Cover } from '../components/Cover';
@@ -24,12 +25,17 @@ const lock = (o: ScreenOrientation.OrientationLock) => ScreenOrientation.lockAsy
 
 export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const { theme } = useTheme();
+  const t = useT();
   const pad = useContentInsets();
   const {
     track, isPlaying, progress, duration, loading,
     togglePlay, next, prev, seekTo, shuffle, repeat, toggleShuffle, cycleRepeat, liked, toggleLike,
   } = usePlayer();
   const accent = theme.colors.accent;
+  // Chưa phát bài nào: hiện câu nhắc theo ngôn ngữ đang chọn
+  const idle = track.id === 'none';
+  const title = idle ? t('np.idleTitle') : track.title;
+  const artist = idle ? t('np.idleArtist') : track.artist;
 
   // Báo vị trí ảnh bìa lớn để lúc mở player, ảnh album từ mini player bay tới đúng chỗ này.
   // Vùng gắn swipe.panHandlers cho phép vuốt xuống để thoát.
@@ -120,7 +126,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
       />
       <View style={styles.times}>
         <Text style={styles.time}>{fmt(elapsed)}</Text>
-        <Text style={styles.time}>{loading ? 'Đang tải...' : `-${fmt(duration - elapsed)}`}</Text>
+        <Text style={styles.time}>{loading ? t('common.loading') : `-${fmt(duration - elapsed)}`}</Text>
       </View>
     </View>
   );
@@ -164,10 +170,10 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
                 <Ionicons name="musical-notes" size={40} color="rgba(255,255,255,0.8)" />
               </Cover>
             </View>
-            <Text numberOfLines={1} style={[styles.title, { fontSize: 20, marginTop: 10 }]}>{track.title}</Text>
+            <Text numberOfLines={1} style={[styles.title, { fontSize: 20, marginTop: 10 }]}>{title}</Text>
             <Text numberOfLines={1} style={[styles.artist, { fontSize: 14 }]}>
               {track.album ? `${track.album} • ` : ''}
-              {track.artist}
+              {artist}
             </Text>
             <View style={{ marginTop: 6 }}>{Progress}</View>
             <View style={[styles.controls, { justifyContent: 'center', gap: 36, marginTop: 4 }]}>
@@ -238,7 +244,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
           <Pressable onPress={close} style={styles.circle}>
             <Ionicons name="chevron-down" size={26} color="#FFFFFF" />
           </Pressable>
-          <Text numberOfLines={1} style={styles.topTitle}>{track.artist}</Text>
+          <Text numberOfLines={1} style={styles.topTitle}>{artist}</Text>
           <Pressable style={styles.circle}>
             <Ionicons name="ellipsis-horizontal" size={22} color="#FFFFFF" />
           </Pressable>
@@ -250,8 +256,8 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
               <Ionicons name="musical-notes" size={26} color="rgba(255,255,255,0.8)" />
             </Cover>
             <View style={{ flex: 1 }}>
-              <Text numberOfLines={1} style={styles.compactTitle}>{track.title}</Text>
-              <Text numberOfLines={1} style={styles.artist}>{track.artist}</Text>
+              <Text numberOfLines={1} style={styles.compactTitle}>{title}</Text>
+              <Text numberOfLines={1} style={styles.artist}>{artist}</Text>
             </View>
             {LikeButton}
           </View>
@@ -291,8 +297,8 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         {!showLyrics && (
           <View style={styles.info} {...swipe.panHandlers}>
             <View style={{ flex: 1 }}>
-              <Text numberOfLines={1} style={styles.title}>{track.title}</Text>
-              <Text numberOfLines={1} style={styles.artist}>{track.artist}</Text>
+              <Text numberOfLines={1} style={styles.title}>{title}</Text>
+              <Text numberOfLines={1} style={styles.artist}>{artist}</Text>
             </View>
             {LikeButton}
           </View>
@@ -311,7 +317,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
           />
           <View style={styles.times}>
             <Text style={styles.time}>{fmt(elapsed)}</Text>
-            <Text style={styles.time}>{loading ? 'Đang tải...' : `-${fmt(duration - elapsed)}`}</Text>
+            <Text style={styles.time}>{loading ? t('common.loading') : `-${fmt(duration - elapsed)}`}</Text>
           </View>
         </View>
 
