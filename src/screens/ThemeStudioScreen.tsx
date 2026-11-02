@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, GestureResponderEvent, Pressable, ScrollView,
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useThemeTransition } from '../theme/ThemeTransition';
-import { PRESET_ORDER, PRESETS, ThemePresetId } from '../theme/presets';
+import { AMBIENT_PRESETS, AmbientPresetId, PRESET_ORDER, PRESETS, ThemePresetId } from '../theme/presets';
 import type { BackgroundType } from '../theme/types';
 import { useContentInsets } from '../components/FloatingDock';
 import { PageBackground } from '../components/AppBackground';
@@ -80,7 +80,7 @@ function PresetCard({ id, selected, width, onPress }: { id: ThemePresetId; selec
 
 // Trang Giao diện: bộ màu, nền (màu / ảnh / GIF / video), độ tối nền, độ mờ kính
 export function ThemeStudioScreen() {
-  const { theme, setBackground, setGlassBlur, setAmbientSnow, setAmbientLeaves } = useTheme();
+  const { theme, setBackground, setGlassBlur, setAmbient } = useTheme();
   const { changePreset } = useThemeTransition();
   const t = useT();
   const pad = useContentInsets();
@@ -171,16 +171,19 @@ export function ThemeStudioScreen() {
           ))}
         </View>
 
-        {/* Bộ Snow / Green: bật/tắt tuyết rơi / lá rơi liên tục */}
-        {(theme.preset === 'snow' || theme.preset === 'green') && (
+        {/* Hiệu ứng nền của bộ đang dùng (bộ nào có thì mới hiện). Bật/tắt được nhớ riêng cho từng bộ */}
+        {(AMBIENT_PRESETS as ThemePresetId[]).includes(theme.preset) && (
           <View style={styles.switchRow}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: text }]}>{t(theme.preset === 'snow' ? 'studio.snow' : 'studio.leaves')}</Text>
-              <Text style={{ color: textSecondary, fontSize: 12, marginTop: 2 }}>{t(theme.preset === 'snow' ? 'studio.snowHint' : 'studio.leavesHint')}</Text>
+              <Text style={[styles.label, { color: text }]}>{t('studio.ambient')}</Text>
+              <Text style={{ color: textSecondary, fontSize: 12, marginTop: 2 }}>
+                {t(`studio.ambient.${theme.preset as AmbientPresetId}`)}
+                {theme.preset !== 'latte' ? ` ${t('studio.ambientPause')}` : ''}
+              </Text>
             </View>
             <Switch
-              value={theme.preset === 'snow' ? theme.effects.ambientSnow : theme.effects.ambientLeaves}
-              onValueChange={theme.preset === 'snow' ? setAmbientSnow : setAmbientLeaves}
+              value={theme.effects.ambient[theme.preset as AmbientPresetId]}
+              onValueChange={(on) => setAmbient(theme.preset as AmbientPresetId, on)}
               trackColor={{ true: accent, false: theme.colors.switchOff }}
             />
           </View>

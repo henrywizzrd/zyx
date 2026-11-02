@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { defaultTheme } from './defaultTheme';
-import { PRESETS, ThemePresetId } from './presets';
+import { AmbientPresetId, PRESETS, ThemePresetId } from './presets';
 import { Edge, HomeSection, LibraryLayout, MiniAnchor, MiniPlayerVariant, Position, TabId, Theme, TrendingRange } from './types';
 
 const STORAGE_KEY = 'zyx:theme';
@@ -22,7 +22,9 @@ const clampN = (v: number, lo: number, hi: number, d: number) => (Number.isFinit
 
 // Màu luôn tính lại từ bộ màu đang chọn (không tin màu đã lưu, để đổi bảng màu trong code là app cập nhật theo)
 function derive(t: Theme): Theme {
-  const preset: ThemePresetId = t.preset in PRESETS ? t.preset : defaultTheme.preset;
+  // Bộ 'blue' cũ nay là 'ocean'
+  const id = (t.preset as string) === 'blue' ? 'ocean' : t.preset;
+  const preset: ThemePresetId = id in PRESETS ? id : defaultTheme.preset;
   const palette = PRESETS[preset];
   // Nền là ảnh/video: thẻ dùng màu trong suốt một phần để lộ nền phía sau (trông như kính, cuộn vẫn mượt)
   const media = t.background.type !== 'preset' && !!t.background.uri;
@@ -125,8 +127,7 @@ interface ThemeContextValue {
   setPreset: (id: ThemePresetId) => void;
   setBackground: (patch: Partial<Theme['background']>) => void;
   setGlassBlur: (blur: number) => void;
-  setAmbientSnow: (on: boolean) => void;
-  setAmbientLeaves: (on: boolean) => void;
+  setAmbient: (preset: AmbientPresetId, on: boolean) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -183,8 +184,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setPreset: (preset) => setThemeState((t) => derive({ ...t, preset })),
       setBackground: (patch) => setThemeState((t) => derive({ ...t, background: { ...t.background, ...patch } })),
       setGlassBlur: (blur) => setThemeState((t) => ({ ...t, glass: { blur: Math.max(0, Math.min(100, blur)) } })),
-      setAmbientSnow: (on) => setThemeState((t) => ({ ...t, effects: { ...t.effects, ambientSnow: on } })),
-      setAmbientLeaves: (on) => setThemeState((t) => ({ ...t, effects: { ...t.effects, ambientLeaves: on } })),
+      setAmbient: (preset, on) =>
+        setThemeState((t) => ({ ...t, effects: { ...t.effects, ambient: { ...t.effects.ambient, [preset]: on } } })),
     };
   }, [theme]);
 

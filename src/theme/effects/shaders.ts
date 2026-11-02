@@ -62,6 +62,29 @@ half4 main(float2 p) {
   return half4(col * half(a), half(a));
 }`;
 
+// Ocean: sóng nước lan từ chỗ bấm. Màn hình cũ bị méo nhẹ ở đầu sóng (như nhìn qua mặt nước),
+// phía sau đầu sóng còn vài vòng gợn sáng mờ dần trên theme mới
+const RIPPLE = `${COMMON}
+half4 main(float2 p) {
+  float d = distance(p, origin);
+  float2 dir = d > 0.5 ? (p - origin) / d : float2(0.0, 0.0);
+  float r = progress * (maxR + 150.0);
+  float edge = d + fbm(p * 0.012) * 40.0 - r;
+  if (edge > 0.0) {
+    float ring = exp(-edge * edge / 2500.0);
+    float off = sin(edge * 0.18) * 14.0 * ring;
+    half4 c = image.eval(p + dir * off);
+    float a = smoothstep(0.0, 4.0, edge);
+    float crest = ring * 0.35 * (0.5 + 0.5 * sin(edge * 0.18));
+    half3 col = mix(c.rgb, half3(0.85, 0.93, 1.0), half(crest));
+    return half4(col * half(a), half(a));
+  }
+  float behind = -edge;
+  float wave = 0.5 + 0.5 * sin(behind * 0.09 - progress * 14.0);
+  float al = wave * wave * exp(-behind / 160.0) * (1.0 - progress) * 0.22;
+  return half4(half3(0.45, 0.66, 0.9) * half(al), half(al));
+}`;
+
 const cache: Record<string, SkRuntimeEffect | null> = {};
 function make(name: string, src: string) {
   if (!(name in cache)) {
@@ -73,3 +96,4 @@ function make(name: string, src: string) {
 
 export const snowRevealShader = () => make('snow', SNOW);
 export const leafRevealShader = () => make('leaf', LEAF);
+export const rippleRevealShader = () => make('ripple', RIPPLE);

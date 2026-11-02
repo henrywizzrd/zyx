@@ -2,17 +2,18 @@ import React, { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Canvas, Fill, ImageShader, Picture, Shader, Skia, type SkImage } from '@shopify/react-native-skia';
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
-import { leafRevealShader, snowRevealShader } from './shaders';
+import { leafRevealShader, rippleRevealShader, snowRevealShader } from './shaders';
+import { drawBubble } from './ocean';
 import { drawFlake, FLAKE_SVGS } from './snowflakes';
 import { drawLeaf, LEAF_COLORS, LEAF_SVGS, makeLeafPaths } from './leaves';
 
 // Màu bông tuyết lúc chuyển theme: xanh xám vừa phải, thấy được trên cả nền tối lẫn nền trắng
 const FLAKE_COLOR = '#7C9EC4';
 
-export type ThemeEffect = 'snow' | 'leaves';
+export type ThemeEffect = 'snow' | 'leaves' | 'ripple';
 
 // Thời gian chạy của từng hiệu ứng (ms)
-export const EFFECT_MS: Record<ThemeEffect, number> = { snow: 1500, leaves: 1400 };
+export const EFFECT_MS: Record<ThemeEffect, number> = { snow: 1500, leaves: 1400, ripple: 1300 };
 
 type Props = {
   effect: ThemeEffect;
@@ -24,7 +25,9 @@ type Props = {
 };
 
 // Shader của hiệu ứng dựng được chưa (dựng lỗi thì chuyển theme kiểu mờ dần thay vì giật)
-export const effectReady = (effect: ThemeEffect) => !!(effect === 'snow' ? snowRevealShader() : leafRevealShader());
+const shaderOf = (effect: ThemeEffect) =>
+  effect === 'snow' ? snowRevealShader() : effect === 'leaves' ? leafRevealShader() : rippleRevealShader();
+export const effectReady = (effect: ThemeEffect) => !!shaderOf(effect);
 
 // Số ngẫu nhiên cố định theo chỉ số (để mỗi lần vẽ, bông tuyết / chiếc lá thứ i luôn giống nhau)
 const rnd = (i: number, k: number) => {
@@ -36,7 +39,7 @@ const rnd = (i: number, k: number) => {
 //  1. Ảnh chụp màn hình cũ, bị shader "xoá" dần từ chỗ bấm ra ngoài
 //  2. Các hạt bay phía trên (bông tuyết / lá), vẽ lại mỗi khung hình trên luồng UI
 export function EffectOverlay({ effect, image, origin, progress, width, height }: Props) {
-  const source = effect === 'snow' ? snowRevealShader() : leafRevealShader();
+  const source = shaderOf(effect);
   const maxR = Math.max(
     Math.hypot(origin.x, origin.y),
     Math.hypot(width - origin.x, origin.y),
@@ -54,7 +57,7 @@ export function EffectOverlay({ effect, image, origin, progress, width, height }
   });
 
   const particles = useMemo(
-    () => (effect === 'snow' ? makeFlakes(width, height) : makeLeaves()),
+    () => (effect === 'snow' ? makeFlakes(width, height) : effect === 'leaves' ? makeLeaves() : makeBubbles()),
     [effect, width, height]
   );
   // Chỉ chuyển chữ/số sang luồng UI; hình (SkPath) dựng ngay trong worklet cho chắc
@@ -94,6 +97,23 @@ export function EffectOverlay({ effect, image, origin, progress, width, height }
           const x = x0 + Math.sin(t * 6.2 + phase) * amp;
           paint.setAlphaf(alpha * fadeIn * fadeOut);
           drawFlake(canvas, paint, shape, x, y, r, phase * 57.3 + t * 90, 1.4);
+        }
+      } else if (effect === 'ripple') {
+        // Một chùm bong bóng sủi lên từ chỗ bấm, lắc lư rồi tan
+        const blue = Skia.Color('#4F86C6');
+        const white = Skia.Color('#FFFFFF');
+        for (let i = 0; i < particles.length; i += 5) {
+          const start = particles[i];
+          const dx = particles[i + 1];
+          const rise = particles[i + 2];
+          const r0 = particles[i + 3];
+          const phase = particles[i + 4];
+          const t = (p - start) / 0.65;
+          if (t <= 0 || t >= 1) continue;
+          const x = ox + dx * t + Math.sin(t * 9 + phase) * 6;
+          const y = oy - rise * t;
+          const a = t < 0.1 ? t / 0.1 : t > 0.7 ? (1 - t) / 0.3 : 1;
+          drawBubble(canvas, paint, x, y, r0 * (0.7 + 0.5 * t), blue, white, a * 0.85);
         }
       } else {
         // Lá (hình icon) bay ra từ chỗ bấm, bị gió thổi sang phải, vừa bay vừa xoay và lật
@@ -148,6 +168,15 @@ function makeFlakes(width: number, height: number) {
   const count = Math.round(36 * Math.min(1.6, (width * height) / (390 * 844)));
   for (let i = 0; i < count; i++) {
     out.push(rnd(i, 1) * width, rnd(i, 2) * 0.45, 6 + rnd(i, 3) * 8, 6 + rnd(i, 4) * 16, rnd(i, 5) * 6.28, 0.55 + rnd(i, 6) * 0.45);
+  }
+  return out;
+}
+
+// Mỗi bong bóng 5 số: lúc xuất hiện, độ lệch ngang, quãng nổi lên, bán kính, pha lắc
+function makeBubbles() {
+  const out: number[] = [];
+  for (let i = 0; i < 26; i++) {
+    out.push(rnd(i, 1) * 0.35, (rnd(i, 2) - 0.5) * 140, 160 + rnd(i, 3) * 320, 3 + rnd(i, 4) * 7, rnd(i, 5) * 6.28);
   }
   return out;
 }

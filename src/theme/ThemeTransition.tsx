@@ -8,8 +8,8 @@ import type { ThemeEffect } from './effects/EffectOverlay';
 const USE_NATIVE = Platform.OS !== 'web';
 const FADE_MS = 650;
 
-// Hiệu ứng riêng của từng bộ màu (bộ chưa có thì mờ dần như cũ). Đợt sau thêm dark, light, blue, latte
-const EFFECT_OF: Partial<Record<ThemePresetId, ThemeEffect>> = { snow: 'snow', green: 'leaves' };
+// Hiệu ứng riêng của từng bộ màu (bộ chưa có thì mờ dần như cũ). Đợt sau thêm dark, light, latte
+const EFFECT_OF: Partial<Record<ThemePresetId, ThemeEffect>> = { snow: 'snow', green: 'leaves', ocean: 'ripple' };
 
 // Skia chỉ nạp trên iOS/Android (web chưa cài CanvasKit)
 const effects = Platform.OS === 'web' ? null : (require('./effects/EffectOverlay') as typeof import('./effects/EffectOverlay'));

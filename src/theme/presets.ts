@@ -1,7 +1,12 @@
 // Các bộ màu có sẵn. Mọi màn hình (trừ Player) lấy màu từ đây qua theme.colors.
 // Thêm bộ màu mới: thêm id vào ThemePresetId, thêm một mục vào PRESETS và tên vào PRESET_ORDER.
 
-export type ThemePresetId = 'dark' | 'light' | 'green' | 'blue' | 'latte' | 'snow';
+export type ThemePresetId = 'dark' | 'light' | 'green' | 'ocean' | 'latte' | 'snow';
+
+// Các bộ có hiệu ứng nền chạy liên tục (bật/tắt bằng công tắc Hiệu ứng nền, nhớ riêng từng bộ)
+export type AmbientPresetId = 'snow' | 'green' | 'ocean' | 'latte';
+// Bộ đã có hiệu ứng nền (Latte: hạt cà phê trang trí, làm ở đợt sau)
+export const AMBIENT_PRESETS: AmbientPresetId[] = ['snow', 'green', 'ocean'];
 
 export interface Palette {
   bg: string; // nền của app
@@ -69,7 +74,7 @@ export const PRESETS: Record<ThemePresetId, Palette> = {
     statusBar: 'dark-content',
     switchOff: '#B9D9BC',
   },
-  blue: {
+  ocean: {
     bg: '#E8F1FB',
     surface: '#D3E4F7',
     card: 'rgba(211,228,247,0.6)',
@@ -119,4 +124,4 @@ export const PRESETS: Record<ThemePresetId, Palette> = {
   },
 };
 
-export const PRESET_ORDER: ThemePresetId[] = ['dark', 'light', 'green', 'blue', 'latte', 'snow'];
+export const PRESET_ORDER: ThemePresetId[] = ['dark', 'light', 'green', 'ocean', 'latte', 'snow'];

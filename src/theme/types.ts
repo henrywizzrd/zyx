@@ -15,7 +15,7 @@ export type MiniPlayerVariant = 'pill' | 'rect';
 export type LibraryLayout = 'list' | 'columns' | 'covers2' | 'covers3';
 
 import type { Language } from '../i18n/strings';
-import type { Palette, ThemePresetId } from './presets';
+import type { AmbientPresetId, Palette, ThemePresetId } from './presets';
 
 // Nền của app: theo bộ màu, ảnh (cả GIF) hoặc video người dùng chọn
 export type BackgroundType = 'preset' | 'image' | 'video';
@@ -29,7 +29,8 @@ export interface Theme {
   background: { type: BackgroundType; color: string; uri: string; dim: number };
   colors: Palette; // tính tự động từ preset, không tự sửa
   glass: { blur: number }; // độ mờ kính của dock, mini player, popup (0..100)
-  effects: { ambientSnow: boolean; ambientLeaves: boolean }; // tuyết rơi (bộ Snow) / lá rơi (bộ Green) ở nền
+  // Hiệu ứng nền của từng bộ: tuyết rơi (Snow), lá rơi (Green), bong bóng + cá (Ocean), hạt cà phê (Latte)
+  effects: { ambient: Record<AmbientPresetId, boolean> };
   dock: {
     position: Position;
     items: TabId[];
