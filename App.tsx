@@ -10,6 +10,7 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { NowPlayingScreen } from './src/screens/NowPlayingScreen';
 import { ActionSheetProvider } from './src/components/ActionSheet';
+import { Freeze } from './src/components/Freeze';
 import { GenreScreen } from './src/screens/GenreScreen';
 import { TabId } from './src/theme/types';
 import { DropPreview } from './src/components/DropPreview';
@@ -102,7 +103,8 @@ function Root() {
   const tabLayer = (id: TabId, el: React.ReactNode) =>
     visited.has(id) ? (
       <View key={id} pointerEvents={shown === id ? 'auto' : 'none'} style={[StyleSheet.absoluteFill, { display: shown === id ? 'flex' : 'none' }]}>
-        {el}
+        {/* Tab đang ẩn: đóng băng, không vẽ lại cho tới khi quay lại tab đó */}
+        <Freeze freeze={shown !== id}>{el}</Freeze>
       </View>
     ) : null;
 
@@ -136,6 +138,8 @@ function Root() {
           const top = i === nav.stack.length - 1;
           return (
             <Animated.View key={k} pointerEvents={top ? 'box-none' : 'none'} style={[StyleSheet.absoluteFill, { opacity: fadeOf(k) }]}>
+              {/* Trang nằm sâu hơn trang ngay dưới trang trên cùng thì không nhìn thấy được: đóng băng */}
+              <Freeze freeze={i < nav.stack.length - 2}>
               <SwipeBack onBack={nav.pop} fade={i === 0 ? tabFade : fadeOf(pageKey(nav.stack[i - 1], i - 1))} bottom>
                 {pg.type === 'collection' ? (
                   <CollectionScreen page={pg} />
@@ -147,6 +151,7 @@ function Root() {
                   <ThemeStudioScreen />
                 )}
               </SwipeBack>
+              </Freeze>
             </Animated.View>
           );
         })}

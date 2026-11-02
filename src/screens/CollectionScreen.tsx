@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, PixelRatio, Pressable, Share, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -262,6 +262,19 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
         : []
     );
 
+  // Mỗi dòng là component riêng (memo): trạng thái nhạc đổi (bấm trộn bài, phát / dừng...) thì chỉ dòng nào thật sự đổi
+  // (bài đang phát, dấu tích thích) mới vẽ lại, không vẽ lại cả danh sách như trước
+  const handlers = useRef({ play: (_r: Row) => {}, menu: (_r: Row) => {} });
+  handlers.current.play = (r: Row) => playTrack(r, rows, ctx);
+  handlers.current.menu = menuFor;
+  const rowExtra = `${track.id}:${liked.size}:${text}`;
+  const renderRow = useCallback(
+    ({ item }: { item: Row }) => (
+      <SongRow item={item} playing={item.id === track.id} isLiked={liked.has(item.id)} showThumb={!isAlbum} handlers={handlers} colors={theme.colors} />
+    ),
+    [track.id, liked, isAlbum, theme.colors]
+  );
+
   return (
     <View style={StyleSheet.absoluteFill}>
       <FlatList
@@ -274,32 +287,37 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
         initialNumToRender={14}
         contentContainerStyle={{ paddingHorizontal: pad.left + 16, paddingBottom: pad.bottom + pad.endPadding }}
         ItemSeparatorComponent={() => <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: border }} />}
-        renderItem={({ item }) => {
-          const playing = item.id === track.id;
-          return (
-            <Pressable onPress={() => playTrack(item, rows, ctx)} onLongPress={() => menuFor(item)} style={styles.row}>
-              {/* Album: các bài cùng ảnh bìa nên bỏ ảnh đi (giống Spotify); playlist thì giữ ảnh từng bài */}
-              {!isAlbum &&
-                (item.thumb ? (
-                  <Image source={{ uri: item.thumb }} style={[styles.thumb, { backgroundColor: surface }]} />
-                ) : (
-                  <View style={[styles.thumb, { backgroundColor: surface }]} />
-                ))}
-              <View style={{ flex: 1 }}>
-                <Text numberOfLines={1} style={{ color: playing ? accent : text, fontSize: 17, fontWeight: '600' }}>{item.title}</Text>
-                <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 14, marginTop: 3 }}>{item.artist}</Text>
-              </View>
-              {liked.has(item.id) && <Ionicons name="checkmark-circle" size={22} color={accent} />}
-              <Pressable onPress={() => menuFor(item)} hitSlop={12} style={styles.more}>
-                <Ionicons name="ellipsis-horizontal" size={20} color={textSecondary} />
-              </Pressable>
-            </Pressable>
-          );
-        }}
+        extraData={rowExtra}
+        renderItem={renderRow}
       />
     </View>
   );
 }
+
+type Handlers = React.MutableRefObject<{ play: (r: Row) => void; menu: (r: Row) => void }>;
+const SongRow = React.memo(function SongRow({
+  item, playing, isLiked, showThumb, handlers, colors,
+}: { item: Row; playing: boolean; isLiked: boolean; showThumb: boolean; handlers: Handlers; colors: { text: string; textSecondary: string; accent: string; surface: string } }) {
+  return (
+    <Pressable onPress={() => handlers.current.play(item)} onLongPress={() => handlers.current.menu(item)} style={styles.row}>
+      {/* Album: các bài cùng ảnh bìa nên bỏ ảnh đi (giống Spotify); playlist thì giữ ảnh từng bài */}
+      {showThumb &&
+        (item.thumb ? (
+          <Image source={{ uri: item.thumb }} style={[styles.thumb, { backgroundColor: colors.surface }]} />
+        ) : (
+          <View style={[styles.thumb, { backgroundColor: colors.surface }]} />
+        ))}
+      <View style={{ flex: 1 }}>
+        <Text numberOfLines={1} style={{ color: playing ? colors.accent : colors.text, fontSize: 17, fontWeight: '600' }}>{item.title}</Text>
+        <Text numberOfLines={1} style={{ color: colors.textSecondary, fontSize: 14, marginTop: 3 }}>{item.artist}</Text>
+      </View>
+      {isLiked && <Ionicons name="checkmark-circle" size={22} color={colors.accent} />}
+      <Pressable onPress={() => handlers.current.menu(item)} hitSlop={12} style={styles.more}>
+        <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
+      </Pressable>
+    </Pressable>
+  );
+});
 
 const styles = StyleSheet.create({
   topBar: { position: 'absolute', flexDirection: 'row', justifyContent: 'space-between' },

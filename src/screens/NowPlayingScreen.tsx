@@ -5,7 +5,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useT } from '../i18n';
-import { usePlayer } from '../player/PlayerProvider';
+import { usePlayer, useProgress } from '../player/PlayerProvider';
 import { useContentInsets } from '../components/FloatingDock';
 import { Cover } from '../components/Cover';
 import { usePlayerTransition } from '../components/PlayerTransition';
@@ -96,7 +96,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const pad = useContentInsets();
   const songMenu = useSongMenu();
   const {
-    track, isPlaying, progress, duration, loading, failed,
+    track, isPlaying, duration, loading, failed,
     togglePlay, next, prev, seekTo, shuffle, repeat, toggleShuffle, cycleRepeat, liked, toggleLike,
   } = usePlayer();
   const accent = theme.colors.accent;
@@ -112,8 +112,6 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const [showLyrics, setShowLyricsState] = useState(() => lyricsOpen);
   const setShowLyrics = (v: boolean | ((p: boolean) => boolean)) =>
     setShowLyricsState((p) => (lyricsOpen = typeof v === 'function' ? v(p) : v));
-  const [scrub, setScrub] = useState<number | null>(null); // 0..1 khi đang kéo thanh tiến trình
-  const [vol, setVol] = useState(() => (musicSupported ? audio().getPlayer().volume : 1));
   const [queueOpen, setQueueOpen] = useState(false);
 
   // Màn hình ngang: bấm nút điện thoại để xoay. Rời player thì luôn quay về dọc.
@@ -139,15 +137,8 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
 
   const lyr = useLyrics(track, landscape ? landLyrics : showLyrics, duration);
 
-  const pct = duration > 0 ? Math.min(1, progress / duration) : 0;
-  const shownPct = scrub ?? pct;
-  const elapsed = shownPct * duration;
   const isLiked = liked.has(track.id);
 
-  const onVolume = (v: number) => {
-    setVol(v);
-    if (musicSupported) audio().getPlayer().volume = v;
-  };
 
   const LikeButton = (
     <Pressable onPress={() => track.id !== 'none' && toggleLike(track.id)} hitSlop={10} style={styles.roundBtn}>
@@ -219,25 +210,9 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     </View>
   );
 
-  const Progress = (
-    <View>
-      <Slider
-        value={pct}
-        thickness={6}
-        fill="rgba(255,255,255,0.9)"
-        track="rgba(255,255,255,0.22)"
-        onChange={setScrub}
-        onCommit={(v) => {
-          seekTo(v * duration);
-          setScrub(null);
-        }}
-      />
-      <View style={styles.times}>
-        <Text style={styles.time}>{fmt(elapsed)}</Text>
-        <Text style={[styles.time, failed && { color: '#FF8A80' }]}>{loading ? t('common.loading') : failed ? t('np.failed') : `-${fmt(duration - elapsed)}`}</Text>
-      </View>
-    </View>
-  );
+  // Thanh thời gian và âm lượng là component riêng (khai báo ngoài màn hình, bên dưới):
+  // kéo thanh / thời gian chạy chỉ vẽ lại đúng cái thanh đó, không vẽ lại cả màn player như trước (kéo âm lượng từng tụt còn 5 fps)
+  const Progress = <ProgressBar duration={duration} loading={loading} failed={failed} seekTo={seekTo} />;
 
   // ◀◀  ❚❚  ▶▶ to, trắng, ở giữa (giống Apple Music).
   // Gọi như hàm thường (controls(true)), KHÔNG dùng như component <Controls />: component khai báo bên trong
@@ -288,15 +263,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     </View>
   );
 
-  const Volume = (
-    <View style={styles.volume}>
-      <Ionicons name="volume-low" size={18} color={SOFT} />
-      <View style={{ flex: 1 }}>
-        <Slider value={vol} thickness={6} onChange={onVolume} fill="rgba(255,255,255,0.9)" track="rgba(255,255,255,0.22)" />
-      </View>
-      <Ionicons name="volume-high" size={18} color={SOFT} />
-    </View>
-  );
+  const Volume = <VolumeBar />;
 
   // ================= Màn hình ngang =================
   // Có lời: trái là ảnh + điều khiển, giữa là lời, mép phải là âm lượng và các nút.
@@ -308,7 +275,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     const SideButtons = (
       <View style={{ width: 44, alignItems: 'center', gap: 14, justifyContent: 'center' }}>
         <Ionicons name="volume-high" size={18} color={SOFT} />
-        <Slider vertical value={vol} thickness={6} onChange={onVolume} fill="rgba(255,255,255,0.9)" track="rgba(255,255,255,0.22)" />
+        <VolumeBar vertical />
         <Ionicons name="volume-low" size={18} color={SOFT} />
         <Pressable onPress={() => setLandLyrics((v) => !v)} hitSlop={10} style={{ marginTop: 6 }}>
           <Ionicons name={landLyrics ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} size={24} color={landLyrics ? '#FFFFFF' : SOFT} />
@@ -394,7 +361,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
             </View>
           </View>
           <View style={{ flex: 1 }}>
-            <LyricsView status={lyr.status} lyrics={lyr.lyrics} progress={progress} onSeek={seekTo} />
+            <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} />
           </View>
           {SideButtons}
         </View>
@@ -454,7 +421,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
           </View>
           </View>
           <View style={{ flex: 1 }}>
-            <LyricsView status={lyr.status} lyrics={lyr.lyrics} progress={progress} onSeek={seekTo} />
+            <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} />
           </View>
           {/* Cả vùng điều khiển bên dưới cũng vuốt xuống để thoát được (kéo thanh trượt thì vẫn là kéo thanh trượt) */}
           <View {...swipe.panHandlers}>{PlayerBody}</View>
@@ -507,6 +474,57 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     </View>
   );
 }
+
+// Thanh thời gian: chỉ phần này đọc thời gian đã phát (đổi vài lần mỗi giây)
+const ProgressBar = React.memo(function ProgressBar({
+  duration, loading, failed, seekTo,
+}: { duration: number; loading: boolean; failed: boolean; seekTo: (s: number) => void }) {
+  const t = useT();
+  const progress = useProgress();
+  const [scrub, setScrub] = useState<number | null>(null); // 0..1 khi đang kéo
+  const pct = duration > 0 ? Math.min(1, progress / duration) : 0;
+  const elapsed = (scrub ?? pct) * duration;
+  return (
+    <View>
+      <Slider
+        value={pct}
+        thickness={6}
+        fill="rgba(255,255,255,0.9)"
+        track="rgba(255,255,255,0.22)"
+        onChange={setScrub}
+        onCommit={(v) => {
+          seekTo(v * duration);
+          setScrub(null);
+        }}
+      />
+      <View style={styles.times}>
+        <Text style={styles.time}>{fmt(elapsed)}</Text>
+        <Text style={[styles.time, failed && { color: '#FF8A80' }]}>
+          {loading ? t('common.loading') : failed ? t('np.failed') : `-${fmt(duration - elapsed)}`}
+        </Text>
+      </View>
+    </View>
+  );
+});
+
+// Âm lượng: tự giữ giá trị của mình, kéo chỉ vẽ lại thanh này
+const VolumeBar = React.memo(function VolumeBar({ vertical = false }: { vertical?: boolean }) {
+  const [vol, setVol] = useState(() => (musicSupported ? audio().getPlayer().volume : 1));
+  const onVolume = (v: number) => {
+    setVol(v);
+    if (musicSupported) audio().getPlayer().volume = v;
+  };
+  if (vertical) return <Slider vertical value={vol} thickness={6} onChange={onVolume} fill="rgba(255,255,255,0.9)" track="rgba(255,255,255,0.22)" />;
+  return (
+    <View style={styles.volume}>
+      <Ionicons name="volume-low" size={18} color={SOFT} />
+      <View style={{ flex: 1 }}>
+        <Slider value={vol} thickness={6} onChange={onVolume} fill="rgba(255,255,255,0.9)" track="rgba(255,255,255,0.22)" />
+      </View>
+      <Ionicons name="volume-high" size={18} color={SOFT} />
+    </View>
+  );
+});
 
 const styles = StyleSheet.create({
   grabberWrap: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 24 },

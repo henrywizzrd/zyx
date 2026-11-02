@@ -29,7 +29,6 @@ const AUTOPLAY_KEY = 'zyx:autoplay';
 interface PlayerContextValue {
   track: Track;
   isPlaying: boolean;
-  progress: number; // giây đã phát
   duration: number; // tổng giây
   loading: boolean;
   togglePlay: () => void;
@@ -64,6 +63,10 @@ interface PlayerContextValue {
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
+// Thời gian đã phát nằm riêng một chỗ: nó đổi liên tục (vài lần mỗi giây). Trước đây nằm chung với mọi thứ khác
+// nên mỗi lần đổi là cả app (mọi màn hình dùng usePlayer) vẽ lại → tụt khung hình khi đang phát nhạc.
+// Giờ chỉ thanh tiến trình đọc nó (useProgress)
+const ProgressContext = createContext(0);
 
 // Trạng thái đang kéo dock/mini player tách riêng: nó đổi liên tục lúc kéo, để chung thì cả app vẽ lại theo từng cử động ngón tay
 interface DragContextValue {
@@ -372,7 +375,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const sub = p.addListener('playbackStatusUpdate', (s) => {
       setIsPlaying(s.playing);
       setProgress(s.currentTime);
-      if (s.isLoaded && s.duration > 0) setDuration(s.duration);
+      // Độ dài bài khi phát qua mạng hay nhích lên xuống vài phần trăm giây mỗi lần báo:
+      // chỉ cập nhật khi lệch thật (> 0,5s), không thì cả app vẽ lại liên tục chỉ vì con số lẻ
+      if (s.isLoaded && s.duration > 0) setDuration((d) => (Math.abs(d - s.duration) > 0.5 ? s.duration : d));
       // Hết bài: báo của thư viện, hoặc tự nhận biết khi đã chạy tới cuối và dừng
       const ended = s.didJustFinish || (s.isLoaded && s.duration > 0 && !s.playing && s.currentTime >= s.duration - 0.3);
       if (ended && !loadingRef.current && endedFor.current !== reqId.current) {
@@ -385,13 +390,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<PlayerContextValue>(
     () => ({
-      track, isPlaying, progress, duration, loading, failed, togglePlay, next, prev, seekTo, playTrack,
+      track, isPlaying, duration, loading, failed, togglePlay, next, prev, seekTo, playTrack,
       shuffle, repeat, toggleShuffle, cycleRepeat, liked, toggleLike,
       queue, index, playNext, addToQueue, removeFromQueue, reorderUpNext, jumpTo, autoplay, setAutoplay, radioLoading,
       dockRef, playerRef, emergeFrom, setEmergeFrom,
     }),
     [
-      track, isPlaying, progress, duration, loading, failed, togglePlay, next, prev, seekTo, playTrack, shuffle, repeat, toggleShuffle,
+      track, isPlaying, duration, loading, failed, togglePlay, next, prev, seekTo, playTrack, shuffle, repeat, toggleShuffle,
       cycleRepeat, liked, toggleLike, queue, index, playNext, addToQueue, removeFromQueue, reorderUpNext, jumpTo, autoplay,
       setAutoplay, radioLoading, emergeFrom,
     ]
@@ -401,7 +406,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <PlayerContext.Provider value={value}>
-      <DragContext.Provider value={dragValue}>{children}</DragContext.Provider>
+      <ProgressContext.Provider value={progress}>
+        <DragContext.Provider value={dragValue}>{children}</DragContext.Provider>
+      </ProgressContext.Provider>
     </PlayerContext.Provider>
   );
 }
@@ -412,6 +419,11 @@ export function usePlayer() {
   return ctx;
 }
 
+
+// Số giây đã phát của bài hiện tại (chỉ dùng ở chỗ thật sự cần hiện thời gian)
+export function useProgress() {
+  return useContext(ProgressContext);
+}
 
 export function useDrag() {
   const ctx = useContext(DragContext);

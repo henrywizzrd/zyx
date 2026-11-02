@@ -109,12 +109,12 @@ function MusicNotes({ active }: { active: boolean }) {
 export function LyricsView({
   status,
   lyrics,
-  progress,
+  progress = 0,
   onSeek,
 }: {
   status: 'idle' | 'loading' | 'done';
   lyrics: Lyrics | null;
-  progress: number;
+  progress?: number; // chỉ dùng khi không đọc được thời gian từ trình phát (web)
   onSeek: (seconds: number) => void;
 }) {
   const { track, duration } = usePlayer();
