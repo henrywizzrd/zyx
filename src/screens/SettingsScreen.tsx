@@ -4,6 +4,8 @@ import { useTheme } from '../theme/ThemeProvider';
 import { useContentInsets } from '../components/FloatingDock';
 import { MiniPlayerVariant } from '../theme/types';
 import { LANGUAGES, useT } from '../i18n';
+import { Ionicons } from '@expo/vector-icons';
+import { useNav } from '../nav/Nav';
 
 const PlaybackLab: React.ComponentType | null =
   Platform.OS === 'web' ? null : require('../components/PlaybackLab').PlaybackLab;
@@ -22,7 +24,7 @@ function Chips<T extends string>({ options, value, onSelect, labels }: { options
             onPress={() => onSelect(o)}
             style={[styles.chip, { backgroundColor: on ? theme.colors.accent : theme.colors.surface }]}
           >
-            <Text style={{ color: on ? '#000' : theme.colors.text, fontWeight: '600' }}>{labels?.[o] ?? o}</Text>
+            <Text style={{ color: on ? theme.colors.onAccent : theme.colors.text, fontWeight: '600' }}>{labels?.[o] ?? o}</Text>
           </Pressable>
         );
       })}
@@ -33,6 +35,7 @@ function Chips<T extends string>({ options, value, onSelect, labels }: { options
 export function SettingsScreen() {
   const { theme, resetTheme, setMiniPlayerVariant, setMerged, setLanguage } = useTheme();
   const t = useT();
+  const { push } = useNav();
   const pad = useContentInsets();
   const label = { color: theme.colors.textSecondary, marginTop: 24, marginBottom: 12 };
 
@@ -49,6 +52,18 @@ export function SettingsScreen() {
     >
       <Text style={[styles.title, { color: theme.colors.text }]}>{t('settings.title')}</Text>
       <Text style={{ color: theme.colors.textSecondary, marginTop: 8 }}>{t('settings.hint')}</Text>
+
+      {/* Giao diện: mở Theme Studio */}
+      <Pressable onPress={() => push({ type: 'themeStudio' })} style={[styles.row, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={[styles.rowIcon, { backgroundColor: theme.colors.accent }]}>
+          <Ionicons name="color-palette" size={20} color={theme.colors.onAccent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: theme.colors.text, fontSize: 16, fontWeight: '700' }}>{t('settings.appearance')}</Text>
+          <Text style={{ color: theme.colors.textSecondary, fontSize: 13, marginTop: 2 }}>{t('settings.appearanceHint')}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+      </Pressable>
 
       {/* Ngôn ngữ: tên mỗi ngôn ngữ luôn viết bằng chính ngôn ngữ đó, để ai cũng tìm được */}
       <Text style={label}>{t('settings.language')}</Text>
@@ -90,4 +105,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '700' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 20, padding: 12, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
+  rowIcon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 });

@@ -18,6 +18,9 @@ import { PlayerTransition } from './src/components/PlayerTransition';
 import { NavProvider, useNav } from './src/nav/Nav';
 import { CollectionScreen } from './src/screens/CollectionScreen';
 import { SwipeBack } from './src/nav/SwipeBack';
+import { AppBackground } from './src/components/AppBackground';
+import { ThemeTransition } from './src/theme/ThemeTransition';
+import { ThemeStudioScreen } from './src/screens/ThemeStudioScreen';
 
 ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
 
@@ -48,7 +51,9 @@ function Root() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background.color }}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle={theme.colors.statusBar} />
+      {/* Nền chung: màu của bộ màu, ảnh/GIF hoặc video người dùng chọn */}
+      <AppBackground />
       <View style={{ flex: 1 }}>
         {shown === 'home' && <HomeScreen />}
         {shown === 'search' && <SearchScreen />}
@@ -56,8 +61,8 @@ function Root() {
         {shown === 'settings' && <SettingsScreen />}
         {/* Trang playlist/album mở chồng lên tab, dock và mini player vẫn nằm trên */}
         {page && (
-          <SwipeBack key={`${page.source}:${page.id}:${nav.stack.length}`} onBack={nav.pop}>
-            <CollectionScreen page={page} />
+          <SwipeBack key={page.type === 'collection' ? `${page.source}:${page.id}:${nav.stack.length}` : `${page.type}:${nav.stack.length}`} onBack={nav.pop}>
+            {page.type === 'collection' ? <CollectionScreen page={page} /> : <ThemeStudioScreen />}
           </SwipeBack>
         )}
         <DropPreview />
@@ -78,7 +83,10 @@ export default function App() {
         <ThemeProvider>
           <PlayerProvider>
             <NavProvider>
-              <Root />
+              {/* Đổi bộ màu mượt cho cả app (chụp màn hình rồi tan dần) */}
+              <ThemeTransition>
+                <Root />
+              </ThemeTransition>
             </NavProvider>
           </PlayerProvider>
         </ThemeProvider>

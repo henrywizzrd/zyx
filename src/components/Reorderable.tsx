@@ -26,7 +26,6 @@ import { useReorderContext } from './ReorderableScrollView';
 
 const LONG_PRESS_MS = 300;
 const CARD_INSET = 8; // thẻ nổi lớn hơn ô gốc mỗi phía bấy nhiêu px
-const CARD_COLOR = '#2E2E2E';
 const MOVE_SPRING = { damping: 20, stiffness: 220, mass: 1 }; // các ô trượt chừa chỗ / thẻ vừa thả bay vào ô
 const LIFT_SPRING = { damping: 14, stiffness: 220, mass: 1 };
 const LIFT_SCALE = 1.05;
@@ -63,13 +62,14 @@ interface CellProps {
   width: number;
   enabled: boolean;
   accent: string;
+  cardColor: string; // màu thẻ nổi khi nhấc lên (theo theme)
   sh: Shared;
   begin: (id: string) => void; // worklet
   onMeasure: (id: string, height: number) => void;
   children: React.ReactNode;
 }
 
-function Cell({ id, fallbackIndex, width, enabled, accent, sh, begin, onMeasure, children }: CellProps) {
+function Cell({ id, fallbackIndex, width, enabled, accent, cardColor, sh, begin, onMeasure, children }: CellProps) {
   const { hypOrder, layout, dragId, activeId, dragX, dragY, scale, lift, animate } = sh;
   const { manual } = useReorderContext();
   const px = useSharedValue(0);
@@ -131,7 +131,7 @@ function Cell({ id, fallbackIndex, width, enabled, accent, sh, begin, onMeasure,
       onLayout={(e) => onMeasure(id, e.nativeEvent.layout.height)}
       style={[styles.cell, { width }, style]}
     >
-      <Animated.View pointerEvents="none" style={[styles.card, { borderColor: accent }, cardStyle]} />
+      <Animated.View pointerEvents="none" style={[styles.card, { borderColor: accent, backgroundColor: cardColor }, cardStyle]} />
       <GestureDetector gesture={press}>
         <View collapsable={false}>{children}</View>
       </GestureDetector>
@@ -335,6 +335,7 @@ export function Reorderable<T extends { id: string }>({
           width={cellWidth}
           enabled={enabled}
           accent={theme.colors.accent}
+          cardColor={theme.colors.surface}
           sh={{ hypOrder, layout, dragId, activeId, dragX, dragY, scale, lift, animate }}
           begin={begin}
           onMeasure={onMeasure}
@@ -360,7 +361,6 @@ const styles = StyleSheet.create({
     bottom: -CARD_INSET,
     borderRadius: 14,
     borderWidth: 1.5,
-    backgroundColor: CARD_COLOR,
     shadowColor: '#000000',
     shadowOpacity: 0.6,
     shadowRadius: 18,

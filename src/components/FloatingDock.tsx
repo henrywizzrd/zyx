@@ -5,6 +5,7 @@ import { Animated, Easing, LayoutAnimation, Platform, Pressable, StyleSheet, Tex
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
+import { GlassFill } from './Glass';
 import { useT } from '../i18n';
 import { usePlayer, ViewRef } from '../player/PlayerProvider';
 import { TabId } from '../theme/types';
@@ -164,7 +165,6 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
         <Animated.View
           {...d.panHandlers}
           style={{
-            backgroundColor: style.background,
             borderRadius: style.radius,
             opacity: d.opacity,
             transform: [
@@ -178,6 +178,8 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
             ...glow,
           }}
         >
+          {/* Nền kính mờ theo theme */}
+          <GlassFill radius={style.radius} />
           {/* Giữ lâu vào khoảng trống giữa các nút cũng kéo được dock */}
           <Pressable
             {...d.pressProps}

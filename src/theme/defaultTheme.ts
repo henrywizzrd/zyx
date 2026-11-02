@@ -1,16 +1,15 @@
 import { Theme } from './types';
+import { PRESETS } from './presets';
 
 export const defaultTheme: Theme = {
   version: 1,
   name: 'Default Dark',
   language: 'vi',
-  background: { type: 'solid', color: '#000000' },
-  colors: {
-    text: '#FFFFFF',
-    textSecondary: '#B3B3B3',
-    accent: '#1DB954',
-    surface: '#181818',
-  },
+  preset: 'dark',
+  background: { type: 'preset', color: PRESETS.dark.bg, uri: '', dim: 0.25 },
+  colors: PRESETS.dark,
+  glass: { blur: 40 },
+  effects: { ambientSnow: true },
   dock: {
     position: 'bottom',
     items: ['home', 'search', 'library', 'settings'],

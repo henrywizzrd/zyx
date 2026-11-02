@@ -5,9 +5,10 @@ import { useTheme } from '../theme/ThemeProvider';
 import { usePlayer } from '../player/PlayerProvider';
 import { useContentInsets } from '../components/FloatingDock';
 import { useSongMenu } from '../components/useSongMenu';
-import { Page, useNav } from '../nav/Nav';
+import { CollectionPage, useNav } from '../nav/Nav';
 import { Translate, useT } from '../i18n';
 import { useAnimatedBack } from '../nav/SwipeBack';
+import { PageBackground } from '../components/AppBackground';
 import type { Track } from '../data/mock';
 import { musicSupported, toTrack, ytmusic } from '../music/lazy';
 import {
@@ -22,7 +23,7 @@ const fmtTotal = (sec: number, t: Translate) => {
 };
 
 // Trang danh sách bài: playlist / album trên YouTube Music, Liked Songs, hoặc playlist tự tạo
-export function CollectionScreen({ page }: { page: Page }) {
+export function CollectionScreen({ page }: { page: CollectionPage }) {
   const { theme } = useTheme();
   const t = useT();
   const pad = useContentInsets();
@@ -132,7 +133,7 @@ export function CollectionScreen({ page }: { page: Page }) {
           <Image source={{ uri: info.thumb }} style={styles.cover} />
         ) : (
           <View style={[styles.cover, { backgroundColor: page.source === 'liked' ? '#5B3CC4' : surface, alignItems: 'center', justifyContent: 'center' }]}>
-            <Ionicons name={page.source === 'liked' ? 'heart' : 'musical-notes'} size={64} color="rgba(255,255,255,0.85)" />
+            <Ionicons name={page.source === 'liked' ? 'heart' : 'musical-notes'} size={64} color={page.source === 'liked' ? 'rgba(255,255,255,0.85)' : textSecondary} />
           </View>
         )}
       </View>
@@ -149,7 +150,7 @@ export function CollectionScreen({ page }: { page: Page }) {
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 10 }}>
           <Ionicons name={isPublic ? 'globe-outline' : 'lock-closed-outline'} size={18} color={textSecondary} />
           <Text style={{ color: textSecondary, fontSize: 14, flex: 1 }}>{t(isPublic ? 'col.publicOnProfile' : 'col.onlyMe')}</Text>
-          <Switch value={isPublic} onValueChange={(v) => setPlaylistPublic(page.id, v)} trackColor={{ true: accent, false: '#3A3A3A' }} />
+          <Switch value={isPublic} onValueChange={(v) => setPlaylistPublic(page.id, v)} trackColor={{ true: accent, false: theme.colors.switchOff }} />
         </View>
       )}
 
@@ -158,7 +159,7 @@ export function CollectionScreen({ page }: { page: Page }) {
           <Ionicons name="shuffle" size={28} color={shuffle ? accent : textSecondary} />
         </Pressable>
         <Pressable onPress={() => playAll(false)} disabled={!rows.length} style={[styles.play, { backgroundColor: accent, opacity: rows.length ? 1 : 0.4 }]}>
-          <Ionicons name="play" size={28} color="#000000" style={{ marginLeft: 3 }} />
+          <Ionicons name="play" size={28} color={theme.colors.onAccent} style={{ marginLeft: 3 }} />
         </Pressable>
       </View>
 
@@ -177,7 +178,8 @@ export function CollectionScreen({ page }: { page: Page }) {
   );
 
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background.color }]}>
+    <View style={StyleSheet.absoluteFill}>
+      <PageBackground />
       <FlatList
         data={rows}
         keyExtractor={(r, i) => `${r.id}:${r.position ?? i}`}

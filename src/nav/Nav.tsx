@@ -5,7 +5,7 @@ import { BackHandler } from 'react-native';
 //  - source 'yt': playlist hoặc album trên YouTube Music
 //  - source 'local': playlist tự tạo trong máy
 //  - source 'liked': Liked Songs
-export type Page = {
+export type CollectionPage = {
   type: 'collection';
   source: 'yt' | 'local' | 'liked';
   kind: 'playlist' | 'album';
@@ -13,6 +13,8 @@ export type Page = {
   title: string;
   thumb?: string;
 };
+// Theme Studio: chọn bộ màu, nền, độ mờ kính (mở từ Cài đặt)
+export type Page = CollectionPage | { type: 'themeStudio' };
 
 interface NavValue {
   stack: Page[];

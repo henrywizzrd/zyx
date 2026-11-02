@@ -216,7 +216,7 @@ export function SearchScreen() {
             autoCorrect={false}
             autoCapitalize="none"
             placeholder={tr('search.placeholder')}
-            placeholderTextColor="#6B6B6B"
+            placeholderTextColor={theme.background.color + '99'}
             style={[styles.input, { color: theme.background.color }]}
           />
           {(suggestBusy || resultsBusy) && searching && <ActivityIndicator size="small" color={theme.background.color} />}
@@ -269,10 +269,10 @@ export function SearchScreen() {
                 style={styles.row}
               >
                 {it.thumb ? (
-                  <Image source={{ uri: it.thumb }} style={[styles.cover, { borderRadius: it.kind === 'artist' ? 28 : 4, backgroundColor: '#2A2A2A' }]} />
+                  <Image source={{ uri: it.thumb }} style={[styles.cover, { borderRadius: it.kind === 'artist' ? 28 : 4, backgroundColor: theme.colors.surface }]} />
                 ) : (
-                  <View style={[styles.cover, { borderRadius: it.kind === 'artist' ? 28 : 4, backgroundColor: '#2A2A2A' }]}>
-                    <Ionicons name={it.kind === 'artist' ? 'person' : 'musical-notes'} size={22} color="rgba(255,255,255,0.8)" />
+                  <View style={[styles.cover, { borderRadius: it.kind === 'artist' ? 28 : 4, backgroundColor: theme.colors.surface }]}>
+                    <Ionicons name={it.kind === 'artist' ? 'person' : 'musical-notes'} size={22} color={textSecondary} />
                   </View>
                 )}
                 <View style={{ flex: 1 }}>
@@ -295,10 +295,10 @@ export function SearchScreen() {
               // Khung chờ: giữ chỗ đúng hình dạng kết quả để màn hình không bị trống
               Array.from({ length: 6 }).map((_, i) => (
                 <View key={`sk-${i}`} style={styles.row}>
-                  <View style={[styles.cover, { borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.08)' }]} />
+                  <View style={[styles.cover, { borderRadius: 4, backgroundColor: theme.colors.skeleton }]} />
                   <View style={{ flex: 1, gap: 8 }}>
-                    <View style={{ height: 12, width: '70%', borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.08)' }} />
-                    <View style={{ height: 10, width: '45%', borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.06)' }} />
+                    <View style={{ height: 12, width: '70%', borderRadius: 6, backgroundColor: theme.colors.skeleton }} />
+                    <View style={{ height: 10, width: '45%', borderRadius: 5, backgroundColor: theme.colors.skeleton }} />
                   </View>
                 </View>
               ))}

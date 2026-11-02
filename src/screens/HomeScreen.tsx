@@ -178,9 +178,9 @@ function MyPlaylists() {
       <Text numberOfLines={2} style={[styles.chipTitle, { color: theme.colors.text }]}>{title}</Text>
     </Pressable>
   );
-  const iconCover = (name: keyof typeof Ionicons.glyphMap, bg: string) => (
+  const iconCover = (name: keyof typeof Ionicons.glyphMap, bg: string, fg = '#FFFFFF') => (
     <View style={[styles.chipCover, { backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }]}>
-      <Ionicons name={name} size={22} color="#FFFFFF" />
+      <Ionicons name={name} size={22} color={fg} />
     </View>
   );
   return (
@@ -191,7 +191,7 @@ function MyPlaylists() {
           p.id,
           p.title,
           () => push({ type: 'collection', source: 'local', kind: 'playlist', id: p.id, title: p.title, thumb: p.thumb }),
-          p.thumb ? <Image source={{ uri: p.thumb }} style={styles.chipCover} /> : iconCover('musical-notes', '#3A3A3A')
+          p.thumb ? <Image source={{ uri: p.thumb }} style={styles.chipCover} /> : iconCover('musical-notes', theme.colors.skeleton, theme.colors.textSecondary)
         )
       )}
       {lists.length < 7 &&
@@ -203,7 +203,7 @@ function MyPlaylists() {
             const id = createPlaylist(name);
             push({ type: 'collection', source: 'local', kind: 'playlist', id, title: name });
           },
-          iconCover('add', theme.colors.accent)
+          iconCover('add', theme.colors.accent, theme.colors.onAccent)
         )}
     </View>
   );
@@ -280,7 +280,7 @@ function Trending() {
     <View style={{ flexDirection: 'row', gap: 6 }}>
       {(['week', 'month', 'year'] as TrendingRange[]).map((k) => (
         <Pressable key={k} onPress={() => setHome({ trendingRange: k })} style={[styles.pill, { backgroundColor: k === range ? accent : surface }]}>
-          <Text style={{ color: k === range ? '#000000' : text, fontSize: 12, fontWeight: '700' }}>{t(`home.range.${k}`)}</Text>
+          <Text style={{ color: k === range ? theme.colors.onAccent : text, fontSize: 12, fontWeight: '700' }}>{t(`home.range.${k}`)}</Text>
         </Pressable>
       ))}
     </View>
@@ -442,7 +442,7 @@ function EditHome({ onClose }: { onClose: () => void }) {
       <Text style={{ color: textSecondary, fontSize: 13, marginBottom: 8 }}>{t('home.edit.hint')}</Text>
       {sections.map((s, i) => (
         <View key={s} style={styles.editRow}>
-          <Switch value={!hidden.includes(s)} onValueChange={(v) => toggle(s, v)} trackColor={{ true: accent, false: '#3A3A3A' }} />
+          <Switch value={!hidden.includes(s)} onValueChange={(v) => toggle(s, v)} trackColor={{ true: accent, false: theme.colors.switchOff }} />
           <Text style={{ flex: 1, color: text, fontSize: 15, fontWeight: '600' }}>{t(`home.section.${s}`)}</Text>
           <Pressable onPress={() => move(i, -1)} hitSlop={8} disabled={i === 0} style={{ opacity: i === 0 ? 0.3 : 1 }}>
             <Ionicons name="chevron-up" size={22} color={text} />

@@ -3,6 +3,7 @@ import { Animated, Easing, Platform, Pressable, StyleSheet, View } from 'react-n
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
+import { GlassFill } from './Glass';
 import { usePlayer } from '../player/PlayerProvider';
 import { useDraggable } from './useDraggable';
 import type { MiniAnchor } from '../theme/types';
@@ -267,10 +268,11 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
                 width: wAnim,
                 height: hAnim,
                 borderRadius: radius,
-                backgroundColor: theme.miniPlayer.style.background,
                 overflow: 'hidden',
               }}
             >
+              {/* Nền kính mờ theo theme, co giãn cùng khung */}
+              <GlassFill radius={radius} />
               <Pressable
                 {...d.pressProps}
                 style={{

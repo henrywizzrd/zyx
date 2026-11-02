@@ -17,7 +17,7 @@ export function DropPreview() {
 
   // Chỗ sẽ nằm khi thả: một vệt bóng mờ, không viền
   const box = {
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: theme.colors.border,
     shadowColor: '#000',
     shadowOpacity: 0.5,
     shadowRadius: 14,

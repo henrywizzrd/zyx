@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StatusBar, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { Ionicons } from '@expo/vector-icons';
@@ -144,6 +144,8 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     return (
       <View style={{ flex: 1 }}>
         {Background}
+        {/* Player luôn tối (không theo theme): thanh trạng thái chữ trắng */}
+        <StatusBar barStyle="light-content" />
         <View
           style={{
             flex: 1,
@@ -226,6 +228,8 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   return (
     <View style={{ flex: 1 }}>
       {Background}
+      {/* Player luôn tối (không theo theme): thanh trạng thái chữ trắng */}
+      <StatusBar barStyle="light-content" />
 
       <View
         style={{

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { defaultTheme } from './defaultTheme';
+import { PRESETS, ThemePresetId } from './presets';
 import { Edge, HomeSection, LibraryLayout, MiniAnchor, MiniPlayerVariant, Position, TabId, Theme, TrendingRange } from './types';
 
 const STORAGE_KEY = 'zyx:theme';
@@ -16,6 +17,18 @@ const TABS: TabId[] = ['home', 'search', 'library', 'settings'];
 const SECTIONS: HomeSection[] = ['myPlaylists', 'recent', 'trending', 'recommended', 'playlistPicks'];
 const RANGES: TrendingRange[] = ['week', 'month', 'year'];
 const LANGS = ['vi', 'en'] as const;
+const BG_TYPES = ['preset', 'image', 'video'] as const;
+const clampN = (v: number, lo: number, hi: number, d: number) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d);
+
+// Màu luôn tính lại từ bộ màu đang chọn (không tin màu đã lưu, để đổi bảng màu trong code là app cập nhật theo)
+function derive(t: Theme): Theme {
+  const preset: ThemePresetId = t.preset in PRESETS ? t.preset : defaultTheme.preset;
+  const palette = PRESETS[preset];
+  // Nền là ảnh/video: thẻ dùng màu trong suốt một phần để lộ nền phía sau (trông như kính, cuộn vẫn mượt)
+  const media = t.background.type !== 'preset' && !!t.background.uri;
+  const colors = media ? { ...palette, surface: palette.card } : palette;
+  return { ...t, preset, colors, background: { ...t.background, color: palette.bg } };
+}
 const LIBRARY_LAYOUTS: LibraryLayout[] = ['list', 'columns', 'covers2', 'covers3'];
 
 // Bản lưu cũ có miniPlayer.position (8 vị trí cố định): đổi sang vị trí tự do theo viền
@@ -59,8 +72,15 @@ function sanitize(t: Theme): Theme {
   // Giữ thứ tự đã lưu, bỏ khối lạ (bản cũ), thêm khối mới chưa có vào cuối
   const kept = t.home.sections.filter((s, i, a) => SECTIONS.includes(s) && a.indexOf(s) === i);
   const sections = kept.length ? [...kept, ...SECTIONS.filter((s) => !kept.includes(s))] : d.home.sections;
-  return {
+  return derive({
     ...t,
+    background: {
+      ...t.background,
+      type: (BG_TYPES as readonly string[]).includes(t.background.type) ? t.background.type : 'preset',
+      uri: typeof t.background.uri === 'string' ? t.background.uri : '',
+      dim: clampN(t.background.dim, 0, 0.8, d.background.dim),
+    },
+    glass: { blur: clampN(t.glass.blur, 0, 100, d.glass.blur) },
     language: (LANGS as readonly string[]).includes(t.language) ? t.language : d.language,
     dock: {
       ...t.dock,
@@ -86,7 +106,7 @@ function sanitize(t: Theme): Theme {
       hidden: t.home.hidden.filter((s) => SECTIONS.includes(s)),
       trendingRange: RANGES.includes(t.home.trendingRange) ? t.home.trendingRange : d.home.trendingRange,
     },
-  };
+  });
 }
 
 interface ThemeContextValue {
@@ -102,6 +122,10 @@ interface ThemeContextValue {
   setLibraryOrder: (ids: string[]) => void;
   setHome: (patch: Partial<Theme['home']>) => void;
   setLanguage: (l: Theme['language']) => void;
+  setPreset: (id: ThemePresetId) => void;
+  setBackground: (patch: Partial<Theme['background']>) => void;
+  setGlassBlur: (blur: number) => void;
+  setAmbientSnow: (on: boolean) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -155,6 +179,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setThemeState((t) => ({ ...t, library: { ...t.library, order } })),
       setHome: (patch) => setThemeState((t) => ({ ...t, home: { ...t.home, ...patch } })),
       setLanguage: (language) => setThemeState((t) => ({ ...t, language })),
+      setPreset: (preset) => setThemeState((t) => derive({ ...t, preset })),
+      setBackground: (patch) => setThemeState((t) => derive({ ...t, background: { ...t.background, ...patch } })),
+      setGlassBlur: (blur) => setThemeState((t) => ({ ...t, glass: { blur: Math.max(0, Math.min(100, blur)) } })),
+      setAmbientSnow: (on) => setThemeState((t) => ({ ...t, effects: { ...t.effects, ambientSnow: on } })),
     };
   }, [theme]);
 

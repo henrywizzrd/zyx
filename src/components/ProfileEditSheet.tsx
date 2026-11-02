@@ -3,6 +3,7 @@ import { Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, Sty
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
+import { GlassFill } from './Glass';
 import { useT } from '../i18n';
 
 const USE_NATIVE = Platform.OS !== 'web';
@@ -31,7 +32,7 @@ export function ProfileEditSheet({
   const { theme } = useTheme();
   const t = useT();
   const insets = useSafeAreaInsets();
-  const { text, textSecondary, accent, surface } = theme.colors;
+  const { text, textSecondary, accent, border, skeleton, onAccent, glassTint } = theme.colors;
 
   const [nameV, setNameV] = useState(name);
   const [tagV, setTagV] = useState(tag);
@@ -74,7 +75,7 @@ export function ProfileEditSheet({
     <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
       {/* Nền mờ nhẹ, bấm ra ngoài để đóng */}
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: show }]}>
-        <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
+        <BlurView intensity={25} tint={glassTint} style={StyleSheet.absoluteFill} />
         <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.25)' }]} onPress={onClose} />
       </Animated.View>
 
@@ -82,14 +83,15 @@ export function ProfileEditSheet({
         <Animated.View
           style={[
             styles.card,
-            { backgroundColor: surface, marginBottom: Math.max(insets.bottom, 12) + 4, transform: [{ translateY }] },
+            { marginBottom: Math.max(insets.bottom, 12) + 4, transform: [{ translateY }] },
           ]}
         >
+          <GlassFill radius={20} />
           <Text style={[styles.title, { color: text }]}>{t('profile.edit')}</Text>
 
           <View style={styles.row}>
             {/* Tên */}
-            <View style={[styles.box, { flex: 1.25, borderColor: 'rgba(255,255,255,0.12)' }]}>
+            <View style={[styles.box, { flex: 1.25, borderColor: border, backgroundColor: skeleton }]}>
               <TextInput
                 value={nameV}
                 onChangeText={(v) => setNameV(v.slice(0, NAME_MAX))}
@@ -102,7 +104,7 @@ export function ProfileEditSheet({
             </View>
 
             {/* Hashtag: dấu # xám cố định sát trái, người dùng gõ phần còn lại */}
-            <View style={[styles.box, { flex: 1, borderColor: 'rgba(255,255,255,0.12)', flexDirection: 'row', alignItems: 'center' }]}>
+            <View style={[styles.box, { flex: 1, borderColor: border, backgroundColor: skeleton, flexDirection: 'row', alignItems: 'center' }]}>
               <Text style={[styles.hash, { color: textSecondary }]}>#</Text>
               <TextInput
                 value={tagV}
@@ -123,7 +125,7 @@ export function ProfileEditSheet({
               <Text style={{ color: textSecondary, fontSize: 15, fontWeight: '700' }}>{t('common.cancel')}</Text>
             </Pressable>
             <Pressable onPress={save} disabled={!canSave} style={[styles.btn, styles.saveBtn, { backgroundColor: accent, opacity: canSave ? 1 : 0.4 }]}>
-              <Text style={{ color: '#000000', fontSize: 15, fontWeight: '800' }}>{t('profile.save')}</Text>
+              <Text style={{ color: onAccent, fontSize: 15, fontWeight: '800' }}>{t('profile.save')}</Text>
             </Pressable>
           </View>
         </Animated.View>
@@ -136,7 +138,7 @@ const styles = StyleSheet.create({
   card: { marginHorizontal: 12, borderRadius: 20, padding: 16 },
   title: { fontSize: 17, fontWeight: '800', marginBottom: 14 },
   row: { flexDirection: 'row', gap: 10 },
-  box: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, height: 48, justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)' },
+  box: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, height: 48, justifyContent: 'center' },
   input: { fontSize: 15, fontWeight: '600', paddingVertical: 0 },
   hash: { fontSize: 15, fontWeight: '700' },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 16 },

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,7 +7,7 @@ import { useT } from '../i18n';
 import { useContentInsets } from '../components/FloatingDock';
 import { LibraryLayout } from '../theme/types';
 import { followers, libraryItems, LibraryItem } from '../data/mock';
-import { ImageSlot, PickedImage, pickProfileImage, removeProfileImage, saveCroppedCover, updateProfile, useProfile } from '../data/profile';
+import { ensureCoverTone, ImageSlot, PickedImage, pickProfileImage, removeProfileImage, saveCroppedCover, updateProfile, useProfile } from '../data/profile';
 import { CoverCropper } from '../components/CoverCropper';
 import { ProfileEditSheet } from '../components/ProfileEditSheet';
 import { sheet } from '../components/useSongMenu';
@@ -54,6 +54,8 @@ export function LibraryScreen() {
   const { theme, setLibraryLayout, setLibraryOrder } = useTheme();
   const t = useT();
   const profile = useProfile();
+  // Cuối dải ảnh bìa: nền màu thì hoà vào màu nền, nền ảnh/video thì mờ hẳn để lộ nền chung
+  const fadeTo = theme.background.type === 'preset' ? theme.background.color : theme.background.color + '00';
   const [cropImg, setCropImg] = useState<PickedImage | null>(null); // ảnh bìa đang chờ cắt
   const [editOpen, setEditOpen] = useState(false); // popup sửa tên / hashtag
 
@@ -82,6 +84,20 @@ export function LibraryScreen() {
   const layout = theme.library.layout;
   const innerW = width - H_PAD * 2; 
   const { text, textSecondary, accent, surface } = theme.colors;
+
+  // Màu chữ trên ảnh bìa: tự đổi theo độ sáng của ảnh (ảnh tối → chữ trắng, ảnh sáng → chữ đậm).
+  // Chưa có ảnh bìa thì dùng màu chữ của theme như mọi chỗ khác.
+  useEffect(() => {
+    ensureCoverTone();
+  }, [profile.cover]);
+  const hasCover = !!profile.cover;
+  const lightCover = hasCover && profile.coverTone === 'light';
+  const hero = !hasCover
+    ? { text, sub: textSecondary, shadow: 'transparent' }
+    : lightCover
+      ? { text: '#111111', sub: 'rgba(17,17,17,0.68)', shadow: 'rgba(255,255,255,0.45)' }
+      : { text: '#FFFFFF', sub: 'rgba(255,255,255,0.78)', shadow: 'rgba(0,0,0,0.45)' };
+  const heroShadow = hasCover ? { textShadowColor: hero.shadow, textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 } : null;
 
   // Áp dụng thứ tự do người dùng tự sắp xếp (mục chưa có trong thứ tự thì xếp sau, giữ nguyên vị trí cũ)
   const ordered = useMemo(() => {
@@ -116,7 +132,7 @@ export function LibraryScreen() {
       onPress={onPress}
       style={[styles.chip, { backgroundColor: on ? accent : surface }]}
     >
-      <Text style={{ color: on ? '#000' : text, fontWeight: '600', fontSize: 13 }}>{label}</Text>
+      <Text style={{ color: on ? theme.colors.onAccent : text, fontWeight: '600', fontSize: 13 }}>{label}</Text>
     </Pressable>
   );
 
@@ -193,14 +209,15 @@ export function LibraryScreen() {
           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: COVER_H }}>
             <Image source={{ uri: profile.cover }} resizeMode="cover" style={StyleSheet.absoluteFill} />
             <LinearGradient
-              colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.35)', theme.background.color]}
+              // Ảnh tối: phủ đen nhẹ cho chữ trắng nổi hơn. Ảnh sáng: phủ trắng nhẹ cho chữ đậm nổi hơn
+              colors={lightCover ? ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.3)', fadeTo] : ['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.35)', fadeTo]}
               locations={[0, 0.55, 1]}
               style={StyleSheet.absoluteFill}
             />
           </View>
         ) : (
           <LinearGradient
-            colors={[profile.wallColor, theme.background.color]}
+            colors={[theme.colors.glassTint === 'dark' ? profile.wallColor : profile.wallColor + '55', fadeTo]}
             style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 320 }}
           />
         )}
@@ -228,19 +245,19 @@ export function LibraryScreen() {
           </Pressable>
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={{ color: text, fontSize: 12, fontWeight: '600' }}>{t('lib.profile')}</Text>
+              <Text style={[{ color: hero.text, fontSize: 12, fontWeight: '600' }, heroShadow]}>{t('lib.profile')}</Text>
               {/* Nút bút: mở popup sửa tên và hashtag */}
               <Pressable onPress={() => setEditOpen(true)} hitSlop={8} style={styles.penBtn}>
                 <Ionicons name="pencil" size={16} color="#FFFFFF" />
               </Pressable>
             </View>
-            <Text numberOfLines={1} style={{ color: text, fontSize: 30, fontWeight: '800', marginTop: 2 }}>
+            <Text numberOfLines={1} style={[{ color: hero.text, fontSize: 30, fontWeight: '800', marginTop: 2 }, heroShadow]}>
               {profile.name}
-              <Text style={{ color: textSecondary, fontWeight: '600' }}> #{profile.tag}</Text>
+              <Text style={{ color: hero.sub, fontWeight: '600' }}> #{profile.tag}</Text>
             </Text>
             <View style={styles.followersRow}>
-              <Pressable style={[styles.plusBtn, { borderColor: textSecondary }]}>
-                <Ionicons name="add" size={18} color={text} />
+              <Pressable style={[styles.plusBtn, { borderColor: hero.sub }]}>
+                <Ionicons name="add" size={18} color={hero.text} />
               </Pressable>
               <View style={{ flexDirection: 'row', marginLeft: 10 }}>
                 {followers.map((f, i) => (
