@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { AppState, Platform, StyleSheet, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '../theme/ThemeProvider';
+import { AmbientSnow } from './AmbientSnowLayer';
 
 // Nền chung của cả app, nằm sau mọi màn hình (trừ Player):
 //  - 'preset': màu nền của bộ màu
@@ -56,11 +57,18 @@ function VideoBg({ uri }: { uri: string }) {
 export function PageBackground() {
   const { theme } = useTheme();
   const { type, uri } = theme.background;
-  if (type === 'preset' || !uri) return <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.bg }]} />;
+  if (type === 'preset' || !uri) {
+    return (
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.bg }]}>
+        <AmbientSnow />
+      </View>
+    );
+  }
   if (type === 'image') {
     return (
       <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.bg }]}>
         <AppBackground />
+        <AmbientSnow />
       </View>
     );
   }
@@ -68,6 +76,7 @@ export function PageBackground() {
     <View style={StyleSheet.absoluteFill}>
       {Platform.OS !== 'web' && <BlurView intensity={90} tint={theme.colors.glassTint} style={StyleSheet.absoluteFill} />}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.glass }]} />
+      <AmbientSnow />
     </View>
   );
 }

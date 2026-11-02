@@ -19,6 +19,7 @@ import { NavProvider, useNav } from './src/nav/Nav';
 import { CollectionScreen } from './src/screens/CollectionScreen';
 import { SwipeBack } from './src/nav/SwipeBack';
 import { AppBackground } from './src/components/AppBackground';
+import { AmbientSnow } from './src/components/AmbientSnowLayer';
 import { ThemeTransition } from './src/theme/ThemeTransition';
 import { ThemeStudioScreen } from './src/screens/ThemeStudioScreen';
 
@@ -54,6 +55,8 @@ function Root() {
       <StatusBar barStyle={theme.colors.statusBar} />
       {/* Nền chung: màu của bộ màu, ảnh/GIF hoặc video người dùng chọn */}
       <AppBackground />
+      {/* Tuyết rơi của bộ Snow: dừng khi mở Player hoặc khi có trang mở chồng (trang đó tự có tuyết riêng) */}
+      <AmbientSnow paused={tab === 'player' || !!page} />
       <View style={{ flex: 1 }}>
         {shown === 'home' && <HomeScreen />}
         {shown === 'search' && <SearchScreen />}

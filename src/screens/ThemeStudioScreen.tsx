@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Alert, GestureResponderEvent, Pressable, ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useThemeTransition } from '../theme/ThemeTransition';
@@ -33,7 +33,7 @@ function useThrottle<T>(fn: (v: T) => void, ms = 120) {
 }
 
 // Thẻ xem trước một bộ màu: vẽ thu nhỏ một màn hình của app bằng đúng màu của bộ đó
-function PresetCard({ id, selected, width, onPress }: { id: ThemePresetId; selected: boolean; width: number; onPress: () => void }) {
+function PresetCard({ id, selected, width, onPress }: { id: ThemePresetId; selected: boolean; width: number; onPress: (e: GestureResponderEvent) => void }) {
   const { theme } = useTheme();
   const t = useT();
   const p = PRESETS[id];
@@ -80,7 +80,7 @@ function PresetCard({ id, selected, width, onPress }: { id: ThemePresetId; selec
 
 // Trang Giao diện: bộ màu, nền (màu / ảnh / GIF / video), độ tối nền, độ mờ kính
 export function ThemeStudioScreen() {
-  const { theme, setBackground, setGlassBlur } = useTheme();
+  const { theme, setBackground, setGlassBlur, setAmbientSnow } = useTheme();
   const { changePreset } = useThemeTransition();
   const t = useT();
   const pad = useContentInsets();
@@ -167,9 +167,20 @@ export function ThemeStudioScreen() {
         <Text style={{ color: textSecondary, fontSize: 13, marginBottom: 12 }}>{t('studio.presetsHint')}</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
           {PRESET_ORDER.map((id) => (
-            <PresetCard key={id} id={id} width={cardW} selected={theme.preset === id} onPress={() => changePreset(id)} />
+            <PresetCard key={id} id={id} width={cardW} selected={theme.preset === id} onPress={(e) => changePreset(id, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY })} />
           ))}
         </View>
+
+        {/* Bộ Snow: bật/tắt tuyết rơi liên tục */}
+        {theme.preset === 'snow' && (
+          <View style={styles.switchRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.label, { color: text }]}>{t('studio.snow')}</Text>
+              <Text style={{ color: textSecondary, fontSize: 12, marginTop: 2 }}>{t('studio.snowHint')}</Text>
+            </View>
+            <Switch value={theme.effects.ambientSnow} onValueChange={setAmbientSnow} trackColor={{ true: accent, false: theme.colors.switchOff }} />
+          </View>
+        )}
 
         {/* Nền */}
         <Text style={[styles.section, { color: text }]}>{t('studio.background')}</Text>
@@ -216,4 +227,5 @@ const styles = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth },
   sliderHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 22 },
   label: { fontSize: 15, fontWeight: '700' },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 18 },
 });
