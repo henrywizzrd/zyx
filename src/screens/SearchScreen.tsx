@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
-import { usePlayer } from '../player/PlayerProvider';
+import { usePlayerPick } from '../player/PlayerProvider';
 import { useContentInsets } from '../components/FloatingDock';
 import { genres, type Track } from '../data/mock';
 import { useLibrary, type LibraryEntry } from '../data/library';
@@ -98,7 +98,7 @@ export function SearchScreen() {
     const id = setTimeout(warmUp, 250); // để màn hình Tìm kiếm hiện ra trước rồi mới làm
     return () => clearTimeout(id);
   }, []);
-  const { track, playTrack } = usePlayer();
+  const { track, playTrack } = usePlayerPick('track', 'playTrack');
   const tr = useT(); // chữ theo ngôn ngữ (đặt tên tr vì biến t đang dùng cho bài hát)
   const songMenu = useSongMenu(); // nhấn giữ một bài: phát tiếp, hàng đợi, thích, thêm vào playlist
   const { push } = useNav();

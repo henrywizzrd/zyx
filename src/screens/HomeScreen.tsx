@@ -3,7 +3,7 @@ import { ActivityIndicator, Image, PixelRatio, Pressable, ScrollView, StyleSheet
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useContentInsets } from '../components/FloatingDock';
-import { usePlayer } from '../player/PlayerProvider';
+import { usePlayerPick } from '../player/PlayerProvider';
 import { useSongMenu } from '../components/useSongMenu';
 import { useNav } from '../nav/Nav';
 import { musicSupported, toTrack, ytmusic } from '../music/lazy';
@@ -220,7 +220,7 @@ function MyPlaylists() {
 function useOpenContext() {
   const t = useT();
   const { push } = useNav();
-  const { playTrack } = usePlayer();
+  const { playTrack } = usePlayerPick('playTrack');
   const startMix = (seed: Track, title: string) => {
     if (!musicSupported) return;
     // Phát bài gốc ngay, phần còn lại của mix nối vào khi tải xong
@@ -277,7 +277,7 @@ function Recent() {
 function Trending() {
   const { theme, setHome } = useTheme();
   const t = useT();
-  const { track, playTrack } = usePlayer();
+  const { track, playTrack } = usePlayerPick('track', 'playTrack');
   const songMenu = useSongMenu();
   const { push } = useNav();
   const range = theme.home.trendingRange;
@@ -359,7 +359,7 @@ function Recommended() {
   const dbv = useDbVersion();
   const tops = useMemo(() => getTopArtists(30, 6), [dbv]);
   const { startMix } = useOpenContext();
-  const { playTrack } = usePlayer();
+  const { playTrack } = usePlayerPick('playTrack');
   // Chưa có lịch sử nghe: dùng gợi ý chung của YouTube Music
   const fallback = useRemote('home', homeFeed, tops.length === 0, 3 * 60 * 60 * 1000);
 

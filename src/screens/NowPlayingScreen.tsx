@@ -5,9 +5,9 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useT } from '../i18n';
-import { usePlayer, useProgress } from '../player/PlayerProvider';
+import { usePlayerPick, useProgress } from '../player/PlayerProvider';
 import { useContentInsets } from '../components/FloatingDock';
-import { Cover } from '../components/Cover';
+import { Cover, SmartImage } from '../components/Cover';
 import { usePlayerTransition } from '../components/PlayerTransition';
 import { Slider } from '../components/Slider';
 import { LyricsView } from '../components/LyricsView';
@@ -17,6 +17,8 @@ import { QueueSheet } from '../components/QueueSheet';
 import { useSongMenu } from '../components/useSongMenu';
 import RNMaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
+import RAnimated, { Easing as REasing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 // Kiểu khai báo của thư viện chưa khớp React 19, ép kiểu để dùng như component bình thường
 const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
@@ -35,6 +37,7 @@ const REPEAT_PATH = 'M4 12.5V8.5A3.5 3.5 0 0 1 7.5 5H18.5M15.5 2L18.5 5L15.5 8M2
 const skia = Platform.OS === 'web' ? null : (require('@shopify/react-native-skia') as typeof import('@shopify/react-native-skia'));
 // Mọi icon ở hàng dưới cùng dùng chung một cỡ khung để nhìn đều nhau
 const ICON = 24;
+const TITLE_SCALE = 0.72; // tên bài khi bay lên đầu (cạnh ảnh nhỏ) nhỏ lại còn chừng này
 const PLAY = 66; // đường kính nút phát
 const REPEAT_SIZE = ICON;
 
@@ -87,6 +90,9 @@ function RepeatIcon({ mode }: { mode: 'off' | 'all' | 'one' }) {
 
 // Nhớ đang xem lời hay ảnh bìa, để vuốt xuống rồi mở lại player vẫn giữ nguyên
 let lyricsOpen = false;
+// Kích thước bố cục player đo được (giữ qua các lần mở / đóng player)
+const layoutMemo = { blockH: 52, slotW: 0, infoH: 0, headerH: 0 };
+const posMemo = { ax: 0, ay: 0, lx: 0, ly: 0, ok: false };
 
 const lock = (o: ScreenOrientation.OrientationLock) => ScreenOrientation.lockAsync(o).catch(() => {});
 
@@ -98,7 +104,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const {
     track, isPlaying, duration, loading, failed,
     togglePlay, next, prev, seekTo, shuffle, repeat, toggleShuffle, cycleRepeat, liked, toggleLike,
-  } = usePlayer();
+  } = usePlayerPick('track', 'isPlaying', 'duration', 'loading', 'failed', 'togglePlay', 'next', 'prev', 'seekTo', 'shuffle', 'repeat', 'toggleShuffle', 'cycleRepeat', 'liked', 'toggleLike');
   const accent = theme.colors.accent;
   // Chưa phát bài nào: hiện câu nhắc theo ngôn ngữ đang chọn
   const idle = track.id === 'none';
@@ -137,6 +143,78 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
 
   const lyr = useLyrics(track, landscape ? landLyrics : showLyrics, duration);
 
+  // ---- Chuyển ảnh bìa ⇄ lời (giống Apple Music): một giá trị lp chạy 0 → 1 trên UI thread, mọi thứ đi theo nó:
+  //  ảnh bìa lớn nhoè dần + tối đi, ảnh nhỏ hiện ra ở góc trên, tên bài bay từ dưới lên cạnh ảnh nhỏ (và nhỏ lại),
+  //  nút thích / menu ở dưới mờ đi, lời hiện dần từ dưới lên. Đóng lời thì chạy ngược lại
+  const lp = useSharedValue(showLyrics ? 1 : 0);
+  const [lyricsMounted, setLyricsMounted] = useState(showLyrics);
+  useEffect(() => {
+    if (showLyrics) setLyricsMounted(true);
+    lp.value = withTiming(showLyrics ? 1 : 0, { duration: 460, easing: REasing.bezier(0.25, 0.8, 0.25, 1) }, (done) => {
+      if (done && !showLyrics) scheduleOnRN(setLyricsMounted, false);
+    });
+  }, [showLyrics]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Vị trí của tên bài ở hai chỗ (đo bằng onLayout): dưới ảnh bìa (a) và trên đầu cạnh ảnh nhỏ (l)
+  const ax = useSharedValue(posMemo.ax), ay = useSharedValue(posMemo.ay), lx = useSharedValue(posMemo.lx), ly = useSharedValue(posMemo.ly);
+  const measured = useSharedValue(posMemo.ok ? 1 : 0); // đủ 2 vị trí thì mới hiện tên bài (tránh nháy ở góc trái trên)
+  // Các kích thước đo được nhớ lại cho lần mở player sau (layoutMemo, ngoài component): mở player là có số đúng ngay,
+  // không phải vẽ lại vài lần giữa lúc đang phóng to (mỗi lần vẽ lại giữa chừng làm hiệu ứng mở bị giật)
+  const [blockH, setBlockHRaw] = useState(layoutMemo.blockH); // chiều cao khối tên bài + nghệ sĩ (cỡ chữ lớn)
+  const [slotW, setSlotWRaw] = useState(layoutMemo.slotW); // bề ngang chỗ dành cho tên bài ở dưới ảnh bìa
+  const [infoH, setInfoHRaw] = useState(layoutMemo.infoH); // chiều cao phần tên bài ở dưới (ảnh bìa dừng ngay trên phần này)
+  const [headerH, setHeaderHRaw] = useState(layoutMemo.headerH); // phần đầu (thanh kéo + hàng ảnh nhỏ): lời bắt đầu ngay dưới
+  const remember = (k: keyof typeof layoutMemo, set: (v: number) => void) => (v: number) => {
+    if (Math.abs(layoutMemo[k] - v) < 0.5) return;
+    layoutMemo[k] = v;
+    set(v);
+  };
+  const setBlockH = remember('blockH', setBlockHRaw);
+  const setSlotW = remember('slotW', setSlotWRaw);
+  const setInfoH = remember('infoH', setInfoHRaw);
+  const setHeaderH = remember('headerH', setHeaderHRaw);
+  const pos = useRef({ wrapY: 0, rowY: 0, slotX: 0, slotY: 0, hRowY: 0, hSlotX: 0, hSlotY: 0, side: 0 });
+  const updatePos = () => {
+    const q = pos.current;
+    const next = { ax: q.side + q.slotX, ay: q.wrapY + q.rowY + q.slotY, lx: q.side + q.hSlotX, ly: q.hRowY + q.hSlotY };
+    // Chỉ cập nhật khi vị trí thật sự đổi (mở player lần sau dùng luôn số đã nhớ, không làm hiệu ứng mở phải vẽ lại)
+    const same = posMemo.ok && (['ax', 'ay', 'lx', 'ly'] as const).every((k) => Math.abs(posMemo[k] - next[k]) < 0.5);
+    if (same) return;
+    // Lần đầu: đợi đo đủ cả 4 chỗ (hàng dưới, chỗ tên bài dưới, hàng đầu, chỗ tên bài trên) rồi mới hiện tên bài
+    if (!(q.wrapY > 0 && q.hRowY > 0 && q.slotX >= 0 && q.hSlotX > 0)) return;
+    Object.assign(posMemo, next, { ok: true });
+    ax.value = next.ax;
+    ay.value = next.ay;
+    lx.value = next.lx;
+    ly.value = next.ly;
+    measured.value = 1;
+  };
+  const floatStyle = useAnimatedStyle(() => ({
+    opacity: measured.value,
+    transform: [
+      { translateX: interpolate(lp.value, [0, 1], [ax.value, lx.value]) },
+      { translateY: interpolate(lp.value, [0, 1], [ay.value, ly.value]) },
+      { scale: interpolate(lp.value, [0, 1], [1, TITLE_SCALE]) },
+    ],
+  }));
+  const sharpArtStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(lp.value, [0, 0.65], [1, 0], 'clamp'),
+    transform: [{ scale: interpolate(lp.value, [0, 1], [1, 1.08]) }],
+  }));
+  const blurArtStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(lp.value, [0, 0.45, 1], [0, 0.95, 0.45]),
+    transform: [{ scale: interpolate(lp.value, [0, 1], [1, 1.08]) }],
+  }));
+  const dimStyle = useAnimatedStyle(() => ({ opacity: lp.value * 0.35 }));
+  const thumbStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(lp.value, [0.35, 0.9], [0, 1], 'clamp'),
+    transform: [{ scale: interpolate(lp.value, [0, 1], [0.6, 1]) }],
+  }));
+  const infoBtnsStyle = useAnimatedStyle(() => ({ opacity: interpolate(lp.value, [0, 0.4], [1, 0], 'clamp') }));
+  const lyricsStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(lp.value, [0.3, 1], [0, 1], 'clamp'),
+    transform: [{ translateY: interpolate(lp.value, [0, 1], [60, 0]) }],
+  }));
+
   const isLiked = liked.has(track.id);
 
 
@@ -168,7 +246,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   // Trong lúc phóng to / thu nhỏ player thì tạm dừng xoay (màn player đang được chụp thành ảnh, có gì chuyển động là phải chụp lại mỗi khung hình)
   const spin = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (swipe.moving) return;
+    if (swipe.moving || !swipe.active) return;
     let alive = true;
     let anim: Animated.CompositeAnimation | null = null;
     // Xoay tiếp từ chỗ đang dừng tới hết vòng, rồi mới lặp vòng mới (không bị giật ngược về góc cũ)
@@ -186,7 +264,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
       alive = false;
       anim?.stop();
     };
-  }, [spin, swipe.moving]);
+  }, [spin, swipe.moving, swipe.active]);
   const rot1 = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
   const rot2 = spin.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
   const blobSize = Math.max(win.width, win.height) * 1.9;
@@ -397,75 +475,138 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
 
   const sidePad = { paddingLeft: pad.left + 24, paddingRight: pad.right + 24 };
 
-  // Đang xem lời: ảnh nhỏ + tên bài + thích ở trên, lời ở giữa
-  if (showLyrics) {
-    return (
-      <View style={{ flex: 1 }}>
-        {Background}
-        <StatusBar barStyle="light-content" />
-        <View style={[styles.column, sidePad, { paddingTop: pad.top + 4, paddingBottom: pad.bottom + 8 }]}>
-          {/* Cả vùng đầu (thanh kéo + ảnh nhỏ + tên bài) vuốt xuống được để thu về mini player */}
-          <View {...swipe.panHandlers}>
-          <Pressable onPress={close} hitSlop={14} style={styles.grabberWrap}>
-            <View style={styles.grabber} />
-          </Pressable>
-          <View style={styles.compact}>
-            <Cover track={track} size={300} style={{ width: 52, height: 52, borderRadius: 6 }}>
-              <Ionicons name="musical-notes" size={22} color="rgba(255,255,255,0.8)" />
-            </Cover>
-            <View style={{ flex: 1 }}>
-              <Text numberOfLines={1} style={styles.compactTitle}>{title}</Text>
-              <Text numberOfLines={1} style={[styles.artist, { fontSize: 15 }]}>{artist}</Text>
-            </View>
-            {SaveButton}
-          </View>
-          </View>
-          <View style={{ flex: 1 }}>
-            <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} />
-          </View>
-          {/* Cả vùng điều khiển bên dưới cũng vuốt xuống để thoát được (kéo thanh trượt thì vẫn là kéo thanh trượt) */}
-          <View {...swipe.panHandlers}>{PlayerBody}</View>
-        </View>
-        <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} />
-      </View>
-    );
-  }
+  const side = pad.left + 24;
+  pos.current.side = side;
+  const artMask = <LinearGradient colors={['#000', '#000', 'transparent']} locations={[0, 0.72, 1]} style={{ flex: 1 }} />;
 
-  // Xem ảnh bìa: ảnh tràn hết bề ngang ở nửa trên, cạnh dưới tan dần vào nền
+  // Một bố cục duy nhất cho cả ảnh bìa và lời: các phần chỉ đổi vị trí / độ hiện theo lp (không dựng lại màn hình)
   return (
     <View style={{ flex: 1 }}>
       {Background}
+      {/* Tối nhẹ cả màn hình khi xem lời để chữ trắng dễ đọc (phủ cả màn, không chỉ phần trên → không có đường kẻ ngang) */}
+      <RAnimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }, dimStyle]} />
       <StatusBar barStyle="light-content" />
       <View style={{ flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center' }}>
-        <View style={{ flex: 1, minHeight: 120 }} {...swipe.panHandlers}>
-          <MaskedView
-            style={StyleSheet.absoluteFill}
-            maskElement={<LinearGradient colors={['#000', '#000', 'transparent']} locations={[0, 0.72, 1]} style={{ flex: 1 }} />}
+        {/* Sân khấu: ảnh bìa, phần đầu, lời, tên bài */}
+        <View style={{ flex: 1 }}>
+          {/* Ảnh bìa tràn ngang: bản rõ (mờ dần khi mở lời) và bản nhoè (hiện lên làm nền cho lời) */}
+          <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: infoH, overflow: 'hidden' }}>
+            <RAnimated.View style={[StyleSheet.absoluteFill, sharpArtStyle]}>
+              <MaskedView style={StyleSheet.absoluteFill} maskElement={artMask}>
+                <Cover track={track} size={1200} style={{ flex: 1 }}>
+                  <Ionicons name="musical-notes" size={72} color="rgba(255,255,255,0.8)" />
+                </Cover>
+              </MaskedView>
+            </RAnimated.View>
+            {/* Bản nhoè chỉ dựng khi đang xem lời (hoặc đang chuyển): bình thường không tốn thêm một lớp ảnh có mặt nạ */}
+            {!!track.thumb && lyricsMounted && (
+              <RAnimated.View style={[StyleSheet.absoluteFill, blurArtStyle]}>
+                <MaskedView style={StyleSheet.absoluteFill} maskElement={artMask}>
+                  <SmartImage url={track.thumb} size={300} blurRadius={40} style={StyleSheet.absoluteFill} />
+                </MaskedView>
+              </RAnimated.View>
+            )}
+            <LinearGradient
+              colors={['rgba(0,0,0,0.35)', 'rgba(0,0,0,0)']}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, height: pad.top + 60 }}
+            />
+          </View>
+
+          {/* Lời: từ ngay dưới phần đầu tới hết sân khấu */}
+          {lyricsMounted && (
+            <RAnimated.View
+              pointerEvents={showLyrics ? 'auto' : 'none'}
+              style={[{ position: 'absolute', top: headerH, bottom: 0, left: side, right: pad.right + 24 }, lyricsStyle]}
+            >
+              {/* Lời có ngay từ lần vẽ đầu (đã tải thì lấy từ bộ nhớ), không phải chờ */}
+              <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} />
+            </RAnimated.View>
+          )}
+
+          {/* Phần đầu: thanh kéo + hàng ảnh nhỏ (khi xem lời). Vuốt xuống ở đây để thu player lại */}
+          <View
+            {...swipe.panHandlers}
+            onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)}
+            style={{ paddingTop: pad.top + 4, paddingLeft: side, paddingRight: pad.right + 24 }}
           >
-            <Cover track={track} size={1200} style={{ flex: 1 }}>
-              <Ionicons name="musical-notes" size={72} color="rgba(255,255,255,0.8)" />
-            </Cover>
-          </MaskedView>
-          {/* Phủ tối nhẹ ở đỉnh để thanh trạng thái và thanh kéo luôn nhìn thấy */}
-          <LinearGradient
+            <Pressable onPress={close} hitSlop={14} style={styles.grabberWrap}>
+              <View style={styles.grabber} />
+            </Pressable>
+            <View
+              style={styles.compact}
+              pointerEvents={showLyrics ? 'auto' : 'none'}
+              onLayout={(e) => {
+                pos.current.hRowY = e.nativeEvent.layout.y;
+                updatePos();
+              }}
+            >
+              <RAnimated.View style={thumbStyle}>
+                <Cover track={track} size={300} style={{ width: 52, height: 52, borderRadius: 6 }}>
+                  <Ionicons name="musical-notes" size={22} color="rgba(255,255,255,0.8)" />
+                </Cover>
+              </RAnimated.View>
+              {/* Chỗ tên bài sẽ bay tới */}
+              <View
+                style={{ flex: 1, height: blockH * TITLE_SCALE }}
+                onLayout={(e) => {
+                  pos.current.hSlotX = e.nativeEvent.layout.x;
+                  pos.current.hSlotY = e.nativeEvent.layout.y;
+                  updatePos();
+                }}
+              />
+            </View>
+          </View>
+
+          {/* Khoảng trống giữa (vuốt xuống để thu player khi đang xem ảnh bìa) */}
+          <View style={{ flex: 1 }} pointerEvents={showLyrics ? 'none' : 'auto'} {...swipe.panHandlers} />
+
+          {/* Hàng tên bài dưới ảnh bìa: chỉ giữ chỗ cho tên bài + nút thích / menu */}
+          <View
+            style={{ paddingLeft: side, paddingRight: pad.right + 24 }}
+            pointerEvents={showLyrics ? 'none' : 'auto'}
+            onLayout={(e) => {
+              pos.current.wrapY = e.nativeEvent.layout.y;
+              setInfoH(e.nativeEvent.layout.height);
+              updatePos();
+            }}
+            {...swipe.panHandlers}
+          >
+            <View
+              style={styles.info}
+              onLayout={(e) => {
+                pos.current.rowY = e.nativeEvent.layout.y;
+                updatePos();
+              }}
+            >
+              <View
+                style={{ flex: 1, height: blockH }}
+                onLayout={(e) => {
+                  pos.current.slotX = e.nativeEvent.layout.x;
+                  pos.current.slotY = e.nativeEvent.layout.y;
+                  setSlotW(e.nativeEvent.layout.width);
+                  updatePos();
+                }}
+              />
+              <RAnimated.View style={[{ flexDirection: 'row', gap: 8 }, infoBtnsStyle]} pointerEvents={showLyrics ? 'none' : 'auto'}>
+                {SaveButton}
+                {MoreButtonFlat}
+              </RAnimated.View>
+            </View>
+          </View>
+
+          {/* Tên bài + nghệ sĩ: một khối duy nhất bay giữa hai chỗ trên */}
+          <RAnimated.View
             pointerEvents="none"
-            colors={['rgba(0,0,0,0.35)', 'rgba(0,0,0,0)']}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, height: pad.top + 60 }}
-          />
-          <Pressable onPress={close} hitSlop={14} style={[styles.grabberWrap, { marginTop: pad.top + 4 }]}>
-            <View style={styles.grabber} />
-          </Pressable>
+            onLayout={(e) => setBlockH(e.nativeEvent.layout.height)}
+            style={[{ position: 'absolute', left: 0, top: 0, width: slotW || undefined, transformOrigin: 'left top' }, floatStyle]}
+          >
+            <Text numberOfLines={1} style={styles.title}>{title}</Text>
+            <Text numberOfLines={1} style={styles.artist}>{artist}</Text>
+          </RAnimated.View>
         </View>
 
-        <View style={[sidePad, { paddingBottom: pad.bottom + 8 }]}>
-          <View style={styles.info} {...swipe.panHandlers}>
-            <View style={{ flex: 1 }}>
-              <Text numberOfLines={1} style={styles.title}>{title}</Text>
-              <Text numberOfLines={1} style={styles.artist}>{artist}</Text>
-            </View>
-            {SaveButton}
-            {MoreButtonFlat}
-          </View>
+        {/* Thanh thời gian, nút điều khiển, âm lượng, hàng dưới: đứng yên khi chuyển ảnh bìa ⇄ lời */}
+        <View style={{ paddingLeft: side, paddingRight: pad.right + 24, paddingBottom: pad.bottom + 8 }} {...swipe.panHandlers}>
           {PlayerBody}
         </View>
       </View>

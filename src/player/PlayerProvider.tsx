@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Image, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Track } from '../data/mock';
@@ -67,6 +67,23 @@ const PlayerContext = createContext<PlayerContextValue | null>(null);
 // nên mỗi lần đổi là cả app (mọi màn hình dùng usePlayer) vẽ lại → tụt khung hình khi đang phát nhạc.
 // Giờ chỉ thanh tiến trình đọc nó (useProgress)
 const ProgressContext = createContext(0);
+
+// Kho trạng thái phát nhạc để màn hình "chọn" đúng phần mình cần (usePlayerPick).
+// usePlayer() kiểu cũ làm màn hình vẽ lại mỗi khi BẤT KỲ thứ gì đổi (hàng chờ, đang tải, trộn bài...);
+// usePlayerPick('track', 'playTrack') chỉ vẽ lại khi đúng hai thứ đó đổi
+type Store = { value: PlayerContextValue | null; listeners: Set<() => void>; subscribe: (l: () => void) => () => void };
+function makeStore(): Store {
+  const st: Store = {
+    value: null,
+    listeners: new Set(),
+    subscribe: (l) => {
+      st.listeners.add(l);
+      return () => st.listeners.delete(l);
+    },
+  };
+  return st;
+}
+const StoreContext = createContext<Store | null>(null);
 
 // Trạng thái đang kéo dock/mini player tách riêng: nó đổi liên tục lúc kéo, để chung thì cả app vẽ lại theo từng cử động ngón tay
 interface DragContextValue {
@@ -404,11 +421,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const dragValue = useMemo<DragContextValue>(() => ({ drag, setDrag }), [drag]);
 
+  const store = useRef<Store>(makeStore()).current;
+  store.value = value;
+  useLayoutEffect(() => {
+    store.listeners.forEach((l) => l());
+  }, [value, store]);
+
   return (
     <PlayerContext.Provider value={value}>
+      <StoreContext.Provider value={store}>
       <ProgressContext.Provider value={progress}>
         <DragContext.Provider value={dragValue}>{children}</DragContext.Provider>
       </ProgressContext.Provider>
+      </StoreContext.Provider>
     </PlayerContext.Provider>
   );
 }
@@ -419,6 +444,23 @@ export function usePlayer() {
   return ctx;
 }
 
+
+// Chỉ lấy vài phần của trạng thái phát nhạc; màn hình chỉ vẽ lại khi đúng những phần đó đổi
+export function usePlayerPick<K extends keyof PlayerContextValue>(...keys: K[]): Pick<PlayerContextValue, K> {
+  const store = useContext(StoreContext);
+  if (!store) throw new Error('usePlayerPick must be used inside PlayerProvider');
+  const cache = useRef<Pick<PlayerContextValue, K> | null>(null);
+  const get = () => {
+    const v = store.value!;
+    const prev = cache.current;
+    if (prev && keys.every((k) => prev[k] === v[k])) return prev;
+    const next = {} as Pick<PlayerContextValue, K>;
+    for (const k of keys) next[k] = v[k];
+    cache.current = next;
+    return next;
+  };
+  return useSyncExternalStore(store.subscribe, get);
+}
 
 // Số giây đã phát của bài hiện tại (chỉ dùng ở chỗ thật sự cần hiện thời gian)
 export function useProgress() {

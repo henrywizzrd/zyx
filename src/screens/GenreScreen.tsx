@@ -3,7 +3,7 @@ import { ActivityIndicator, PixelRatio, Pressable, ScrollView, StyleSheet, Text,
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
-import { usePlayer } from '../player/PlayerProvider';
+import { usePlayerPick } from '../player/PlayerProvider';
 import { useContentInsets } from '../components/FloatingDock';
 import { SmartImage } from '../components/Cover';
 import { useActionSheet } from '../components/ActionSheet';
@@ -29,7 +29,7 @@ export function GenreScreen({ page }: { page: GenrePage }) {
   const goBack = useAnimatedBack() ?? pop;
   // Trượt vào xong mới dựng các kệ (nhiều ảnh) để hiệu ứng mở trang không bị khựng; trước đó chỉ dựng 1 kệ đầu
   const entered = useEntered();
-  const { playTrack, shuffle, toggleShuffle } = usePlayer();
+  const { playTrack, shuffle, toggleShuffle } = usePlayerPick('playTrack', 'shuffle', 'toggleShuffle');
   const sheet = useActionSheet();
   const { text, textSecondary, accent, surface, bg } = theme.colors;
 

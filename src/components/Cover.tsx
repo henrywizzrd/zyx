@@ -32,7 +32,7 @@ export function prefetchThumbs(urls: (string | undefined)[], size: number) {
 // Ảnh có dự phòng: link đầu lỗi thì thử link sau.
 // Dùng expo-image: lưu ảnh vào bộ nhớ + ổ đĩa (mở lại trang / mở lại app là hiện ngay, không tải lại),
 // giải mã ảnh ở luồng nền, và hiện mờ dần thay vì bật ra
-export function SmartImage({ url, size, style }: { url: string; size: number; style?: any }) {
+export function SmartImage({ url, size, style, blurRadius }: { url: string; size: number; style?: any; blurRadius?: number }) {
   const list = thumbCandidates(url, size);
   const [state, setState] = useState({ url, i: 0 });
   const i = state.url === url ? state.i : 0; // đổi bài thì bắt đầu lại từ link tốt nhất
@@ -43,6 +43,7 @@ export function SmartImage({ url, size, style }: { url: string; size: number; st
       cachePolicy="memory-disk"
       transition={160}
       recyclingKey={url}
+      blurRadius={blurRadius}
       style={style}
       onError={() => i < list.length - 1 && setState({ url, i: i + 1 })}
     />

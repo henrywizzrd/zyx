@@ -3,7 +3,7 @@ import { ActivityIndicator, PixelRatio, Pressable, ScrollView, StyleSheet, Text,
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
-import { usePlayer } from '../player/PlayerProvider';
+import { usePlayerPick } from '../player/PlayerProvider';
 import { useContentInsets } from '../components/FloatingDock';
 import { SmartImage } from '../components/Cover';
 import { useSongMenu } from '../components/useSongMenu';
@@ -32,7 +32,7 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
   const goBack = useAnimatedBack() ?? pop;
   // Trượt vào xong mới dựng các kệ album / video (nhiều ảnh) để hiệu ứng mở trang không bị khựng
   const entered = useEntered();
-  const { track, playTrack, shuffle, toggleShuffle } = usePlayer();
+  const { track, playTrack, shuffle, toggleShuffle } = usePlayerPick('track', 'playTrack', 'shuffle', 'toggleShuffle');
   const songMenu = useSongMenu();
   const dbv = useDbVersion();
   const { text, textSecondary, accent, onAccent, surface, border } = theme.colors;

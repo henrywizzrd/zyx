@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, PanResponder, PanResponderInstance, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, { Easing, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
-import { usePlayer } from '../player/PlayerProvider';
+import { usePlayerPick } from '../player/PlayerProvider';
 import { SmartImage } from './Cover';
 
 export type Rect = { x: number; y: number; w: number; h: number; r: number };
@@ -19,18 +19,21 @@ type Ctx = {
   panHandlers: PanResponderInstance['panHandlers']; // gắn vào vùng cho phép vuốt xuống để thoát
   // true trong lúc đang phóng to / thu nhỏ (hoặc đang vuốt xuống): màn player nên tạm dừng mọi chuyển động bên trong
   moving: boolean;
+  // false khi player đã đóng hẳn (đang ẩn): màn player nên dừng mọi thứ chạy liên tục
+  active: boolean;
 };
-const TransitionContext = createContext<Ctx>({ reportCover: () => {}, panHandlers: {} as Ctx['panHandlers'], moving: false });
+const TransitionContext = createContext<Ctx>({ reportCover: () => {}, panHandlers: {} as Ctx['panHandlers'], moving: false, active: true });
 export const usePlayerTransition = () => useContext(TransitionContext);
 
-const SPRING = { damping: 28, stiffness: 230, mass: 1 };
+// Nở ra như bong bóng cửa sổ nổi (Xiaomi / OPPO): lò xo hơi nảy nhẹ ở cuối
+const SPRING = { damping: 24, stiffness: 210, mass: 1 };
 
 // Mở player như mở app trên iPhone: một ô bo góc từ ảnh album phóng to dần ra tràn màn hình.
 // Cả màn player được thu nhỏ đồng đều bên trong ô đó (không bị méo), ô chỉ cắt phần thừa ở dưới.
 // Lúc đầu ô hiện ảnh album, ảnh mờ dần để lộ màn player; đóng thì chạy ngược lại.
-export function PlayerTransition({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
+export function PlayerTransition({ open, onClose, onClosed, children }: { open: boolean; onClose: () => void; onClosed?: () => void; children: React.ReactNode }) {
   const { width: W, height: H } = useWindowDimensions();
-  const { track } = usePlayer();
+  const { track } = usePlayerPick('track');
   const [mounted, setMountedState] = useState(open);
   const mountedRef = useRef(open);
   const openRef = useRef(open);
@@ -40,8 +43,13 @@ export function PlayerTransition({ open, onClose, children }: { open: boolean; o
     setMountedState(v);
   }, []);
   // Chỉ gỡ player ra khỏi màn hình nếu lúc animation đóng xong nó vẫn đang ở trạng thái đóng
+  const onClosedRef = useRef(onClosed);
+  onClosedRef.current = onClosed;
   const finishClose = useCallback(() => {
-    if (!openRef.current) setMounted(false);
+    if (openRef.current || !mountedRef.current) return;
+    setMounted(false);
+    // Báo cho App: player đã thu hẳn về bong bóng → lúc này mới hiện lại bong bóng (không thấy hai ảnh cùng lúc)
+    onClosedRef.current?.();
   }, [setMounted]);
 
   const p = useSharedValue(open ? 1 : 0); // 0 = mini player, 1 = player đầy đủ
@@ -71,19 +79,19 @@ export function PlayerTransition({ open, onClose, children }: { open: boolean; o
       p.value = withSpring(1, SPRING, (done) => {
         if (done) runOnJS(stopMoving)();
       });
+      // Lưới an toàn: hiệu ứng mở vì lý do gì đó không báo xong thì vẫn tắt trạng thái "đang chuyển".
+      // (Kẹt ở trạng thái này thì màn player bị chụp thành ảnh mãi → lời đứng im, mọi thứ nặng hơn)
+      const id = setTimeout(stopMoving, 900);
+      return () => clearTimeout(id);
     } else if (mountedRef.current) {
       setMoving(true);
       // Thu nhỏ ngay lập tức (không đợi đo vị trí mini player): luồng JS có bận thì hiệu ứng vẫn chạy trên UI thread
       p.value = withTiming(0, { duration: 340, easing: Easing.bezier(0.32, 0.72, 0, 1) }, (done) => {
         if (done) runOnJS(finishClose)();
       });
-      // Đo lại vị trí mini player (có thể đã bị kéo sang chỗ khác kể từ lúc mở).
-      // Đo xong thì đổi điểm đích ngay giữa chừng: hiệu ứng đọc điểm đích mỗi khung hình nên tự bẻ hướng mượt
-      playerOrigin.measureLive?.((r) => {
-        if (r && r.w > 0 && !openRef.current) {
-          ox.value = r.x; oy.value = r.y; ow.value = r.w; oh.value = r.h; or.value = r.r;
-        }
-      });
+      // Thu về đúng chỗ đã mở ra (ảnh album ở mini player lúc bấm mở). KHÔNG đo lại lúc đóng: lúc đó mini player
+      // vừa hiện lại và còn đang chạy hiệu ứng (tách khỏi dock, co thành bong bóng...) nên số đo bị sai
+      // → ảnh album bay tới chỗ khác, thấy hai ảnh cùng lúc. Trong lúc player mở thì mini player không di chuyển được
       // Lưới an toàn: vì lý do gì đó hiệu ứng không báo xong thì vẫn gỡ player
       const id = setTimeout(finishClose, 900);
       return () => clearTimeout(id);
@@ -116,56 +124,87 @@ export function PlayerTransition({ open, onClose, children }: { open: boolean; o
     [] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  const ctx = useMemo<Ctx>(() => ({ reportCover, panHandlers: pan.panHandlers, moving }), [reportCover, pan, moving]);
+  const ctx = useMemo<Ctx>(() => ({ reportCover, panHandlers: pan.panHandlers, moving, active: mounted }), [reportCover, pan, moving, mounted]);
 
   // Ô cửa sổ: từ khung ảnh album ở mini player lớn dần tới toàn màn hình
-  const win = useAnimatedStyle(() => ({
-    position: 'absolute',
-    overflow: 'hidden',
-    left: interpolate(p.value, [0, 1], [ox.value, 0]),
-    top: interpolate(p.value, [0, 1], [oy.value, 0]),
-    width: interpolate(p.value, [0, 1], [ow.value, W]),
-    height: interpolate(p.value, [0, 1], [oh.value, H]),
-    // Hơi thu lại là bo góc kiểu màn hình iPhone ngay, chỉ vuông khi tràn hẳn màn hình
-    borderRadius: interpolate(p.value, [0, 0.97, 1], [or.value, 48, 0], 'clamp'),
-  }));
+  // Ô cửa sổ: từ khung ảnh album ở mini player lớn dần tới toàn màn hình.
+  // CHỈ dùng transform (dịch + co giãn), không đổi left/top/width/height: đổi kích thước bắt máy tính lại bố cục
+  // mỗi khung hình (rất nặng), còn transform thì card đồ hoạ tự làm → mở / đóng player mượt hơn hẳn.
+  //  - ô cửa sổ là một khung W×H được co theo chiều ngang sw và chiều dọc sh (hai tỉ lệ khác nhau) để thành đúng
+  //    hình chữ nhật cần cắt
+  //  - bên trong co ngược chiều dọc lại (sw / sh) để màn player được thu nhỏ đều, không bị méo
+  const win = useAnimatedStyle(() => {
+    const sw = interpolate(p.value, [0, 1], [ow.value / W, 1]);
+    const sh = interpolate(p.value, [0, 1], [oh.value / H, 1]);
+    // Bo góc mong muốn (theo điểm ảnh thật), đổi ra đơn vị của khung trước khi co
+    const r = interpolate(p.value, [0, 0.97, 1], [or.value, 48, 0], 'clamp');
+    return {
+      transform: [
+        { translateX: interpolate(p.value, [0, 1], [ox.value, 0]) },
+        { translateY: interpolate(p.value, [0, 1], [oy.value, 0]) },
+        { scaleX: sw },
+        { scaleY: sh },
+      ],
+      borderRadius: r / ((sw + sh) / 2),
+    };
+  });
 
-  // Cả màn player, thu nhỏ đồng đều sao cho rộng bằng đúng ô cửa sổ, neo ở góc trên trái
-  const screen = useAnimatedStyle(() => ({
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    width: W,
-    height: H,
-    transformOrigin: 'top left',
-    transform: [{ scale: interpolate(p.value, [0, 1], [ow.value / W, 1]) }],
-    opacity: interpolate(p.value, [0.1, 0.5], [0, 1], 'clamp'),
-  }));
+  // Bên trong ô cửa sổ: co ngược chiều dọc để cả màn player thu nhỏ đều theo sw
+  const inner = useAnimatedStyle(() => {
+    const sw = interpolate(p.value, [0, 1], [ow.value / W, 1]);
+    const sh = interpolate(p.value, [0, 1], [oh.value / H, 1]);
+    return { transform: [{ scaleY: sw / sh }] };
+  });
+  const screen = useAnimatedStyle(() => ({ opacity: interpolate(p.value, [0.22, 0.55], [0, 1], 'clamp') }));
 
-  // Ảnh album phủ lên đầu, mờ dần để lộ màn player (đóng lại thì hiện dần trở lại)
-  const art = useAnimatedStyle(() => ({ opacity: interpolate(p.value, [0, 0.4], [1, 0], 'clamp') }));
+  // Ảnh album (vuông, ở đầu) phủ lên, mờ dần để lộ màn player (đóng lại thì hiện dần trở lại).
+  // Nằm ngoài ô cửa sổ và tự co giãn đều (không bị kéo méo), bo góc đúng như ảnh ở mini player:
+  // lúc thu về mini player sẽ khớp đúng hình tròn / bo góc, không còn bị vuông vuông rồi mới tròn lại
+  const art = useAnimatedStyle(() => {
+    const sw = interpolate(p.value, [0, 1], [ow.value / W, 1]);
+    const r = interpolate(p.value, [0, 0.97, 1], [or.value, 48, 0], 'clamp');
+    return {
+      opacity: interpolate(p.value, [0.25, 0.6], [1, 0], 'clamp'),
+      borderRadius: r / sw,
+      transform: [
+        { translateX: interpolate(p.value, [0, 1], [ox.value, 0]) },
+        { translateY: interpolate(p.value, [0, 1], [oy.value, 0]) },
+        { scale: sw },
+      ],
+    };
+  });
 
   if (!mounted) return null;
 
+
   return (
     <View style={[StyleSheet.absoluteFill, { zIndex: 50 }]} pointerEvents={open ? 'auto' : 'none'}>
-      <Animated.View style={[win, { backgroundColor: track.color }]}>
-        <TransitionContext.Provider value={ctx}>
-          <Animated.View style={screen} shouldRasterizeIOS={moving} renderToHardwareTextureAndroid={moving}>
-            {children}
-          </Animated.View>
-        </TransitionContext.Provider>
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, art]}>
-          {track.thumb ? (
-            <>
-              <Image source={{ uri: track.thumb }} resizeMode="cover" style={StyleSheet.absoluteFill} />
-              <SmartImage url={track.thumb} size={600} style={StyleSheet.absoluteFill} />
-            </>
-          ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: track.color }]} />
-          )}
+      {/* Không tô nền cho khung: nền của khung bị kéo méo theo hai chiều nên ở cuối hiệu ứng thu về thành hình vuông vuông
+          (đó là cái ô vuông thấy được trước khi thành hình tròn). Màn player đã có nền riêng bên trong */}
+      <Animated.View style={[styles.frame, { width: W, height: H }, win]}>
+        <Animated.View style={[styles.innerFrame, { width: W, height: H }, inner]}>
+          <TransitionContext.Provider value={ctx}>
+            <Animated.View style={[{ width: W, height: H }, screen]} shouldRasterizeIOS={moving} renderToHardwareTextureAndroid={moving}>
+              {children}
+            </Animated.View>
+          </TransitionContext.Provider>
         </Animated.View>
+      </Animated.View>
+      <Animated.View pointerEvents="none" style={[styles.frame, { width: W, height: W }, art]}>
+        {track.thumb ? (
+          <>
+            <Image source={{ uri: track.thumb }} resizeMode="cover" style={StyleSheet.absoluteFill} />
+            <SmartImage url={track.thumb} size={600} style={StyleSheet.absoluteFill} />
+          </>
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: track.color }]} />
+        )}
       </Animated.View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  frame: { position: 'absolute', left: 0, top: 0, overflow: 'hidden', transformOrigin: 'left top' },
+  innerFrame: { position: 'absolute', left: 0, top: 0, transformOrigin: 'left top' },
+});

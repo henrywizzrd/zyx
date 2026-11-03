@@ -12,7 +12,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { useTheme } from '../theme/ThemeProvider';
 import { useT } from '../i18n';
 import type { Track } from '../data/mock';
-import { usePlayer } from '../player/PlayerProvider';
+import { usePlayerPick } from '../player/PlayerProvider';
 import { useNav } from '../nav/Nav';
 import { addToPlaylist, createPlaylist, getPlaylists, playlistHas, useDbVersion } from '../data/db';
 import { download, removeDownload, useDownloads } from '../data/downloads';
@@ -68,7 +68,7 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
   const t = useT();
   const insets = useSafeAreaInsets();
   const { height: winH } = useWindowDimensions();
-  const { liked, toggleLike, playNext, addToQueue } = usePlayer();
+  const { liked, toggleLike, playNext, addToQueue } = usePlayerPick('liked', 'toggleLike', 'playNext', 'addToQueue');
   const { push } = useNav();
   const dlState = useDownloads();
   useDbVersion(); // playlist đổi thì vẽ lại (dấu tích, số bài)

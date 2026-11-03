@@ -123,7 +123,10 @@ export async function fetchLyrics(t: Track, duration: number): Promise<Lyrics | 
 
 // duration: độ dài thật của bài đang phát (từ trình phát). Chờ có độ dài rồi mới tìm lời (tối đa 4 giây)
 export function useLyrics(track: Track, enabled: boolean, duration = 0) {
-  const [state, setState] = useState<{ status: Status; lyrics: Lyrics | null }>({ status: 'idle', lyrics: null });
+  // Lời đã tải rồi (trong phiên): có ngay từ lần vẽ đầu, không phải qua bước "đang tải" (mở player là thấy chữ liền)
+  const [state, setState] = useState<{ status: Status; lyrics: Lyrics | null }>(() =>
+    cache.has(track.id) ? { status: 'done', lyrics: cache.get(track.id) ?? null } : { status: 'idle', lyrics: null }
+  );
   const [waited, setWaited] = useState(false);
   useEffect(() => {
     setWaited(false);
@@ -135,7 +138,8 @@ export function useLyrics(track: Track, enabled: boolean, duration = 0) {
   useEffect(() => {
     if (!enabled || track.id === 'none') return;
     if (cache.has(track.id)) {
-      setState({ status: 'done', lyrics: cache.get(track.id) ?? null });
+      const l = cache.get(track.id) ?? null;
+      setState((s) => (s.status === 'done' && s.lyrics === l ? s : { status: 'done', lyrics: l }));
       return;
     }
     let dead = false;

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Platform, Pressable, ScrollView, ScrollViewInstance, StyleSheet, Text, View } from 'react-native';
 import type { Lyrics } from '../music/lyrics';
 import { audio, musicSupported } from '../music/lazy';
-import { usePlayer } from '../player/PlayerProvider';
+import { usePlayerPick } from '../player/PlayerProvider';
 import { useT } from '../i18n';
 import { usePlayerTransition } from './PlayerTransition';
 import RNMaskedView from '@react-native-masked-view/masked-view';
@@ -117,7 +117,7 @@ export function LyricsView({
   progress?: number; // chỉ dùng khi không đọc được thời gian từ trình phát (web)
   onSeek: (seconds: number) => void;
 }) {
-  const { track, duration } = usePlayer();
+  const { track, duration } = usePlayerPick('track', 'duration');
   const { moving } = usePlayerTransition();
   const t = useT();
   // Không còn chỉnh lệch tay: lời được chọn theo đúng videoId / độ dài thật nên khớp sẵn
@@ -214,10 +214,13 @@ export function LyricsView({
     setBrowsing(false);
   };
 
-  // Lần đầu: nhảy tức thì. Sau đó: cuộn mượt theo câu đang hát.
+  // Lần đầu (hoặc khung lời vừa đổi chiều cao): nhảy tức thì. Sau đó: cuộn mượt theo câu đang hát.
+  const lastH = useRef(0);
   useEffect(() => {
     if (!h) return;
-    if (!placed.current) {
+    const resized = lastH.current !== h;
+    lastH.current = h;
+    if (!placed.current || resized) {
       if (cur < 0 || scrollToLine(cur, false)) {
         placed.current = true;
         setReady(true);
@@ -286,8 +289,10 @@ export function LyricsView({
           const onLayout = (e: any) => {
             ys.current[i] = e.nativeEvent.layout.y;
             hs.current[i] = e.nativeEvent.layout.height;
-            // Dòng đang hát vừa đo xong mà chưa đặt vị trí lần đầu: nhảy tới luôn
-            if (!placed.current && i === curRef.current && scrollToLine(i, false)) {
+            // Dòng đang hát vừa được đo (lần đầu, hoặc đo lại vì bố cục vừa xê dịch — ví dụ khung lời vừa có chiều cao thật
+            // khi mở player): đặt lại đúng giữa khung ngay. Trước đây chỉ đặt một lần theo số đo cũ nên mở lại player
+            // lời nằm sai chỗ và "đứng im" cho tới khi sang câu mới
+            if (i === curRef.current && !browsingRef.current && scrollToLine(i, false)) {
               placed.current = true;
               setReady(true);
             }

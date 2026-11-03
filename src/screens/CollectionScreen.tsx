@@ -3,7 +3,7 @@ import { ActivityIndicator, FlatList, Image, PixelRatio, Pressable, Share, Style
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
-import { usePlayer } from '../player/PlayerProvider';
+import { usePlayerPick } from '../player/PlayerProvider';
 import { useContentInsets } from '../components/FloatingDock';
 import { useSongMenu } from '../components/useSongMenu';
 import { SheetAction, useActionSheet } from '../components/ActionSheet';
@@ -42,7 +42,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
   const goBack = useAnimatedBack() ?? pop; // trượt ra rồi mới đóng
   // Trượt vào xong mới dựng hết danh sách (trước đó chỉ vài bài đầu) để hiệu ứng mở trang không bị khựng
   const entered = useEntered();
-  const { track, playTrack, shuffle, toggleShuffle, liked, addToQueue } = usePlayer();
+  const { track, playTrack, shuffle, toggleShuffle, liked, addToQueue } = usePlayerPick('track', 'playTrack', 'shuffle', 'toggleShuffle', 'liked', 'addToQueue');
   const songMenu = useSongMenu();
   const sheet = useActionSheet();
   const dbv = useDbVersion();

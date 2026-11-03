@@ -24,7 +24,7 @@ export function DropPreview() {
     shadowOffset: { width: 0, height: 6 },
   };
   const pill = theme.miniPlayer.variant === 'pill';
-  const miniRadius = pill ? MP_THICKNESS / 2 : theme.miniPlayer.style.rectRadius;
+  const miniRadius = pill ? MP_THICKNESS / 2 : 16; // mini player giờ là bong bóng tròn / vuông bo góc
 
   if (drag.kind === 'dock') {
     const target = drag.target as Position;
@@ -40,7 +40,7 @@ export function DropPreview() {
   }
 
   // Mini player: hiện đúng chỗ và đúng cỡ (đầy đủ hoặc bubble) mà nó sẽ nằm, đã tính cả việc tránh dock
-  const rect = resolveMini(theme, insets, W, H, drag.target as MiniAnchor, theme.miniPlayer.collapsed);
+  const rect = resolveMini(theme, insets, W, H, drag.target as MiniAnchor, true);
   return (
     <View pointerEvents="none" style={{ position: 'absolute', zIndex: 1, left: rect.x, top: rect.y }}>
       <View style={{ width: rect.w, height: rect.h, borderRadius: miniRadius, ...box }} />

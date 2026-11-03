@@ -18,7 +18,7 @@ import { LibraryScreen } from './src/screens/LibraryScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { PlayerTransition } from './src/components/PlayerTransition';
-import { NavProvider, Page, useNav } from './src/nav/Nav';
+import { NavProvider, Page, useNav, useNavStack } from './src/nav/Nav';
 import { CollectionScreen } from './src/screens/CollectionScreen';
 import { ArtistScreen } from './src/screens/ArtistScreen';
 import { FadeLayer, SwipeBack } from './src/nav/SwipeBack';
@@ -60,7 +60,14 @@ function Root() {
   const { theme } = useTheme();
   const [tab, setTab] = useState<TabId>('home');
   const [lastTab, setLastTab] = useState<TabId>('home');
-  const nav = useNav();
+  // Player đang hiện (kể cả lúc đang thu nhỏ về bong bóng)
+  const [playerUp, setPlayerUp] = useState(false);
+  useEffect(() => {
+    if (tab === 'player') setPlayerUp(true);
+  }, [tab]);
+  const navActions = useNav();
+  const stack = useNavStack();
+  const nav = { ...navActions, stack };
   // Độ hiện của tab phía dưới các trang mở chồng (1 = hiện rõ, 0 = ẩn). SwipeBack điều khiển giá trị này trên UI thread
   const tabFade = useSharedValue(1);
   const depth = nav.stack.length;
@@ -152,9 +159,10 @@ function Root() {
           );
         })}
         <DropPreview />
-        <MiniPlayer hidden={tab === 'player'} onOpen={() => setTab('player')} />
+        {/* Bong bóng ẩn từ lúc bấm mở player tới khi player thu hẳn về (playerUp), để không thấy hai ảnh cùng lúc */}
+        <MiniPlayer hidden={tab === 'player' || playerUp} onOpen={() => setTab('player')} />
           <FloatingDock active={tab} onChange={go} hidden={tab === 'player'} />
-          <PlayerTransition open={tab === 'player'} onClose={() => setTab(lastTab)}>
+          <PlayerTransition open={tab === 'player'} onClose={() => setTab(lastTab)} onClosed={() => setPlayerUp(false)}>
           <NowPlayingScreen onClose={() => setTab(lastTab)} />
         </PlayerTransition>
       </View>

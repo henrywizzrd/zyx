@@ -8,7 +8,7 @@ import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withSp
 import { scheduleOnRN } from 'react-native-worklets';
 import { useTheme } from '../theme/ThemeProvider';
 import { useT } from '../i18n';
-import { QueueItem, usePlayer } from '../player/PlayerProvider';
+import { QueueItem, usePlayerPick } from '../player/PlayerProvider';
 import { Cover } from './Cover';
 import { Reorderable } from './Reorderable';
 import { ReorderableScrollView } from './ReorderableScrollView';
@@ -31,7 +31,7 @@ export function QueueSheet({ visible, onClose }: { visible: boolean; onClose: ()
   const { theme } = useTheme();
   const t = useT();
   const insets = useSafeAreaInsets();
-  const { queue, index, jumpTo, removeFromQueue, reorderUpNext, autoplay, setAutoplay, radioLoading } = usePlayer();
+  const { queue, index, jumpTo, removeFromQueue, reorderUpNext, autoplay, setAutoplay, radioLoading } = usePlayerPick('queue', 'index', 'jumpTo', 'removeFromQueue', 'reorderUpNext', 'autoplay', 'setAutoplay', 'radioLoading');
   const accent = theme.colors.accent;
 
   const [box, setBox] = useState({ width: 0, height: 0 });

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 import { Animated, Easing, PanResponder, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
-import { useDrag, usePlayer } from '../player/PlayerProvider';
+import { useDrag, usePlayerPick } from '../player/PlayerProvider';
 import { Edge, MiniAnchor, Position } from '../theme/types';
 import { targetAnchor, targetPosition, useFrame } from './layout';
 
@@ -34,7 +34,7 @@ export interface LiveAnchor {
 
 export function useDraggable(kind: 'dock' | 'player', live?: LiveAnchor) {
   const { theme, setDockPosition, setMiniPlayerAnchor, setMerged } = useTheme();
-  const { dockRef, playerRef } = usePlayer();
+  const { dockRef, playerRef } = usePlayerPick('dockRef', 'playerRef');
   const { drag, setDrag } = useDrag();
   const { width, height, left } = useFrame();
   const insets = useSafeAreaInsets();
