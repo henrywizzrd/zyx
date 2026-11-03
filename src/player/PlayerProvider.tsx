@@ -9,6 +9,32 @@ import { getLikedIds, PlayContext, recordPlay, setLiked as saveLiked } from '../
 import { localUri } from '../data/downloads';
 import { Image as ExpoImage } from 'expo-image';
 
+// ---- Link phát của từng bài, lấy sẵn trước khi cần
+// Ở chế độ nền (tắt màn hình), iPhone chỉ cho app chạy tiếp khi đang PHÁT âm thanh. Hết bài mà phải đợi vài giây lấy link
+// bài sau (gọi mạng) thì lúc đó im lặng → iOS cho app "ngủ" → bài sau không bao giờ phát (nghe được 1 bài rồi tắt).
+// Vì vậy bài sau được lấy link sẵn trong lúc bài hiện tại đang phát: hết bài là phát ngay, không có khoảng im lặng.
+const URL_TTL = 3 * 60 * 60 * 1000; // link YouTube hết hạn sau ~6 tiếng, giữ 3 tiếng cho chắc
+const urlCache = new Map<string, { url: string; at: number }>();
+const urlPending = new Map<string, Promise<string>>();
+function resolveUrl(id: string): Promise<string> {
+  const local = localUri(id); // bài đã tải về máy: phát thẳng từ file
+  if (local) return Promise.resolve(local);
+  const c = urlCache.get(id);
+  if (c && Date.now() - c.at < URL_TTL) return Promise.resolve(c.url);
+  const pending = urlPending.get(id);
+  if (pending) return pending; // đang lấy dở (vd. lấy sẵn) thì dùng chung, không gọi lần hai
+  // muxed=true: link mp4 có hình, iPhone phát được (link chỉ âm thanh bị lỗi trên iOS)
+  const job = ytmusic()
+    .getAudio(id, undefined, true)
+    .then((a) => {
+      urlCache.set(id, { url: a.url, at: Date.now() });
+      return a.url;
+    })
+    .finally(() => urlPending.delete(id));
+  urlPending.set(id, job);
+  return job;
+}
+
 export type ViewRef = React.ElementRef<typeof View>;
 export type DragState = { kind: 'dock' | 'player'; target: Position | MiniAnchor | 'merge' };
 
@@ -118,6 +144,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const endedFor = useRef(-1); // lần tải nào đã báo hết bài rồi, tránh nhảy bài hai lần
   const reqId = useRef(0); // chống chạy lộn khi bấm bài liên tục
   const shuffleRef = useRef(false);
+  // Đang trộn bài: bài kế tiếp được chọn sẵn (để lấy link trước), tới lúc chuyển bài thì dùng đúng bài đó
+  const shuffleNext = useRef<{ from: number; to: number } | null>(null);
   const repeatRef = useRef<Repeat>('off');
   const advanceRef = useRef<(auto: boolean) => void>(() => {});
   const autoplayRef = useRef(true);
@@ -162,10 +190,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setProgress(0);
     setDuration(t.duration);
     try {
-      // muxed=true: link mp4 có hình, iPhone phát được (link chỉ âm thanh bị lỗi trên iOS)
-      // Bài đã tải về máy: phát thẳng từ file, không cần mạng
-      const local = localUri(t.id);
-      const uri = local ?? (await ytmusic().getAudio(t.id, undefined, true)).url;
+      const uri = await resolveUrl(t.id);
       if (id !== reqId.current) return; // đã bấm bài khác
       const p = audio().getPlayer();
       p.replace({ uri, name: t.title });
@@ -303,6 +328,28 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (index >= queue.length - 2) extendRadio();
   }, [index, queue.length, autoplay, repeat, extendRadio]);
 
+  // Lấy sẵn link của bài sẽ phát tiếp (đợi vài giây sau khi bài hiện tại bắt đầu, để không tranh mạng với nó)
+  const nextId = (() => {
+    if (queue.length < 2 || repeat === 'one') return null;
+    if (shuffle) {
+      const pick = shuffleNext.current;
+      if (pick && pick.from === index && pick.to < queue.length) return queue[pick.to].id;
+      let n = index;
+      while (n === index) n = Math.floor(Math.random() * queue.length);
+      shuffleNext.current = { from: index, to: n };
+      return queue[n].id;
+    }
+    if (index + 1 < queue.length) return queue[index + 1].id;
+    return repeat === 'all' ? queue[0].id : null;
+  })();
+  useEffect(() => {
+    if (!musicSupported || !nextId) return;
+    const timer = setTimeout(() => {
+      resolveUrl(nextId).catch(() => {}); // lỗi thì thôi, tới lúc chuyển bài sẽ thử lại
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [nextId]);
+
   // auto=true: bài tự hết; auto=false: người dùng bấm Next
   const advance = useCallback(
     (auto: boolean) => {
@@ -316,8 +363,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       if (shuffleRef.current && q.length > 1) {
-        let n = cur;
+        const pick = shuffleNext.current;
+        let n = pick && pick.from === cur && pick.to < q.length ? pick.to : cur;
         while (n === cur) n = Math.floor(Math.random() * q.length);
+        shuffleNext.current = null;
         goTo(n);
         return;
       }
