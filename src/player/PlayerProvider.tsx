@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Image, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Track } from '../data/mock';
@@ -6,6 +6,8 @@ import { MiniAnchor, Position } from '../theme/types';
 import { audio, musicSupported, toTrack, ytmusic } from '../music/lazy';
 import { bigThumb } from '../components/Cover';
 import { getLikedIds, PlayContext, recordPlay, setLiked as saveLiked } from '../data/db';
+import { localUri } from '../data/downloads';
+import { Image as ExpoImage } from 'expo-image';
 
 export type ViewRef = React.ElementRef<typeof View>;
 export type DragState = { kind: 'dock' | 'player'; target: Position | MiniAnchor | 'merge' };
@@ -27,10 +29,10 @@ const AUTOPLAY_KEY = 'zyx:autoplay';
 interface PlayerContextValue {
   track: Track;
   isPlaying: boolean;
-  progress: number; // giây đã phát
   duration: number; // tổng giây
   loading: boolean;
   togglePlay: () => void;
+  failed: boolean; // bài hiện tại không lấy được link phát (bấm nút phát để thử lại)
   next: () => void;
   prev: () => void;
   seekTo: (seconds: number) => void;
@@ -61,6 +63,27 @@ interface PlayerContextValue {
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
+// Thời gian đã phát nằm riêng một chỗ: nó đổi liên tục (vài lần mỗi giây). Trước đây nằm chung với mọi thứ khác
+// nên mỗi lần đổi là cả app (mọi màn hình dùng usePlayer) vẽ lại → tụt khung hình khi đang phát nhạc.
+// Giờ chỉ thanh tiến trình đọc nó (useProgress)
+const ProgressContext = createContext(0);
+
+// Kho trạng thái phát nhạc để màn hình "chọn" đúng phần mình cần (usePlayerPick).
+// usePlayer() kiểu cũ làm màn hình vẽ lại mỗi khi BẤT KỲ thứ gì đổi (hàng chờ, đang tải, trộn bài...);
+// usePlayerPick('track', 'playTrack') chỉ vẽ lại khi đúng hai thứ đó đổi
+type Store = { value: PlayerContextValue | null; listeners: Set<() => void>; subscribe: (l: () => void) => () => void };
+function makeStore(): Store {
+  const st: Store = {
+    value: null,
+    listeners: new Set(),
+    subscribe: (l) => {
+      st.listeners.add(l);
+      return () => st.listeners.delete(l);
+    },
+  };
+  return st;
+}
+const StoreContext = createContext<Store | null>(null);
 
 // Trạng thái đang kéo dock/mini player tách riêng: nó đổi liên tục lúc kéo, để chung thì cả app vẽ lại theo từng cử động ngón tay
 interface DragContextValue {
@@ -76,6 +99,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const failedRef = useRef(false);
   const [shuffle, setShuffle] = useState(false);
   const [repeat, setRepeat] = useState<Repeat>('off');
   const [liked, setLiked] = useState<Set<string>>(() => getLikedIds());
@@ -130,21 +155,29 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const id = ++reqId.current;
     loadingRef.current = true;
     // Tải trước ảnh bìa lớn để lúc mở player ảnh đã sẵn, không bị giật
-    if (t.thumb && musicSupported) Image.prefetch(bigThumb(t.thumb, 1200)).catch(() => {});
+    if (t.thumb && musicSupported) ExpoImage.prefetch(bigThumb(t.thumb, 1200), 'memory-disk').catch(() => {});
     setLoading(true);
+    setFailed(false);
+    failedRef.current = false;
     setProgress(0);
     setDuration(t.duration);
     try {
       // muxed=true: link mp4 có hình, iPhone phát được (link chỉ âm thanh bị lỗi trên iOS)
-      const info = await ytmusic().getAudio(t.id, undefined, true);
+      // Bài đã tải về máy: phát thẳng từ file, không cần mạng
+      const local = localUri(t.id);
+      const uri = local ?? (await ytmusic().getAudio(t.id, undefined, true)).url;
       if (id !== reqId.current) return; // đã bấm bài khác
       const p = audio().getPlayer();
-      p.replace({ uri: info.url, name: t.title });
+      p.replace({ uri, name: t.title });
       p.play();
       // Ghi lịch sử nghe (thêm đủ thông tin bài để Home dựng Recent / Recommend)
       recordPlay({ ...t, duration: t.duration }, t.ctx);
     } catch (e) {
       console.warn('Không phát được', t.title, e);
+      if (id === reqId.current) {
+        setFailed(true);
+        failedRef.current = true;
+      }
     } finally {
       if (id === reqId.current) {
         setLoading(false);
@@ -336,10 +369,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const togglePlay = useCallback(() => {
     if (!musicSupported || queueRef.current.length === 0) return;
+    // Bài trước đó không phát được: bấm phát là thử tải lại
+    if (failedRef.current) {
+      const cur = queueRef.current[indexRef.current];
+      if (cur) load(cur);
+      return;
+    }
     const p = audio().getPlayer();
     if (p.playing) p.pause();
     else p.play();
-  }, []);
+  }, [load]);
 
   const seekTo = useCallback((s: number) => {
     if (!musicSupported || queueRef.current.length === 0) return;
@@ -353,7 +392,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const sub = p.addListener('playbackStatusUpdate', (s) => {
       setIsPlaying(s.playing);
       setProgress(s.currentTime);
-      if (s.isLoaded && s.duration > 0) setDuration(s.duration);
+      // Độ dài bài khi phát qua mạng hay nhích lên xuống vài phần trăm giây mỗi lần báo:
+      // chỉ cập nhật khi lệch thật (> 0,5s), không thì cả app vẽ lại liên tục chỉ vì con số lẻ
+      if (s.isLoaded && s.duration > 0) setDuration((d) => (Math.abs(d - s.duration) > 0.5 ? s.duration : d));
       // Hết bài: báo của thư viện, hoặc tự nhận biết khi đã chạy tới cuối và dừng
       const ended = s.didJustFinish || (s.isLoaded && s.duration > 0 && !s.playing && s.currentTime >= s.duration - 0.3);
       if (ended && !loadingRef.current && endedFor.current !== reqId.current) {
@@ -366,13 +407,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<PlayerContextValue>(
     () => ({
-      track, isPlaying, progress, duration, loading, togglePlay, next, prev, seekTo, playTrack,
+      track, isPlaying, duration, loading, failed, togglePlay, next, prev, seekTo, playTrack,
       shuffle, repeat, toggleShuffle, cycleRepeat, liked, toggleLike,
       queue, index, playNext, addToQueue, removeFromQueue, reorderUpNext, jumpTo, autoplay, setAutoplay, radioLoading,
       dockRef, playerRef, emergeFrom, setEmergeFrom,
     }),
     [
-      track, isPlaying, progress, duration, loading, togglePlay, next, prev, seekTo, playTrack, shuffle, repeat, toggleShuffle,
+      track, isPlaying, duration, loading, failed, togglePlay, next, prev, seekTo, playTrack, shuffle, repeat, toggleShuffle,
       cycleRepeat, liked, toggleLike, queue, index, playNext, addToQueue, removeFromQueue, reorderUpNext, jumpTo, autoplay,
       setAutoplay, radioLoading, emergeFrom,
     ]
@@ -380,9 +421,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const dragValue = useMemo<DragContextValue>(() => ({ drag, setDrag }), [drag]);
 
+  const store = useRef<Store>(makeStore()).current;
+  store.value = value;
+  useLayoutEffect(() => {
+    store.listeners.forEach((l) => l());
+  }, [value, store]);
+
   return (
     <PlayerContext.Provider value={value}>
-      <DragContext.Provider value={dragValue}>{children}</DragContext.Provider>
+      <StoreContext.Provider value={store}>
+      <ProgressContext.Provider value={progress}>
+        <DragContext.Provider value={dragValue}>{children}</DragContext.Provider>
+      </ProgressContext.Provider>
+      </StoreContext.Provider>
     </PlayerContext.Provider>
   );
 }
@@ -393,6 +444,28 @@ export function usePlayer() {
   return ctx;
 }
 
+
+// Chỉ lấy vài phần của trạng thái phát nhạc; màn hình chỉ vẽ lại khi đúng những phần đó đổi
+export function usePlayerPick<K extends keyof PlayerContextValue>(...keys: K[]): Pick<PlayerContextValue, K> {
+  const store = useContext(StoreContext);
+  if (!store) throw new Error('usePlayerPick must be used inside PlayerProvider');
+  const cache = useRef<Pick<PlayerContextValue, K> | null>(null);
+  const get = () => {
+    const v = store.value!;
+    const prev = cache.current;
+    if (prev && keys.every((k) => prev[k] === v[k])) return prev;
+    const next = {} as Pick<PlayerContextValue, K>;
+    for (const k of keys) next[k] = v[k];
+    cache.current = next;
+    return next;
+  };
+  return useSyncExternalStore(store.subscribe, get);
+}
+
+// Số giây đã phát của bài hiện tại (chỉ dùng ở chỗ thật sự cần hiện thời gian)
+export function useProgress() {
+  return useContext(ProgressContext);
+}
 
 export function useDrag() {
   const ctx = useContext(DragContext);

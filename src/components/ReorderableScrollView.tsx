@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { StyleProp, useWindowDimensions, ViewStyle } from 'react-native';
-import { GestureDetector, useManualGesture } from 'react-native-gesture-handler';
+import { StyleProp, ViewStyle } from 'react-native';
+import { GestureDetector, useManualGesture, useNativeGesture, useSimultaneousGestures } from 'react-native-gesture-handler';
 import Animated, {
   cancelAnimation,
   scrollTo,
@@ -13,6 +13,7 @@ import Animated, {
   withDecay,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
+import { useScreenSize } from './ScreenSize';
 
 // ScrollView hỗ trợ kéo thả đa ngón:
 //  - Ngón thứ nhất (giữ lâu trên một ô) giữ thẻ đang kéo.
@@ -58,11 +59,20 @@ interface Props {
   children: React.ReactNode;
   contentContainerStyle?: StyleProp<ViewStyle>;
   style?: StyleProp<ViewStyle>;
+  // false: tạm khoá cuộn (ví dụ tấm Hàng đợi đang mở một nửa, vuốt lên là kéo tấm chứ không cuộn)
+  scrollEnabled?: boolean;
+  // Báo vị trí cuộn ra ngoài (ví dụ tấm Hàng đợi cần biết danh sách đã ở trên cùng chưa)
+  scrollYOut?: SharedValue<number>;
+  // Báo ra ngoài: đang nhấc một ô lên để đổi thứ tự (tấm Hàng đợi khi đó phải đứng yên)
+  reorderingOut?: SharedValue<boolean>;
+  // Cử chỉ cuộn gốc của danh sách (tạo ở ngoài bằng useNativeGesture), để cử chỉ khác (kéo tấm Hàng đợi)
+  // chạy song song với việc cuộn thay vì bị việc cuộn giành mất
+  nativeGesture?: ReturnType<typeof useNativeGesture>;
 }
 
-export function ReorderableScrollView({ children, contentContainerStyle, style }: Props) {
+export function ReorderableScrollView({ children, contentContainerStyle, style, scrollEnabled: allowScroll = true, scrollYOut, reorderingOut, nativeGesture }: Props) {
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
-  const { height: winHeight } = useWindowDimensions();
+  const { height: winHeight } = useScreenSize();
   const [scrollEnabled, setScrollEnabled] = useState(true);
 
   const candidateId = useSharedValue(-1);
@@ -83,12 +93,20 @@ export function ReorderableScrollView({ children, contentContainerStyle, style }
   const flingY = useSharedValue(0);
   const flinging = useSharedValue(false);
 
+  useAnimatedReaction(
+    () => trackedId.value >= 0,
+    (v) => {
+      if (reorderingOut) reorderingOut.value = v;
+    }
+  );
+
   useEffect(() => {
     winH.value = winHeight;
   }, [winHeight, winH]);
 
   // Chỉ lấy vị trí cuộn từ sự kiện native khi không kéo và không đang trôi theo quán tính
   const onScroll = useAnimatedScrollHandler((e) => {
+    if (scrollYOut) scrollYOut.value = e.contentOffset.y;
     if (trackedId.value >= 0 || flinging.value) return;
     scrollY.value = e.contentOffset.y;
   });
@@ -226,6 +244,9 @@ export function ReorderableScrollView({ children, contentContainerStyle, style }
     scrollTo(scrollRef, 0, next, false);
   });
 
+  const ownNative = useNativeGesture({ delaysChildPressedState: false });
+  const combined = useSimultaneousGestures(manual, nativeGesture ?? ownNative);
+
   const ctx = useMemo<ReorderContextValue>(
     () => ({ manual, candidateId, trackedId, cancelled, fingerX, fingerY, scrollY }),
     [manual, candidateId, trackedId, cancelled, fingerX, fingerY, scrollY]
@@ -233,11 +254,11 @@ export function ReorderableScrollView({ children, contentContainerStyle, style }
 
   return (
     <ReorderContext.Provider value={ctx}>
-      <GestureDetector gesture={manual}>
+      <GestureDetector gesture={nativeGesture ? combined : manual}>
         <Animated.ScrollView
           ref={scrollRef}
           style={style}
-          scrollEnabled={scrollEnabled}
+          scrollEnabled={scrollEnabled && allowScroll}
           onScroll={onScroll}
           scrollEventThrottle={16}
           bounces={false}

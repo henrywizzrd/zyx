@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AppState, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { AppState, StyleSheet, View } from 'react-native';
 import { Canvas, Group, Path, Picture, Skia, useClock } from '@shopify/react-native-skia';
 import { useDerivedValue } from 'react-native-reanimated';
 import { useTheme } from '../ThemeProvider';
@@ -7,6 +7,7 @@ import { drawFlake, FLAKE_SVGS } from './snowflakes';
 import { drawLeaf, LEAF_COLORS, LEAF_SVGS, makeLeafPaths } from './leaves';
 import { BEAN_COLORS, BEAN_SVG, BEANS } from './beans';
 import { drawBubble, drawFish, FISH_BODY, FISH_COLORS, FISH_FIN, FISH_TAIL } from './ocean';
+import { useScreenSize } from '../../components/ScreenSize';
 
 // Hiệu ứng rơi nhẹ liên tục phía sau nội dung (bật/tắt trong trang Giao diện):
 //  - bộ Snow: bông tuyết
@@ -52,7 +53,7 @@ function Layer({ picture }: { picture: ReturnType<typeof useDerivedValue<import(
 }
 
 function SnowCanvas({ color }: { color: string }) {
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useScreenSize();
   const clock = useClock();
   const flakeSvgs = FLAKE_SVGS;
   // Mỗi bông 8 số: x, y ban đầu, tốc độ rơi (px/giây), bán kính, độ lắc, tần số lắc, độ đậm, tốc độ xoay.
@@ -99,7 +100,7 @@ function SnowCanvas({ color }: { color: string }) {
 }
 
 function LeafCanvas() {
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useScreenSize();
   const clock = useClock();
   const leafSvgs = LEAF_SVGS;
   const colors = LEAF_COLORS;
@@ -150,7 +151,7 @@ function LeafCanvas() {
 // Bộ Ocean: hai cột bong bóng oxy sủi lên từ hai bên đáy (như máy sục khí trong bể cá),
 // vài bong bóng lẻ nổi chậm, và vài chú cá bơi ngang qua lại, vẫy đuôi, lên xuống nhẹ
 function OceanCanvas({ onMedia }: { onMedia: boolean }) {
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useScreenSize();
   const clock = useClock();
   const bubbleColor = onMedia ? '#FFFFFF' : '#5B8FC9';
   const fishColors = FISH_COLORS;
@@ -236,7 +237,7 @@ function OceanCanvas({ onMedia }: { onMedia: boolean }) {
 
 // Bộ Latte: hạt cà phê đứng yên quanh mép màn hình. Không có đồng hồ chạy nên chỉ vẽ một lần
 function CoffeeBeans() {
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useScreenSize();
   const bean = useMemo(() => {
     const p = Skia.Path.MakeFromSVGString(BEAN_SVG);
     return p ? Skia.PathBuilder.MakeFromPath(p).setFillType(1).build() : null; // even-odd: rãnh giữa thành khe rỗng

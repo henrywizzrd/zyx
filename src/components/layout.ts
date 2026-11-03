@@ -1,9 +1,11 @@
-import { useWindowDimensions, ViewStyle } from 'react-native';import { EdgeInsets } from 'react-native-safe-area-context';
+import { ViewStyle } from 'react-native';
+import { EdgeInsets } from 'react-native-safe-area-context';
+import { useScreenSize } from './ScreenSize';
 import { Edge, MiniAnchor, Position, Theme } from '../theme/types';
 
-// Kích thước và vị trí của "khung điện thoại" trong cửa sổ
+// Kích thước và vị trí của "khung điện thoại" trong cửa sổ (đo thật, xem ScreenSize.tsx)
 export function useFrame() {
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useScreenSize();
   return { width, height, left: 0 };
 }
 

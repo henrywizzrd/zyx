@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, GestureResponderEvent, Pressable, ScrollView, StyleSheet, Switch, Text, useColorScheme, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Alert, GestureResponderEvent, Pressable, ScrollView, StyleSheet, Switch, Text, useColorScheme, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { systemPreset, useTheme } from '../theme/ThemeProvider';
 import { useThemeTransition } from '../theme/ThemeTransition';
@@ -11,6 +11,7 @@ import { useNav } from '../nav/Nav';
 import { useAnimatedBack } from '../nav/SwipeBack';
 import { useT } from '../i18n';
 import { copyIntoApp, deleteAppFile } from '../data/files';
+import { useScreenSize } from '../components/ScreenSize';
 
 const PAD = 16;
 const GAP = 12;
@@ -110,7 +111,7 @@ export function ThemeStudioScreen() {
   const scheme = useColorScheme();
   const t = useT();
   const pad = useContentInsets();
-  const { width } = useWindowDimensions();
+  const { width } = useScreenSize();
   const { pop } = useNav();
   const goBack = useAnimatedBack() ?? pop;
   const [picking, setPicking] = useState<BackgroundType | null>(null);

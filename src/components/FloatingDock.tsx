@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { GlassFill } from './Glass';
 import { useT } from '../i18n';
-import { usePlayer, ViewRef } from '../player/PlayerProvider';
+import { usePlayerPick, ViewRef } from '../player/PlayerProvider';
 import { TabId } from '../theme/types';
 import { useDraggable } from './useDraggable';
 import {
@@ -60,7 +60,7 @@ function PlayerItem({
   onDetach: (origin: Origin | null) => void;
 }) {
   const { theme } = useTheme();
-  const { track } = usePlayer();
+  const { track } = usePlayerPick('track');
   const appear = useRef(new Animated.Value(0)).current;
   const ref = useRef<ViewRef>(null);
 
@@ -113,7 +113,7 @@ function PlayerItem({
 export function FloatingDock({ active, onChange, hidden = false }: { active: TabId; onChange: (t: TabId) => void; hidden?: boolean }) {
   const { theme, setMerged } = useTheme();
   const t = useT();
-  const { dockRef, setEmergeFrom } = usePlayer();
+  const { dockRef, setEmergeFrom } = usePlayerPick('dockRef', 'setEmergeFrom');
   const insets = useSafeAreaInsets();
   const d = useDraggable('dock');
   const { dockStyle } = computeLayout(theme, insets);

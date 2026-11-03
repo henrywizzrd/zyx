@@ -1,9 +1,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, Image, Platform, StyleSheet, View } from 'react-native';
 import { Easing as REasing, runOnJS, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useTheme } from './ThemeProvider';
 import type { ThemePresetId } from './presets';
 import type { ThemeEffect } from './effects/EffectOverlay';
+import { useScreenSize } from '../components/ScreenSize';
 
 const USE_NATIVE = Platform.OS !== 'web';
 const FADE_MS = 650;
@@ -62,7 +63,7 @@ async function loadSkiaImage(uri: string) {
 
 export function ThemeTransition({ children }: { children: React.ReactNode }) {
   const { theme, setPreset } = useTheme();
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useScreenSize();
   const root = useRef<React.ElementRef<typeof View>>(null);
   const [shot, setShot] = useState<Shot | null>(null);
   const [holdImage, setHoldImage] = useState(true); // ảnh chụp kiểu thường che màn hình trong lúc chờ đổi theme

@@ -54,6 +54,9 @@ interface Props<T extends { id: string }> {
   gapY: number;
   renderItem: (item: T) => React.ReactNode;
   onReorder: (ids: string[]) => void;
+  // Chiều cao dự đoán của mỗi ô (khi các ô cao bằng nhau): có số này thì hiện danh sách ngay từ khung hình đầu,
+  // không phải ẩn đi chờ đo xong rồi mới hiện (đỡ cảm giác "nháy")
+  estimatedHeight?: number;
 }
 
 interface CellProps {
@@ -148,6 +151,7 @@ export function Reorderable<T extends { id: string }>({
   gapY,
   renderItem,
   onReorder,
+  estimatedHeight,
 }: Props<T>) {
   const { theme } = useTheme();
   const { candidateId, trackedId, cancelled, fingerX, fingerY, scrollY } = useReorderContext();
@@ -160,13 +164,13 @@ export function Reorderable<T extends { id: string }>({
 
   // ----- Đo chiều cao thật của từng ô (phụ thuộc cỡ chữ, kiểu hiển thị...) -----
   const heights = useRef<Record<string, number>>({});
-  const lastH = useRef(0); // dùng tạm cho ô mới chưa đo
+  const lastH = useRef(estimatedHeight ?? 0); // dùng tạm cho ô mới chưa đo
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [version, setVersion] = useState(0);
-  const [ready, setReady] = useState(false); // ẩn danh sách tới khi đo xong lần đầu
+  const [ready, setReady] = useState(!!estimatedHeight); // ẩn danh sách tới khi đo xong lần đầu
 
   const heightsSV = useSharedValue<Record<string, number>>({});
-  const fallbackH = useSharedValue(0);
+  const fallbackH = useSharedValue(estimatedHeight ?? 0);
   const geomSV = useSharedValue<Geometry>(geom);
   const hypOrder = useSharedValue<string[]>(ids);
   const animate = useSharedValue(false);

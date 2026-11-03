@@ -1,18 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, PixelRatio, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, PixelRatio, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
-import { usePlayer } from '../player/PlayerProvider';
+import { usePlayerPick } from '../player/PlayerProvider';
 import { useContentInsets } from '../components/FloatingDock';
 import { SmartImage } from '../components/Cover';
 import { useSongMenu } from '../components/useSongMenu';
 import { ArtistPage as ArtistNavPage, useNav } from '../nav/Nav';
-import { useAnimatedBack } from '../nav/SwipeBack';
+import { useAnimatedBack, useEntered } from '../nav/SwipeBack';
 import { useT } from '../i18n';
 import { musicSupported, toTrack, ytmusic } from '../music/lazy';
 import type { ArtistPage, Card } from '../music/ytmusic';
 import { isSaved, PlayContext, setSaved, useDbVersion } from '../data/db';
+import { useScreenSize } from '../components/ScreenSize';
 
 const PAD = 16;
 const HERO_H = 340;
@@ -27,10 +28,12 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
   const { theme } = useTheme();
   const t = useT();
   const pad = useContentInsets();
-  const { width } = useWindowDimensions();
+  const { width } = useScreenSize();
   const { push, pop } = useNav();
   const goBack = useAnimatedBack() ?? pop;
-  const { track, playTrack, shuffle, toggleShuffle } = usePlayer();
+  // Trượt vào xong mới dựng các kệ album / video (nhiều ảnh) để hiệu ứng mở trang không bị khựng
+  const entered = useEntered();
+  const { track, playTrack, shuffle, toggleShuffle } = usePlayerPick('track', 'playTrack', 'shuffle', 'toggleShuffle');
   const songMenu = useSongMenu();
   const dbv = useDbVersion();
   const { text, textSecondary, accent, onAccent, surface, border } = theme.colors;
@@ -149,7 +152,7 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
         </View>
 
         {/* Album, Đĩa đơn, Video, Nghệ sĩ tương tự... */}
-        {(data?.shelves ?? []).map((shelf, si) => (
+        {(entered ? data?.shelves ?? [] : []).map((shelf, si) => (
           <View key={`${si}:${shelf.title}`}>
             <Text style={[styles.section, { color: text, paddingHorizontal: PAD }]}>{shelf.title}</Text>
             <ScrollView horizontal bounces={false} overScrollMode="never" showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingHorizontal: PAD }}>

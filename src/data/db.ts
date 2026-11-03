@@ -67,6 +67,7 @@ function open(): DB | null {
       PRIMARY KEY (playlist_id, position)
     );
     CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, at INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS downloads (track_id TEXT PRIMARY KEY, file TEXT NOT NULL, downloaded_at INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS saved (
       kind TEXT NOT NULL, id TEXT NOT NULL, title TEXT NOT NULL, subtitle TEXT NOT NULL DEFAULT '',
       thumb TEXT, saved_at INTEGER NOT NULL, PRIMARY KEY (kind, id)
@@ -270,6 +271,25 @@ export function addToPlaylist(id: string, t: Track) {
       d.runSync('UPDATE playlists SET updated_at = ? WHERE id = ?', [Date.now(), id]);
     })
   );
+  changed();
+}
+
+// Playlist này đã có bài này chưa (để hiện dấu tích trong bảng "Thêm vào playlist")
+export function playlistHas(id: string, trackId: string): boolean {
+  return safe(false, (d) => !!d.getFirstSync('SELECT 1 FROM playlist_tracks WHERE playlist_id = ? AND track_id = ? LIMIT 1', [id, trackId]));
+}
+
+// ---------------- Bài đã tải về máy ----------------
+export function getDownloads(): Map<string, string> {
+  return safe(new Map(), (d) => new Map(d.getAllSync<{ track_id: string; file: string }>('SELECT track_id, file FROM downloads').map((r) => [r.track_id, r.file])));
+}
+export function setDownload(t: Track, file: string | null) {
+  safe(undefined, (d) => {
+    if (file) {
+      saveTrack(d, t);
+      d.runSync('INSERT OR REPLACE INTO downloads (track_id, file, downloaded_at) VALUES (?, ?, ?)', [t.id, file, Date.now()]);
+    } else d.runSync('DELETE FROM downloads WHERE track_id = ?', [t.id]);
+  });
   changed();
 }
 
