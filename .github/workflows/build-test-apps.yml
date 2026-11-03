@@ -78,3 +78,28 @@ jobs:
         with:
           name: Zyx-ios
           path: Zyx-unsigned.ipa
+
+  # Gom 2 file vào một bản Release (trang chính repo -> Releases ở cột phải): tải thẳng, không bị nén zip
+  release:
+    needs: [android, ios]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          path: out
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: test-build-${{ github.run_number }}
+          name: Zyx test build ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          body: |
+            Bản build thử nghiệm từ nhánh `${{ github.ref_name }}` (commit ${{ github.sha }}).
+            - Android: tải `Zyx.apk` rồi cài thẳng lên máy.
+            - iPhone: tải `Zyx-unsigned.ipa`, ký và cài bằng Sideloadly (Apple ID miễn phí: dùng được 7 ngày).
+          files: |
+            out/Zyx.apk
+            out/Zyx-unsigned.ipa

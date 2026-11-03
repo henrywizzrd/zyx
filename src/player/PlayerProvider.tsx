@@ -170,6 +170,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const p = audio().getPlayer();
       p.replace({ uri, name: t.title });
       p.play();
+      // Màn hình khoá / thanh thông báo (Android: cần cái này để nhạc chạy nền lâu dài)
+      audio().showNowPlaying({ title: t.title, artist: t.artist, artworkUrl: t.thumb });
       // Ghi lịch sử nghe (thêm đủ thông tin bài để Home dựng Recent / Recommend)
       recordPlay({ ...t, duration: t.duration }, t.ctx);
     } catch (e) {
