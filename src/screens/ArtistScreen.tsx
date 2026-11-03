@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, PixelRatio, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, PixelRatio, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
@@ -13,6 +13,7 @@ import { useT } from '../i18n';
 import { musicSupported, toTrack, ytmusic } from '../music/lazy';
 import type { ArtistPage, Card } from '../music/ytmusic';
 import { isSaved, PlayContext, setSaved, useDbVersion } from '../data/db';
+import { useScreenSize } from '../components/ScreenSize';
 
 const PAD = 16;
 const HERO_H = 340;
@@ -27,7 +28,7 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
   const { theme } = useTheme();
   const t = useT();
   const pad = useContentInsets();
-  const { width } = useWindowDimensions();
+  const { width } = useScreenSize();
   const { push, pop } = useNav();
   const goBack = useAnimatedBack() ?? pop;
   // Trượt vào xong mới dựng các kệ album / video (nhiều ảnh) để hiệu ứng mở trang không bị khựng

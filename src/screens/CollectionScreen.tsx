@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, PixelRatio, Pressable, Share, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, PixelRatio, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
@@ -18,6 +18,7 @@ import {
   deletePlaylist, getLikedTracks, getPlaylist, getPlaylistTracks, isSaved, PlayContext, removeFromPlaylist,
   renamePlaylist, setPlaylistPublic, setSaved, useDbVersion,
 } from '../data/db';
+import { useScreenSize } from '../components/ScreenSize';
 
 type Row = Track & { position?: number };
 type Info = { title: string; subtitle: string; thumb?: string; owner?: Collection['owner'] };
@@ -37,7 +38,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
   const { theme } = useTheme();
   const t = useT();
   const pad = useContentInsets();
-  const { width } = useWindowDimensions();
+  const { width } = useScreenSize();
   const { push, pop } = useNav();
   const goBack = useAnimatedBack() ?? pop; // trượt ra rồi mới đóng
   // Trượt vào xong mới dựng hết danh sách (trước đó chỉ vài bài đầu) để hiệu ứng mở trang không bị khựng

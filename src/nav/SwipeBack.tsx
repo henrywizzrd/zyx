@@ -1,10 +1,11 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, SharedValue, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useTheme } from '../theme/ThemeProvider';
+import { useScreenSize } from '../components/ScreenSize';
 
 const EDGE = 28; // ngón tay đặt cách cạnh trái bao nhiêu px thì tính là vuốt để quay lại
 const SHADOW_W = 22; // bóng mềm ở mép trái trang
@@ -30,7 +31,7 @@ export const useEntered = () => useContext(EnteredContext);
 // Toàn bộ chuyển động và cử chỉ chạy trên UI thread (Reanimated + Gesture Handler): luồng JS có bận dựng trang
 // thì hiệu ứng vẫn mượt. (Trước đây chạy bằng luồng JS nên mở trang nặng là khựng.)
 export function SwipeBack({ onBack, fade, children }: { onBack: () => void; fade?: SharedValue<number>; children: React.ReactNode }) {
-  const { width } = useWindowDimensions();
+  const { width } = useScreenSize();
   const { theme } = useTheme();
   const w = useSharedValue(width);
   useEffect(() => {

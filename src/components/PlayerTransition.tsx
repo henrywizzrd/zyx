@@ -1,8 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, PanResponder, PanResponderInstance, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Image, PanResponder, PanResponderInstance, StyleSheet, View } from 'react-native';
 import Animated, { Easing, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { usePlayerPick } from '../player/PlayerProvider';
 import { SmartImage } from './Cover';
+import { useScreenSize } from './ScreenSize';
 
 export type Rect = { x: number; y: number; w: number; h: number; r: number };
 
@@ -32,7 +33,7 @@ const SPRING = { damping: 24, stiffness: 210, mass: 1 };
 // Cả màn player được thu nhỏ đồng đều bên trong ô đó (không bị méo), ô chỉ cắt phần thừa ở dưới.
 // Lúc đầu ô hiện ảnh album, ảnh mờ dần để lộ màn player; đóng thì chạy ngược lại.
 export function PlayerTransition({ open, onClose, onClosed, children }: { open: boolean; onClose: () => void; onClosed?: () => void; children: React.ReactNode }) {
-  const { width: W, height: H } = useWindowDimensions();
+  const { width: W, height: H } = useScreenSize();
   const { track } = usePlayerPick('track');
   const [mounted, setMountedState] = useState(open);
   const mountedRef = useRef(open);

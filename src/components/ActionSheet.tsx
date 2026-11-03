@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator, Animated as RNAnimated, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Share,
-  StyleSheet, Text, TextInput, useWindowDimensions, View,
+  StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -17,6 +17,7 @@ import { useNav } from '../nav/Nav';
 import { addToPlaylist, createPlaylist, getPlaylists, playlistHas, useDbVersion } from '../data/db';
 import { download, removeDownload, useDownloads } from '../data/downloads';
 import { musicSupported, ytmusic } from '../music/lazy';
+import { useScreenSize } from './ScreenSize';
 
 // Bảng thao tác của app (thay cho action sheet / hộp thoại của iOS):
 //  - nút ... của bài hát: chia sẻ, thêm vào Thư viện, thêm vào playlist, phát tiếp, thêm vào hàng chờ, tải về, xem nghệ sĩ
@@ -67,7 +68,7 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
   const { theme } = useTheme();
   const t = useT();
   const insets = useSafeAreaInsets();
-  const { height: winH } = useWindowDimensions();
+  const { height: winH } = useScreenSize();
   const { liked, toggleLike, playNext, addToQueue } = usePlayerPick('liked', 'toggleLike', 'playNext', 'addToQueue');
   const { push } = useNav();
   const dlState = useDownloads();

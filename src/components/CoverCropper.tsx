@@ -1,8 +1,9 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Image, Modal, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Animated, Image, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { useT } from '../i18n';
+import { useScreenSize } from './ScreenSize';
 
 export type CropRect = { originX: number; originY: number; width: number; height: number };
 
@@ -32,7 +33,7 @@ export function CoverCropper({
   const { theme } = useTheme();
   const t = useT();
   const insets = useSafeAreaInsets();
-  const win = useWindowDimensions();
+  const win = useScreenSize();
   const [busy, setBusy] = useState(false);
 
   const fw = win.width - SIDE * 2;

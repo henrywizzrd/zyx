@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { ActivityIndicator, Animated, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ScreenSizeProvider } from './src/components/ScreenSize';
 import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
 import { PlayerProvider } from './src/player/PlayerProvider';
 import { FloatingDock, useContentInsets } from './src/components/FloatingDock';
@@ -299,6 +300,7 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
+        <ScreenSizeProvider>
         <ThemeProvider>
           <PlayerProvider>
             <NavProvider>
@@ -311,6 +313,7 @@ export default function App() {
             </NavProvider>
           </PlayerProvider>
         </ThemeProvider>
+        </ScreenSizeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

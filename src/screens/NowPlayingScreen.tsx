@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Platform, Pressable, StatusBar, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +19,7 @@ import RNMaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import RAnimated, { Easing as REasing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
+import { useScreenSize } from '../components/ScreenSize';
 
 // Kiểu khai báo của thư viện chưa khớp React 19, ép kiểu để dùng như component bình thường
 const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
@@ -121,7 +122,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const [queueOpen, setQueueOpen] = useState(false);
 
   // Màn hình ngang: bấm nút điện thoại để xoay. Rời player thì luôn quay về dọc.
-  const win = useWindowDimensions();
+  const win = useScreenSize();
   const landscape = win.width > win.height;
   const insets = useSafeAreaInsets();
   const [landLyrics, setLandLyrics] = useState(true); // ở chế độ ngang, lời hiện mặc định

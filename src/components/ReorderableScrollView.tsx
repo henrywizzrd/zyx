@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { StyleProp, useWindowDimensions, ViewStyle } from 'react-native';
+import { StyleProp, ViewStyle } from 'react-native';
 import { GestureDetector, useManualGesture, useNativeGesture, useSimultaneousGestures } from 'react-native-gesture-handler';
 import Animated, {
   cancelAnimation,
@@ -13,6 +13,7 @@ import Animated, {
   withDecay,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
+import { useScreenSize } from './ScreenSize';
 
 // ScrollView hỗ trợ kéo thả đa ngón:
 //  - Ngón thứ nhất (giữ lâu trên một ô) giữ thẻ đang kéo.
@@ -71,7 +72,7 @@ interface Props {
 
 export function ReorderableScrollView({ children, contentContainerStyle, style, scrollEnabled: allowScroll = true, scrollYOut, reorderingOut, nativeGesture }: Props) {
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
-  const { height: winHeight } = useWindowDimensions();
+  const { height: winHeight } = useScreenSize();
   const [scrollEnabled, setScrollEnabled] = useState(true);
 
   const candidateId = useSharedValue(-1);
