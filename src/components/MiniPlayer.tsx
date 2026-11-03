@@ -125,6 +125,10 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
     d.scale.stopAnimation();
     d.opacity.stopAnimation();
     d.pan.setValue({ x: 0, y: 0 });
+    // Lúc bấm mở player, hiệu ứng lún (0.9) bị ngắt giữa chừng vì bong bóng ẩn đi ngay => hiện lại phải về đúng cỡ,
+    // nếu không player thu về đúng 60pt rồi bong bóng lại hiện ở 54pt (trông như giật nhỏ lại)
+    press.stopAnimation();
+    press.setValue(1);
 
     if (!origin) {
       d.scale.setValue(1);
@@ -159,9 +163,7 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
         <Animated.View {...d.panHandlers} style={{ width: S, height: S, transform: [{ translateX: d.pan.x }, { translateY: d.pan.y }] }}>
           <Animated.View
             style={[
-              styles.bubble,
               { width: S, height: S, borderRadius: bubbleRadius, opacity: d.opacity, transform: [{ scale: d.scale }] },
-              d.active || d.merging ? styles.lifted : null,
             ]}
           >
             <Pressable
@@ -188,7 +190,5 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
 
 const styles = StyleSheet.create({
   layer: { position: 'absolute' },
-  // Bóng đổ mềm cho bong bóng nổi lên khỏi nội dung (không viền)
-  bubble: { shadowColor: '#000', shadowOpacity: 0.28, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, elevation: 8 },
-  lifted: { shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 14 },
+  // Bong bóng không đổ bóng (trông tự nhiên hơn); lúc giữ để kéo thì chỉ phóng to nhẹ (1.08)
 });

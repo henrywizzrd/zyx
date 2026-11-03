@@ -45,12 +45,23 @@ export function PlayerTransition({ open, onClose, onClosed, children }: { open: 
   // Chỉ gỡ player ra khỏi màn hình nếu lúc animation đóng xong nó vẫn đang ở trạng thái đóng
   const onClosedRef = useRef(onClosed);
   onClosedRef.current = onClosed;
+  // Thu về xong (ảnh album bay đã nằm đúng chỗ, đúng cỡ, đúng bo góc của bong bóng):
+  //  1. báo App hiện lại bong bóng thật, nằm NGAY BÊN DƯỚI ảnh album bay (hai cái trùng khít nhau)
+  //  2. đợi vài khung hình cho bong bóng thật vẽ xong rồi mới gỡ ảnh bay đi
+  // → mắt chỉ thấy một hình duy nhất thu nhỏ liền một mạch rồi đứng yên.
+  // (Trước đây bong bóng được cho hiện sớm khi ảnh bay còn to hơn → thấy bong bóng mọc ra trước, lệch chỗ)
+  const unmountTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finishClose = useCallback(() => {
-    if (openRef.current || !mountedRef.current) return;
-    setMounted(false);
-    // Báo cho App: player đã thu hẳn về bong bóng → lúc này mới hiện lại bong bóng (không thấy hai ảnh cùng lúc)
+    if (openRef.current || !mountedRef.current || unmountTimer.current) return;
     onClosedRef.current?.();
+    unmountTimer.current = setTimeout(() => {
+      unmountTimer.current = null;
+      if (!openRef.current) setMounted(false);
+    }, 80);
   }, [setMounted]);
+  useEffect(() => () => {
+    if (unmountTimer.current) clearTimeout(unmountTimer.current);
+  }, []);
 
   const p = useSharedValue(open ? 1 : 0); // 0 = mini player, 1 = player đầy đủ
   const ox = useSharedValue(0), oy = useSharedValue(0), ow = useSharedValue(1), oh = useSharedValue(1), or = useSharedValue(0);
@@ -69,6 +80,11 @@ export function PlayerTransition({ open, onClose, onClosed, children }: { open: 
 
   useEffect(() => {
     if (open) {
+      // Đang chờ gỡ ảnh bay mà lại mở tiếp: huỷ việc gỡ, player vẫn còn nguyên trên màn hình
+      if (unmountTimer.current) {
+        clearTimeout(unmountTimer.current);
+        unmountTimer.current = null;
+      }
       if (!mountedRef.current) {
         const o = playerOrigin.current ?? { x: W / 2 - 24, y: H - 120, w: 48, h: 48, r: 24 };
         ox.value = o.x; oy.value = o.y; ow.value = o.w; oh.value = o.h; or.value = o.r;
@@ -86,7 +102,9 @@ export function PlayerTransition({ open, onClose, onClosed, children }: { open: 
     } else if (mountedRef.current) {
       setMoving(true);
       // Thu nhỏ ngay lập tức (không đợi đo vị trí mini player): luồng JS có bận thì hiệu ứng vẫn chạy trên UI thread
-      p.value = withTiming(0, { duration: 340, easing: Easing.bezier(0.32, 0.72, 0, 1) }, (done) => {
+      // Đường cong đi tới đích dứt khoát (không bò chậm ở cuối): trước đây đoạn cuối kéo dài, ảnh album còn to hơn
+      // bong bóng một chút rồi mới "bụp" thành bong bóng
+      p.value = withTiming(0, { duration: 360, easing: Easing.bezier(0.3, 0, 0.15, 1) }, (done) => {
         if (done) runOnJS(finishClose)();
       });
       // Thu về đúng chỗ đã mở ra (ảnh album ở mini player lúc bấm mở). KHÔNG đo lại lúc đóng: lúc đó mini player
@@ -124,6 +142,19 @@ export function PlayerTransition({ open, onClose, onClosed, children }: { open: 
     [] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
+  // Bo góc (theo điểm ảnh thật trên màn hình) ở mỗi thời điểm.
+  // Bong bóng tròn: lúc gần về bong bóng thì bo góc = nửa cạnh ảnh đang bay (luôn là hình tròn), xa dần thì chuyển
+  // về bo góc thường. Không làm vậy thì ảnh bay trông như ô vuông bo góc, tới cuối mới "bụp" thành hình tròn
+  const radiusAt = (pv: number) => {
+    'worklet';
+    const base = interpolate(pv, [0, 0.97, 1], [or.value, 48, 0], 'clamp');
+    const round = or.value >= ow.value / 2 - 0.5;
+    if (!round) return base;
+    const size = interpolate(pv, [0, 1], [ow.value, W]); // cạnh ảnh album đang bay
+    const t = interpolate(pv, [0, 0.35], [0, 1], 'clamp');
+    return (size / 2) * (1 - t) + base * t;
+  };
+
   const ctx = useMemo<Ctx>(() => ({ reportCover, panHandlers: pan.panHandlers, moving, active: mounted }), [reportCover, pan, moving, mounted]);
 
   // Ô cửa sổ: từ khung ảnh album ở mini player lớn dần tới toàn màn hình
@@ -137,7 +168,7 @@ export function PlayerTransition({ open, onClose, onClosed, children }: { open: 
     const sw = interpolate(p.value, [0, 1], [ow.value / W, 1]);
     const sh = interpolate(p.value, [0, 1], [oh.value / H, 1]);
     // Bo góc mong muốn (theo điểm ảnh thật), đổi ra đơn vị của khung trước khi co
-    const r = interpolate(p.value, [0, 0.97, 1], [or.value, 48, 0], 'clamp');
+    const r = radiusAt(p.value);
     return {
       transform: [
         { translateX: interpolate(p.value, [0, 1], [ox.value, 0]) },
@@ -160,9 +191,16 @@ export function PlayerTransition({ open, onClose, onClosed, children }: { open: 
   // Ảnh album (vuông, ở đầu) phủ lên, mờ dần để lộ màn player (đóng lại thì hiện dần trở lại).
   // Nằm ngoài ô cửa sổ và tự co giãn đều (không bị kéo méo), bo góc đúng như ảnh ở mini player:
   // lúc thu về mini player sẽ khớp đúng hình tròn / bo góc, không còn bị vuông vuông rồi mới tròn lại
+  // Bo góc của lớp cắt bên trong ảnh album bay (bằng lớp ngoài)
+  const artClip = useAnimatedStyle(() => {
+    const sw = interpolate(p.value, [0, 1], [ow.value / W, 1]);
+    const r = radiusAt(p.value);
+    return { borderRadius: r / sw };
+  });
+
   const art = useAnimatedStyle(() => {
     const sw = interpolate(p.value, [0, 1], [ow.value / W, 1]);
-    const r = interpolate(p.value, [0, 0.97, 1], [or.value, 48, 0], 'clamp');
+    const r = radiusAt(p.value);
     return {
       opacity: interpolate(p.value, [0.25, 0.6], [1, 0], 'clamp'),
       borderRadius: r / sw,
@@ -190,15 +228,17 @@ export function PlayerTransition({ open, onClose, onClosed, children }: { open: 
           </TransitionContext.Provider>
         </Animated.View>
       </Animated.View>
-      <Animated.View pointerEvents="none" style={[styles.frame, { width: W, height: W }, art]}>
-        {track.thumb ? (
-          <>
-            <Image source={{ uri: track.thumb }} resizeMode="cover" style={StyleSheet.absoluteFill} />
-            <SmartImage url={track.thumb} size={600} style={StyleSheet.absoluteFill} />
-          </>
-        ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: track.color }]} />
-        )}
+      <Animated.View pointerEvents="none" style={[styles.artShadow, { width: W, height: W }, art]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }, artClip]}>
+          {track.thumb ? (
+            <>
+              <Image source={{ uri: track.thumb }} resizeMode="cover" style={StyleSheet.absoluteFill} />
+              <SmartImage url={track.thumb} size={600} style={StyleSheet.absoluteFill} />
+            </>
+          ) : (
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: track.color }]} />
+          )}
+        </Animated.View>
       </Animated.View>
     </View>
   );
@@ -207,4 +247,6 @@ export function PlayerTransition({ open, onClose, onClosed, children }: { open: 
 const styles = StyleSheet.create({
   frame: { position: 'absolute', left: 0, top: 0, overflow: 'hidden', transformOrigin: 'left top' },
   innerFrame: { position: 'absolute', left: 0, top: 0, transformOrigin: 'left top' },
+  // Ảnh album bay: lớp ngoài lo vị trí / co giãn, lớp trong cắt bo góc. Không đổ bóng (giống bong bóng)
+  artShadow: { position: 'absolute', left: 0, top: 0, transformOrigin: 'left top' },
 });

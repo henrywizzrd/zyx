@@ -12,7 +12,10 @@ export function thumbCandidates(url: string, size: number): string[] {
   if (m) {
     const base = m[1].replace('/vi_webp/', '/vi/');
     // hq720 và maxresdefault là ảnh 16:9 không viền đen, cắt vuông vẫn nét. hqdefault luôn có nhưng nhỏ và có viền đen.
-    return size >= 300 ? [`${base}/hq720.jpg`, `${base}/maxresdefault.jpg`, `${base}/hqdefault.jpg`] : [`${base}/hqdefault.jpg`];
+    // Ảnh nhỏ: dùng mqdefault (16:9, không có viền đen) thay vì hqdefault (4:3, có 2 viền đen trên dưới)
+    return size >= 300
+      ? [`${base}/hq720.jpg`, `${base}/maxresdefault.jpg`, `${base}/hqdefault.jpg`]
+      : [`${base}/mqdefault.jpg`, `${base}/hq720.jpg`, `${base}/hqdefault.jpg`];
   }
   // Ảnh YouTube Music có đoạn =w120-h120 (hoặc =s120). Đặt w và h bằng nhau thì server tự cắt giữa thành hình vuông.
   if (/=(w\d+-h\d+|s\d+)/.test(url)) return [url.replace(/=(w\d+-h\d+|s\d+)/, `=w${size}-h${size}`), url];

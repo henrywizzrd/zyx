@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -22,7 +22,8 @@ import { NavProvider, Page, useNav, useNavStack } from './src/nav/Nav';
 import { CollectionScreen } from './src/screens/CollectionScreen';
 import { ArtistScreen } from './src/screens/ArtistScreen';
 import { FadeLayer, SwipeBack } from './src/nav/SwipeBack';
-import { cancelAnimation, makeMutable, SharedValue, useSharedValue } from 'react-native-reanimated';
+import RAnimated, { cancelAnimation, Easing as REasing, makeMutable, SharedValue, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { AppBackground } from './src/components/AppBackground';
 import { AmbientEffect } from './src/components/AmbientLayer';
 import { musicSupported, ytmusic } from './src/music/lazy';
@@ -54,6 +55,92 @@ function pageKey(pg: Page, i: number) {
   if (pg.type === 'artist') return `${i}:artist:${pg.id}`;
   if (pg.type === 'genre') return `${i}:genre:${pg.params}`;
   return `${i}:${pg.type}`;
+}
+
+// ---- Chuyển tab trên dock: trượt nhẹ + mờ (kiểu Android 14 / Material "shared axis")
+// 4 tab coi như nằm thành hàng ngang: Home, Search, Library, Settings.
+//  - sang tab bên phải: tab cũ trượt sang trái ~30px và mờ đi, tab mới từ bên phải 30px trượt vào và hiện dần (và ngược lại)
+//  - nhảy xa (Home → Settings): đi thẳng, chỉ thấy 2 tab, các tab ở giữa vẫn đóng băng
+//  - bấm liên tục: mỗi tab có độ mờ / vị trí riêng, mỗi lần bấm là chạy tiếp từ đúng chỗ đang dở (không giật, không chạy lại từ đầu)
+// Tất cả chạy trên UI thread. Tab ẩn hẳn (mờ xong) thì đóng băng lại như trước.
+type PageTab = Exclude<TabId, 'player'>;
+const TAB_ORDER: PageTab[] = ['home', 'search', 'library', 'settings'];
+const TAB_SHIFT = 30;
+const TAB_IN = { duration: 280, easing: REasing.out(REasing.cubic) };
+const TAB_OUT = { duration: 200, easing: REasing.out(REasing.quad) };
+
+function TabPane({ o, x, visible, active, children }: { o: SharedValue<number>; x: SharedValue<number>; visible: boolean; active: boolean; children: React.ReactNode }) {
+  const style = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateX: x.value }] }));
+  return (
+    <RAnimated.View pointerEvents={active ? 'auto' : 'none'} style={[StyleSheet.absoluteFill, { display: visible ? 'flex' : 'none' }, style]}>
+      {/* Tab đang ẩn: đóng băng, không vẽ lại cho tới khi quay lại tab đó */}
+      <Freeze freeze={!visible}>{children}</Freeze>
+    </RAnimated.View>
+  );
+}
+
+function TabStage({ shown, render }: { shown: PageTab; render: (id: PageTab) => React.ReactNode }) {
+  const sv = {
+    home: { o: useSharedValue(shown === 'home' ? 1 : 0), x: useSharedValue(0) },
+    search: { o: useSharedValue(shown === 'search' ? 1 : 0), x: useSharedValue(0) },
+    library: { o: useSharedValue(shown === 'library' ? 1 : 0), x: useSharedValue(0) },
+    settings: { o: useSharedValue(shown === 'settings' ? 1 : 0), x: useSharedValue(0) },
+  };
+  // Các tab đang hiện trên màn hình (tab đích + các tab đang mờ dần)
+  const [visible, setVisible] = useState<Set<PageTab>>(() => new Set([shown]));
+  const shownRef = useRef(shown);
+  const prev = useRef(shown);
+  const hide = useCallback((id: PageTab) => {
+    if (id === shownRef.current) return;
+    setVisible((v) => {
+      if (!v.has(id)) return v;
+      const n = new Set(v);
+      n.delete(id);
+      return n;
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    shownRef.current = shown;
+    const from = prev.current;
+    prev.current = shown;
+    if (from === shown) return;
+    const dir = Math.sign(TAB_ORDER.indexOf(shown) - TAB_ORDER.indexOf(from)) || 1;
+    // Tab mới: đang ẩn hẳn thì đặt ở bên phía nó đi vào; đang mờ dở thì chạy tiếp từ chỗ đó
+    const t = sv[shown];
+    if (t.o.value < 0.01) t.x.value = dir * TAB_SHIFT;
+    t.o.value = withTiming(1, TAB_IN);
+    t.x.value = withTiming(0, TAB_IN);
+    // Mọi tab khác đang hiện: trượt ra phía ngược lại và mờ đi, mờ xong thì ẩn + đóng băng
+    for (const id of TAB_ORDER) {
+      if (id === shown) continue;
+      const s = sv[id];
+      if (s.o.value < 0.01) continue;
+      s.x.value = withTiming(-dir * TAB_SHIFT, TAB_OUT);
+      s.o.value = withTiming(0, TAB_OUT, (done) => {
+        if (done) scheduleOnRN(hide, id);
+      });
+    }
+    setVisible((v) => {
+      const n = new Set(v);
+      n.add(shown);
+      return n;
+    });
+  }, [shown]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <>
+      {TAB_ORDER.map((id) => {
+        const el = render(id);
+        if (!el) return null;
+        return (
+          <TabPane key={id} o={sv[id].o} x={sv[id].x} visible={visible.has(id)} active={id === shown}>
+            {el}
+          </TabPane>
+        );
+      })}
+    </>
+  );
 }
 
 function Root() {
@@ -106,13 +193,8 @@ function Root() {
   // Trước đây mỗi lần đổi tab là dựng lại cả màn hình (Home, Thư viện...), luồng JS bận một lúc nên bấm dock tiếp bị "đơ"
   const visited = useRef(new Set<TabId>()).current;
   visited.add(shown);
-  const tabLayer = (id: TabId, el: React.ReactNode) =>
-    visited.has(id) ? (
-      <View key={id} pointerEvents={shown === id ? 'auto' : 'none'} style={[StyleSheet.absoluteFill, { display: shown === id ? 'flex' : 'none' }]}>
-        {/* Tab đang ẩn: đóng băng, không vẽ lại cho tới khi quay lại tab đó */}
-        <Freeze freeze={shown !== id}>{el}</Freeze>
-      </View>
-    ) : null;
+  const tabEl = (id: PageTab) =>
+    !visited.has(id) ? null : id === 'home' ? <HomeTab /> : id === 'search' ? <SearchTab /> : id === 'library' ? <LibraryTab /> : <SettingsTab />;
 
   return (
     // Bảng thao tác (nút ... của bài hát / album) nằm trên cùng, kể cả trên Player
@@ -127,10 +209,7 @@ function Root() {
         {/* Tab hiện tại. Có trang mở chồng thì tab mờ dần đi theo vị trí trang (vuốt quay lại thì hiện lại dần),
             để trang trong suốt phía trên chỉ thấy nền chung, không thấy chữ của tab chồng lên */}
         <FadeLayer value={tabFade} pointerEvents={page ? 'none' : 'auto'} style={{ flex: 1 }}>
-          {tabLayer('home', <HomeTab />)}
-          {tabLayer('search', <SearchTab />)}
-          {tabLayer('library', <LibraryTab />)}
-          {tabLayer('settings', <SettingsTab />)}
+          <TabStage shown={shown as PageTab} render={tabEl} />
         </FadeLayer>
         {/* Các trang mở chồng lên tab (playlist, album, nghệ sĩ, thể loại...). Dock và mini player vẫn nằm trên.
             Mọi trang trong chồng đều được giữ lại (không dựng lại khi quay về), nhưng chỉ trang trên cùng hiện rõ:
