@@ -8,7 +8,7 @@ import { useContentInsets } from '../components/FloatingDock';
 import { SmartImage } from '../components/Cover';
 import { useSongMenu } from '../components/useSongMenu';
 import { ArtistPage as ArtistNavPage, useNav } from '../nav/Nav';
-import { useAnimatedBack } from '../nav/SwipeBack';
+import { useAnimatedBack, useEntered } from '../nav/SwipeBack';
 import { useT } from '../i18n';
 import { musicSupported, toTrack, ytmusic } from '../music/lazy';
 import type { ArtistPage, Card } from '../music/ytmusic';
@@ -30,6 +30,8 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
   const { width } = useWindowDimensions();
   const { push, pop } = useNav();
   const goBack = useAnimatedBack() ?? pop;
+  // Trượt vào xong mới dựng các kệ album / video (nhiều ảnh) để hiệu ứng mở trang không bị khựng
+  const entered = useEntered();
   const { track, playTrack, shuffle, toggleShuffle } = usePlayer();
   const songMenu = useSongMenu();
   const dbv = useDbVersion();
@@ -149,7 +151,7 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
         </View>
 
         {/* Album, Đĩa đơn, Video, Nghệ sĩ tương tự... */}
-        {(data?.shelves ?? []).map((shelf, si) => (
+        {(entered ? data?.shelves ?? [] : []).map((shelf, si) => (
           <View key={`${si}:${shelf.title}`}>
             <Text style={[styles.section, { color: text, paddingHorizontal: PAD }]}>{shelf.title}</Text>
             <ScrollView horizontal bounces={false} overScrollMode="never" showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingHorizontal: PAD }}>

@@ -21,7 +21,8 @@ import { PlayerTransition } from './src/components/PlayerTransition';
 import { NavProvider, Page, useNav } from './src/nav/Nav';
 import { CollectionScreen } from './src/screens/CollectionScreen';
 import { ArtistScreen } from './src/screens/ArtistScreen';
-import { SwipeBack } from './src/nav/SwipeBack';
+import { FadeLayer, SwipeBack } from './src/nav/SwipeBack';
+import { cancelAnimation, makeMutable, SharedValue, useSharedValue } from 'react-native-reanimated';
 import { AppBackground } from './src/components/AppBackground';
 import { AmbientEffect } from './src/components/AmbientLayer';
 import { musicSupported, ytmusic } from './src/music/lazy';
@@ -60,17 +61,15 @@ function Root() {
   const [tab, setTab] = useState<TabId>('home');
   const [lastTab, setLastTab] = useState<TabId>('home');
   const nav = useNav();
-  // Độ hiện của tab phía dưới các trang mở chồng (1 = hiện rõ, 0 = ẩn). SwipeBack điều khiển giá trị này.
-  // Chạy bằng luồng JS chứ không phải native driver: giá trị native có thể bị React ghi đè bằng giá trị cũ
-  // mỗi lần app vẽ lại (đổi theme...), làm tab trắng trơn khi quay ra
-  const tabFade = useRef(new Animated.Value(1)).current;
+  // Độ hiện của tab phía dưới các trang mở chồng (1 = hiện rõ, 0 = ẩn). SwipeBack điều khiển giá trị này trên UI thread
+  const tabFade = useSharedValue(1);
   const depth = nav.stack.length;
   // Độ hiện của từng trang trong chồng (trang phía trên điều khiển độ hiện của trang ngay dưới nó)
-  const pageFades = useRef(new Map<string, Animated.Value>()).current;
+  const pageFades = useRef(new Map<string, SharedValue<number>>()).current;
   const fadeOf = (k: string) => {
     let v = pageFades.get(k);
     if (!v) {
-      v = new Animated.Value(1);
+      v = makeMutable(1);
       pageFades.set(k, v);
     }
     return v;
@@ -83,8 +82,8 @@ function Root() {
   useLayoutEffect(() => {
     // Đóng hết trang (đổi tab trên dock, hoặc quay lại tới tab): tab hiện rõ ngay
     if (depth === 0) {
-      tabFade.stopAnimation();
-      tabFade.setValue(1);
+      cancelAnimation(tabFade);
+      tabFade.value = 1;
     }
   }, [depth, tabFade]);
   const go = (t: TabId) => {
@@ -120,15 +119,12 @@ function Root() {
       <View style={{ flex: 1 }}>
         {/* Tab hiện tại. Có trang mở chồng thì tab mờ dần đi theo vị trí trang (vuốt quay lại thì hiện lại dần),
             để trang trong suốt phía trên chỉ thấy nền chung, không thấy chữ của tab chồng lên */}
-        <Animated.View
-          pointerEvents={page ? 'none' : 'auto'}
-          style={{ flex: 1, opacity: tabFade }}
-        >
+        <FadeLayer value={tabFade} pointerEvents={page ? 'none' : 'auto'} style={{ flex: 1 }}>
           {tabLayer('home', <HomeTab />)}
           {tabLayer('search', <SearchTab />)}
           {tabLayer('library', <LibraryTab />)}
           {tabLayer('settings', <SettingsTab />)}
-        </Animated.View>
+        </FadeLayer>
         {/* Các trang mở chồng lên tab (playlist, album, nghệ sĩ, thể loại...). Dock và mini player vẫn nằm trên.
             Mọi trang trong chồng đều được giữ lại (không dựng lại khi quay về), nhưng chỉ trang trên cùng hiện rõ:
             trang bên dưới mờ hẳn đi, và hiện lại dần theo ngón tay khi vuốt trang trên cùng để quay lại.
@@ -137,10 +133,10 @@ function Root() {
           const k = pageKey(pg, i);
           const top = i === nav.stack.length - 1;
           return (
-            <Animated.View key={k} pointerEvents={top ? 'box-none' : 'none'} style={[StyleSheet.absoluteFill, { opacity: fadeOf(k) }]}>
+            <FadeLayer key={k} value={fadeOf(k)} pointerEvents={top ? 'box-none' : 'none'} style={StyleSheet.absoluteFill}>
               {/* Trang nằm sâu hơn trang ngay dưới trang trên cùng thì không nhìn thấy được: đóng băng */}
               <Freeze freeze={i < nav.stack.length - 2}>
-              <SwipeBack onBack={nav.pop} fade={i === 0 ? tabFade : fadeOf(pageKey(nav.stack[i - 1], i - 1))} bottom>
+              <SwipeBack onBack={nav.pop} fade={i === 0 ? tabFade : fadeOf(pageKey(nav.stack[i - 1], i - 1))}>
                 {pg.type === 'collection' ? (
                   <CollectionScreen page={pg} />
                 ) : pg.type === 'artist' ? (
@@ -152,7 +148,7 @@ function Root() {
                 )}
               </SwipeBack>
               </Freeze>
-            </Animated.View>
+            </FadeLayer>
           );
         })}
         <DropPreview />

@@ -10,7 +10,7 @@ import { SheetAction, useActionSheet } from '../components/ActionSheet';
 import { SmartImage } from '../components/Cover';
 import { CollectionPage, useNav } from '../nav/Nav';
 import { Translate, useT } from '../i18n';
-import { useAnimatedBack } from '../nav/SwipeBack';
+import { useAnimatedBack, useEntered } from '../nav/SwipeBack';
 import type { Track } from '../data/mock';
 import type { Collection } from '../music/ytmusic';
 import { musicSupported, toTrack, ytmusic } from '../music/lazy';
@@ -40,6 +40,8 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
   const { width } = useWindowDimensions();
   const { push, pop } = useNav();
   const goBack = useAnimatedBack() ?? pop; // trượt ra rồi mới đóng
+  // Trượt vào xong mới dựng hết danh sách (trước đó chỉ vài bài đầu) để hiệu ứng mở trang không bị khựng
+  const entered = useEntered();
   const { track, playTrack, shuffle, toggleShuffle, liked, addToQueue } = usePlayer();
   const songMenu = useSongMenu();
   const sheet = useActionSheet();
@@ -278,7 +280,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
   return (
     <View style={StyleSheet.absoluteFill}>
       <FlatList
-        data={rows}
+        data={entered ? rows : rows.slice(0, 6)}
         keyExtractor={(r, i) => `${r.id}:${r.position ?? i}`}
         ListHeaderComponent={Header}
         ListFooterComponent={Footer}

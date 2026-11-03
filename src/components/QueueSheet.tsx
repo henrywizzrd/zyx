@@ -3,7 +3,7 @@ import { ActivityIndicator, Platform, Pressable, StyleSheet, Switch, Text, View 
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GestureDetector, GestureStateManager, usePanGesture } from 'react-native-gesture-handler';
+import { GestureDetector, GestureStateManager, useNativeGesture, usePanGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useTheme } from '../theme/ThemeProvider';
@@ -55,7 +55,7 @@ export function QueueSheet({ visible, onClose }: { visible: boolean; onClose: ()
     const id = setTimeout(() => setArmed(true), 900);
     return () => clearTimeout(id);
   }, [visible]);
-  // Lớp kính mờ chỉ có khi tấm đang mở (để ẩn dưới đáy vẫn tốn máy, nhất là lúc player phóng to / thu nhỏ)
+  // Tấm đang mở (hoặc đang trượt): danh sách chờ chỉ cập nhật khi tấm mở
   const [glass, setGlass] = useState(visible);
 
   useEffect(() => {
@@ -125,8 +125,12 @@ export function QueueSheet({ visible, onClose }: { visible: boolean; onClose: ()
   const sx = useSharedValue(0);
   const sy = useSharedValue(0);
   const reordering = useSharedValue(false);
+  // Cử chỉ cuộn của danh sách: cho chạy song song với việc kéo tấm. Trước đây việc cuộn (của iOS) hay giành mất cử chỉ
+  // khi đang mở hết mà vuốt xuống ở đầu danh sách → tấm không chịu đi xuống
+  const listNative = useNativeGesture({ delaysChildPressedState: false });
   const bodyPan = usePanGesture({
     manualActivation: true,
+    simultaneousWith: listNative,
     onTouchesDown: (e) => {
       const tt = e.changedTouches[0];
       if (!tt) return;
@@ -193,7 +197,7 @@ export function QueueSheet({ visible, onClose }: { visible: boolean; onClose: ()
       <GestureDetector gesture={bodyPan}>
       <Animated.View style={[styles.sheet, { height: sheetH, width: Math.min(box.width, 520) }, sheetStyle]}>
         {/* Kính trong suốt, mờ nhẹ phần player phía sau */}
-        {!glass ? null : Platform.OS === 'ios' ? (
+        {Platform.OS === 'ios' ? (
           <>
             <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} />
             <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(20,20,20,0.32)' }]} />
@@ -214,7 +218,7 @@ export function QueueSheet({ visible, onClose }: { visible: boolean; onClose: ()
         </View>
         </GestureDetector>
 
-        <ReorderableScrollView scrollEnabled={full} scrollYOut={listY} reorderingOut={reordering} contentContainerStyle={{ paddingHorizontal: PAD, paddingBottom: insets.bottom + 32 }}>
+        <ReorderableScrollView scrollEnabled={full} scrollYOut={listY} reorderingOut={reordering} nativeGesture={listNative} contentContainerStyle={{ paddingHorizontal: PAD, paddingBottom: insets.bottom + 32 }}>
           <Text style={styles.section}>{t('queue.nowPlaying')}</Text>
           {current ? row(current, true) : <Text style={{ color: SOFT }}>{t('queue.nothing')}</Text>}
 
@@ -224,7 +228,9 @@ export function QueueSheet({ visible, onClose }: { visible: boolean; onClose: ()
               {t(autoplay ? 'queue.endAuto' : 'queue.end')}
             </Text>
           )}
-          {glass && listW > 0 && upNext.length > 0 && (
+          {/* Danh sách dựng sẵn từ trước (lúc tấm còn ẩn) và luôn giữ nguyên: mở tấm chỉ việc trượt lên,
+              không phải dựng hay hiện lại danh sách giữa lúc đang trượt → hết giật */}
+          {listW > 0 && upNext.length > 0 && (
             <Reorderable
               key={`${Math.round(listW)}`}
               data={upNext}

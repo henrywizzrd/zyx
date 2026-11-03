@@ -8,7 +8,7 @@ import { useContentInsets } from '../components/FloatingDock';
 import { SmartImage } from '../components/Cover';
 import { useActionSheet } from '../components/ActionSheet';
 import { GenrePage, useNav } from '../nav/Nav';
-import { useAnimatedBack } from '../nav/SwipeBack';
+import { useAnimatedBack, useEntered } from '../nav/SwipeBack';
 import { useT } from '../i18n';
 import { musicSupported, toTrack, ytmusic } from '../music/lazy';
 import type { Card, Shelf } from '../music/ytmusic';
@@ -27,6 +27,8 @@ export function GenreScreen({ page }: { page: GenrePage }) {
   const pad = useContentInsets();
   const { push, pop } = useNav();
   const goBack = useAnimatedBack() ?? pop;
+  // Trượt vào xong mới dựng các kệ (nhiều ảnh) để hiệu ứng mở trang không bị khựng; trước đó chỉ dựng 1 kệ đầu
+  const entered = useEntered();
   const { playTrack, shuffle, toggleShuffle } = usePlayer();
   const sheet = useActionSheet();
   const { text, textSecondary, accent, surface, bg } = theme.colors;
@@ -116,7 +118,7 @@ export function GenreScreen({ page }: { page: GenrePage }) {
           </Pressable>
         )}
 
-        {(shelves ?? []).map((shelf, si) => (
+        {(shelves ?? []).slice(0, entered ? undefined : 1).map((shelf, si) => (
           <View key={`${si}:${shelf.title}`}>
             {!!shelf.title && <Text style={[styles.section, { color: text }]}>{shelf.title}</Text>}
             <ScrollView horizontal bounces={false} overScrollMode="never" showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingHorizontal: PAD }}>

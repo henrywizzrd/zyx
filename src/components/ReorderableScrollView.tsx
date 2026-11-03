@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { StyleProp, useWindowDimensions, ViewStyle } from 'react-native';
-import { GestureDetector, useManualGesture } from 'react-native-gesture-handler';
+import { GestureDetector, useManualGesture, useNativeGesture, useSimultaneousGestures } from 'react-native-gesture-handler';
 import Animated, {
   cancelAnimation,
   scrollTo,
@@ -64,9 +64,12 @@ interface Props {
   scrollYOut?: SharedValue<number>;
   // Báo ra ngoài: đang nhấc một ô lên để đổi thứ tự (tấm Hàng đợi khi đó phải đứng yên)
   reorderingOut?: SharedValue<boolean>;
+  // Cử chỉ cuộn gốc của danh sách (tạo ở ngoài bằng useNativeGesture), để cử chỉ khác (kéo tấm Hàng đợi)
+  // chạy song song với việc cuộn thay vì bị việc cuộn giành mất
+  nativeGesture?: ReturnType<typeof useNativeGesture>;
 }
 
-export function ReorderableScrollView({ children, contentContainerStyle, style, scrollEnabled: allowScroll = true, scrollYOut, reorderingOut }: Props) {
+export function ReorderableScrollView({ children, contentContainerStyle, style, scrollEnabled: allowScroll = true, scrollYOut, reorderingOut, nativeGesture }: Props) {
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const { height: winHeight } = useWindowDimensions();
   const [scrollEnabled, setScrollEnabled] = useState(true);
@@ -240,6 +243,9 @@ export function ReorderableScrollView({ children, contentContainerStyle, style, 
     scrollTo(scrollRef, 0, next, false);
   });
 
+  const ownNative = useNativeGesture({ delaysChildPressedState: false });
+  const combined = useSimultaneousGestures(manual, nativeGesture ?? ownNative);
+
   const ctx = useMemo<ReorderContextValue>(
     () => ({ manual, candidateId, trackedId, cancelled, fingerX, fingerY, scrollY }),
     [manual, candidateId, trackedId, cancelled, fingerX, fingerY, scrollY]
@@ -247,7 +253,7 @@ export function ReorderableScrollView({ children, contentContainerStyle, style, 
 
   return (
     <ReorderContext.Provider value={ctx}>
-      <GestureDetector gesture={manual}>
+      <GestureDetector gesture={nativeGesture ? combined : manual}>
         <Animated.ScrollView
           ref={scrollRef}
           style={style}
