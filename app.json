@@ -11,6 +11,7 @@
       "bundleIdentifier": "com.henrywizzrd.zyx",
       "infoPlist": {
         "UIBackgroundModes": [
+          "audio",
           "audio"
         ],
         "ITSAppUsesNonExemptEncryption": false
@@ -24,7 +25,17 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.henrywizzrd.zyx"
+      "package": "com.henrywizzrd.zyx",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -38,6 +49,23 @@
           "cameraPermission": "ZYX cần dùng camera để bạn chụp ảnh đại diện và ảnh bìa cho profile."
         }
       ]
-    ]
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "requestHeaders": {
+        "expo-channel-name": "preview"
+      },
+      "url": "https://u.expo.dev/7f4dcbef-7a9b-43e4-8cd6-6b6674c0ad03"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "7f4dcbef-7a9b-43e4-8cd6-6b6674c0ad03"
+      }
+    },
+    "owner": "tysonneee"
   }
 }

@@ -230,6 +230,10 @@ export const vi = {
   'col.deleteAction': 'Xoá playlist',
   'queue.more': 'Hiện thêm ({n} bài nữa)',
   'np.failed': 'Không phát được · bấm ▶ để thử lại',
+  'update.title': 'Có bản cập nhật mới',
+  'update.body': 'Bản mới của Zyx đã tải xong. Khởi động lại app để dùng ngay?',
+  'update.later': 'Để sau',
+  'update.now': 'Khởi động lại',
 };
 
 export type StringKey = keyof typeof vi;
@@ -443,4 +447,8 @@ export const en: Record<StringKey, string> = {
   'col.deleteAction': 'Delete playlist',
   'queue.more': 'Show more ({n} more)',
   'np.failed': "Couldn't play · tap ▶ to retry",
+  'update.title': 'Update available',
+  'update.body': 'A new version of Zyx has been downloaded. Restart the app to use it now?',
+  'update.later': 'Later',
+  'update.now': 'Restart',
 };

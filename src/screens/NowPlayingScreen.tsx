@@ -197,14 +197,11 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
       { scale: interpolate(lp.value, [0, 1], [1, TITLE_SCALE]) },
     ],
   }));
-  const sharpArtStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(lp.value, [0, 0.65], [1, 0], 'clamp'),
-    transform: [{ scale: interpolate(lp.value, [0, 1], [1, 1.08]) }],
-  }));
-  const blurArtStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(lp.value, [0, 0.45, 1], [0, 0.95, 0.45]),
-    transform: [{ scale: interpolate(lp.value, [0, 1], [1, 1.08]) }],
-  }));
+  // Ảnh bìa phóng nhẹ khi mở lời. Chỉ phóng ẢNH, còn mặt nạ mờ dần ở mép dưới đứng yên: trước đây mặt nạ bị phóng theo
+  // nên phần mờ dần trôi xuống quá mép khung → ảnh bị cắt ngang ở mép dưới, thành một đường kẻ ngay trên thanh thời gian
+  const sharpArtStyle = useAnimatedStyle(() => ({ opacity: interpolate(lp.value, [0, 0.65], [1, 0], 'clamp') }));
+  const blurArtStyle = useAnimatedStyle(() => ({ opacity: interpolate(lp.value, [0, 0.45, 1], [0, 0.95, 0.45]) }));
+  const artZoomStyle = useAnimatedStyle(() => ({ transform: [{ scale: interpolate(lp.value, [0, 1], [1, 1.08]) }] }));
   const dimStyle = useAnimatedStyle(() => ({ opacity: lp.value * 0.35 }));
   const thumbStyle = useAnimatedStyle(() => ({
     opacity: interpolate(lp.value, [0.35, 0.9], [0, 1], 'clamp'),
@@ -494,16 +491,20 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
           <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: infoH, overflow: 'hidden' }}>
             <RAnimated.View style={[StyleSheet.absoluteFill, sharpArtStyle]}>
               <MaskedView style={StyleSheet.absoluteFill} maskElement={artMask}>
-                <Cover track={track} size={1200} style={{ flex: 1 }}>
-                  <Ionicons name="musical-notes" size={72} color="rgba(255,255,255,0.8)" />
-                </Cover>
+                <RAnimated.View style={[StyleSheet.absoluteFill, artZoomStyle]}>
+                  <Cover track={track} size={1200} style={{ flex: 1 }}>
+                    <Ionicons name="musical-notes" size={72} color="rgba(255,255,255,0.8)" />
+                  </Cover>
+                </RAnimated.View>
               </MaskedView>
             </RAnimated.View>
             {/* Bản nhoè chỉ dựng khi đang xem lời (hoặc đang chuyển): bình thường không tốn thêm một lớp ảnh có mặt nạ */}
             {!!track.thumb && lyricsMounted && (
               <RAnimated.View style={[StyleSheet.absoluteFill, blurArtStyle]}>
                 <MaskedView style={StyleSheet.absoluteFill} maskElement={artMask}>
-                  <SmartImage url={track.thumb} size={300} blurRadius={40} style={StyleSheet.absoluteFill} />
+                  <RAnimated.View style={[StyleSheet.absoluteFill, artZoomStyle]}>
+                    <SmartImage url={track.thumb} size={300} blurRadius={40} style={StyleSheet.absoluteFill} />
+                  </RAnimated.View>
                 </MaskedView>
               </RAnimated.View>
             )}

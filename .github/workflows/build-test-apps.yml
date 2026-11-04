@@ -1,5 +1,7 @@
 # Đóng gói app để cài thử. Cách chạy:
 #  - push một commit có chữ [build] trong lời nhắn commit (chạy được trên mọi nhánh), hoặc
+#  - push một commit có chữ [update]: KHÔNG build lại, chỉ đẩy code JS mới lên Expo (EAS Update) → app đã cài tự cập nhật
+#    (cần secret EXPO_TOKEN trong Settings → Secrets and variables → Actions)
 #  - tab Actions -> "Build test apps" -> Run workflow (nút này chỉ hiện khi file này đã có trên nhánh main)
 #  - Android: file APK cài thẳng lên máy (ký bằng khoá debug, chỉ để thử nghiệm)
 #  - iOS: file IPA CHƯA KÝ -> dùng Sideloadly + Apple ID (miễn phí) để ký và cài lên iPhone
@@ -103,3 +105,22 @@ jobs:
           files: |
             out/Zyx.apk
             out/Zyx-unsigned.ipa
+
+  # Cập nhật qua mạng (EAS Update): app đã cài tự tải bản mới, không cần cài lại.
+  # Chỉ dùng được cho thay đổi JS / ảnh. Thêm thư viện native, đổi icon, tên app, quyền... thì phải [build] lại
+  update:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[update]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Đẩy bản cập nhật lên kênh preview
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          MSG: ${{ github.event.head_commit.message }}
+        run: npx --yes eas-cli@latest update --channel preview --message "$MSG" --non-interactive

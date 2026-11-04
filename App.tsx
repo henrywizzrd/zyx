@@ -30,6 +30,7 @@ import { AmbientEffect } from './src/components/AmbientLayer';
 import { musicSupported, ytmusic } from './src/music/lazy';
 import { ThemeTransition } from './src/theme/ThemeTransition';
 import { ThemeStudioScreen } from './src/screens/ThemeStudioScreen';
+import { AppUpdater } from './src/components/AppUpdater';
 
 // Các màn hình tab không nhận props: bọc memo để App vẽ lại (đổi tab, mở trang...) thì chúng không phải vẽ lại theo.
 // Chúng vẫn tự cập nhật khi theme, dữ liệu, player... đổi (qua context)
@@ -306,6 +307,8 @@ export default function App() {
             <NavProvider>
               {/* Đổi bộ màu mượt cho cả app (chụp màn hình rồi tan dần) */}
               <Boot>
+                {/* Tự kiểm tra và tải bản cập nhật (không cần cài lại app) */}
+                <AppUpdater />
                 <ThemeTransition>
                   <Root />
                 </ThemeTransition>
