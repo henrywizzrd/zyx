@@ -118,8 +118,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Đẩy riêng iOS và Android: để "all" thì nó đóng gói cả bản web (app không dùng web, và expo-sqlite trên web lỗi)
       - name: Đẩy bản cập nhật lên kênh preview
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           MSG: ${{ github.event.head_commit.message }}
-        run: npx --yes eas-cli@latest update --channel preview --message "$MSG" --non-interactive
+          CI: 1
+        run: |
+          npx --yes eas-cli@latest update --channel preview --platform ios --message "$MSG" --non-interactive
+          npx --yes eas-cli@latest update --channel preview --platform android --message "$MSG" --non-interactive
