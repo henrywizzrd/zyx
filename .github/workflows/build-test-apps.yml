@@ -92,19 +92,18 @@ jobs:
         with:
           path: out
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: test-build-${{ github.run_number }}
-          name: Zyx test build ${{ github.run_number }}
-          target_commitish: ${{ github.sha }}
-          prerelease: true
-          body: |
-            Bản build thử nghiệm từ nhánh `${{ github.ref_name }}` (commit ${{ github.sha }}).
-            - Android: tải `Zyx.apk` rồi cài thẳng lên máy.
-            - iPhone: tải `Zyx-unsigned.ipa`, ký và cài bằng Sideloadly (Apple ID miễn phí: dùng được 7 ngày).
-          files: |
-            out/Zyx.apk
-            out/Zyx-unsigned.ipa
+      # Dùng gh (có sẵn trên máy build) thay cho action cũ: action đó hay lỗi giữa chừng khi tải nhiều file lên cùng lúc
+      - name: Tạo Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: test-build-${{ github.run_number }}
+        run: |
+          gh release create "$TAG" out/Zyx.apk out/Zyx-unsigned.ipa \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "Zyx test build ${{ github.run_number }}" \
+            --notes "Bản build thử nghiệm từ nhánh \`$GITHUB_REF_NAME\` (commit $GITHUB_SHA).
+          - Android: tải \`Zyx.apk\` rồi cài thẳng lên máy.
+          - iPhone: tải \`Zyx-unsigned.ipa\`, ký và cài bằng ESign / Sideloadly."
 
   # Cập nhật qua mạng (EAS Update): app đã cài tự tải bản mới, không cần cài lại.
   # Chỉ dùng được cho thay đổi JS / ảnh. Thêm thư viện native, đổi icon, tên app, quyền... thì phải [build] lại
