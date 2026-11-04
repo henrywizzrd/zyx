@@ -34,6 +34,13 @@ function resolveUrl(id: string): Promise<string> {
   urlPending.set(id, job);
   return job;
 }
+// Link đã có sẵn chưa (không gọi mạng): dùng để xếp bài trước vào trình phát cho nút Bài trước ở màn hình khoá
+function cachedUrl(id: string): string | null {
+  const local = localUri(id);
+  if (local) return local;
+  const c = urlCache.get(id);
+  return c && Date.now() - c.at < URL_TTL ? c.url : null;
+}
 
 export type ViewRef = React.ElementRef<typeof View>;
 export type DragState = { kind: 'dock' | 'player'; target: Position | MiniAnchor | 'merge' };
@@ -192,9 +199,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     try {
       const uri = await resolveUrl(t.id);
       if (id !== reqId.current) return; // đã bấm bài khác
-      const p = audio().getPlayer();
-      p.replace({ uri, name: t.title });
-      p.play();
+      // Bài ngay trước trong hàng đợi (nếu đã có link) cũng được xếp vào trình phát, để nút Bài trước ở màn hình khoá dùng được
+      const q = queueRef.current;
+      const k = q.findIndex((x) => x.qid === t.qid);
+      const before = k > 0 ? q[k - 1] : null;
+      const beforeUri = before ? cachedUrl(before.id) : null;
+      audio().startTrack(t.qid, uri, before && beforeUri ? { key: before.qid, uri: beforeUri } : null);
       // Màn hình khoá / thanh thông báo (Android: cần cái này để nhạc chạy nền lâu dài)
       audio().showNowPlaying({ title: t.title, artist: t.artist, artworkUrl: t.thumb });
       // Ghi lịch sử nghe (thêm đủ thông tin bài để Home dựng Recent / Recommend)
@@ -328,27 +338,46 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (index >= queue.length - 2) extendRadio();
   }, [index, queue.length, autoplay, repeat, extendRadio]);
 
-  // Lấy sẵn link của bài sẽ phát tiếp (đợi vài giây sau khi bài hiện tại bắt đầu, để không tranh mạng với nó)
-  const nextId = (() => {
+  // Bài sẽ phát tiếp: lấy sẵn link rồi xếp ngay sau bài đang phát trong trình phát. Nhờ vậy:
+  //  - hết bài là chuyển ngay, kể cả khi tắt màn hình (không có khoảng im lặng để iPhone cho app "ngủ")
+  //  - nút Bài sau ở màn hình khoá / Dynamic Island dùng được
+  const nextItem = (() => {
     if (queue.length < 2 || repeat === 'one') return null;
     if (shuffle) {
       const pick = shuffleNext.current;
-      if (pick && pick.from === index && pick.to < queue.length) return queue[pick.to].id;
+      if (pick && pick.from === index && pick.to < queue.length) return queue[pick.to];
       let n = index;
       while (n === index) n = Math.floor(Math.random() * queue.length);
       shuffleNext.current = { from: index, to: n };
-      return queue[n].id;
+      return queue[n];
     }
-    if (index + 1 < queue.length) return queue[index + 1].id;
-    return repeat === 'all' ? queue[0].id : null;
+    if (index + 1 < queue.length) return queue[index + 1];
+    return repeat === 'all' ? queue[0] : null;
   })();
+  const nextQid = nextItem?.qid ?? null;
+  const nextTrackId = nextItem?.id ?? null;
+  const curQid = queue[index]?.qid ?? null;
   useEffect(() => {
-    if (!musicSupported || !nextId) return;
+    if (!musicSupported || !curQid) return;
+    if (!nextQid || !nextTrackId) {
+      audio().setNext(null);
+      return;
+    }
+    let dead = false;
+    // Đợi bài hiện tại chạy được một chút rồi mới lấy link bài sau (không tranh mạng với bài đang mở)
     const timer = setTimeout(() => {
-      resolveUrl(nextId).catch(() => {}); // lỗi thì thôi, tới lúc chuyển bài sẽ thử lại
-    }, 4000);
-    return () => clearTimeout(timer);
-  }, [nextId]);
+      resolveUrl(nextTrackId)
+        .then((uri) => {
+          if (dead || queueRef.current[indexRef.current]?.qid !== curQid || loadingRef.current) return;
+          audio().setNext({ key: nextQid, uri });
+        })
+        .catch(() => {}); // lỗi thì thôi, tới lúc chuyển bài app sẽ tự lấy lại
+    }, 1500);
+    return () => {
+      dead = true;
+      clearTimeout(timer);
+    };
+  }, [curQid, nextQid, nextTrackId, loading]);
 
   // auto=true: bài tự hết; auto=false: người dùng bấm Next
   const advance = useCallback(
@@ -395,7 +424,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     repeatRef.current = repeatRef.current === 'off' ? 'all' : repeatRef.current === 'all' ? 'one' : 'off';
     setRepeat(repeatRef.current);
     // Lặp một bài: để chính trình phát lặp, chắc chắn hơn tự tua về đầu
-    if (musicSupported) audio().getPlayer().loop = repeatRef.current === 'one';
+    if (musicSupported) audio().setLoopOne(repeatRef.current === 'one');
   }, []);
   // Thả tim: lưu vào máy (SQLite) để tắt app mở lại vẫn còn, và để có playlist Liked Songs
   const likedRef = useRef(liked);
@@ -440,20 +469,49 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!musicSupported) return;
     const p = audio().getPlayer();
-    const sub = p.addListener('playbackStatusUpdate', (s) => {
+    const sub = p.addListener('playlistStatusUpdate', (s) => {
       setIsPlaying(s.playing);
       setProgress(s.currentTime);
       // Độ dài bài khi phát qua mạng hay nhích lên xuống vài phần trăm giây mỗi lần báo:
       // chỉ cập nhật khi lệch thật (> 0,5s), không thì cả app vẽ lại liên tục chỉ vì con số lẻ
       if (s.isLoaded && s.duration > 0) setDuration((d) => (Math.abs(d - s.duration) > 0.5 ? s.duration : d));
-      // Hết bài: báo của thư viện, hoặc tự nhận biết khi đã chạy tới cuối và dừng
-      const ended = s.didJustFinish || (s.isLoaded && s.duration > 0 && !s.playing && s.currentTime >= s.duration - 0.3);
+      // Hết bài mà trình phát KHÔNG có bài kế tiếp xếp sẵn (có thì nó tự chuyển, app chỉ cập nhật theo ở onTrackChange):
+      // báo của thư viện, hoặc tự nhận biết khi đã chạy tới cuối và dừng
+      const ended =
+        s.didJustFinish ||
+        (!audio().hasNext() && s.isLoaded && s.duration > 0 && !s.playing && s.currentTime >= s.duration - 0.3);
       if (ended && !loadingRef.current && endedFor.current !== reqId.current) {
         endedFor.current = reqId.current;
         advanceRef.current(true);
       }
     });
     return () => sub.remove();
+  }, []);
+
+  // Trình phát tự đổi bài (hết bài thì sang bài đã xếp sẵn, hoặc bấm Bài trước / Bài sau ở màn hình khoá):
+  // app cập nhật theo (bài đang phát, thời gian, màn hình khoá, lịch sử) mà KHÔNG tải lại bài
+  useEffect(() => {
+    if (!musicSupported) return;
+    audio().onTrackChange((key) => {
+      const q = queueRef.current;
+      const k = q.findIndex((x) => x.qid === key);
+      if (k < 0) return;
+      const t = q[k];
+      ++reqId.current; // bỏ qua mọi lần tải đang dở
+      loadingRef.current = false;
+      setLoading(false);
+      failedRef.current = false;
+      setFailed(false);
+      shuffleNext.current = null;
+      indexRef.current = k;
+      setIndex(k);
+      setProgress(0);
+      setDuration(t.duration);
+      if (t.thumb) ExpoImage.prefetch(bigThumb(t.thumb, 1200), 'memory-disk').catch(() => {});
+      audio().showNowPlaying({ title: t.title, artist: t.artist, artworkUrl: t.thumb });
+      recordPlay({ ...t, duration: t.duration }, t.ctx);
+    });
+    return () => audio().onTrackChange(null);
   }, []);
 
   const value = useMemo<PlayerContextValue>(

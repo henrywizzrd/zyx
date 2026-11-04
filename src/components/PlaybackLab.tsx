@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { AudioPlayer } from 'expo-audio';
-import { getPlayer } from '../music/audioPlayer';
+import { getLabPlayer } from '../music/audioPlayer';
 import { useTheme } from '../theme/ThemeProvider';
 import { getAudio, searchSongs, Song } from '../music/ytmusic';
 
@@ -29,7 +29,7 @@ export function PlaybackLab() {
   }, []);
 
   useEffect(() => {
-    const p = getPlayer();
+    const p = getLabPlayer();
     player.current = p;
     const sub = p.addListener('playbackStatusUpdate', (s) => {
       const key = `${s.playbackState}|${s.timeControlStatus}|${s.reasonForWaitingToPlay}|${s.error ?? ''}`;

@@ -1,27 +1,101 @@
-import { createAudioPlayer, setAudioModeAsync, AudioPlayer, AudioMetadata } from 'expo-audio';
+import { createAudioPlayer, createAudioPlaylist, setAudioModeAsync, AudioMetadata, AudioPlayer, AudioPlaylist } from 'expo-audio';
 
-// Một player duy nhất cho cả app, không bị huỷ khi đổi tab.
-let player: AudioPlayer | null = null;
+// ---- Trình phát chính của app: một "danh sách phát" (AudioPlaylist) thay vì một bài đơn lẻ.
+// Lý do: màn hình khoá / Dynamic Island / thông báo Android chỉ có nút Bài trước / Bài sau khi trình phát có bài trước / sau.
+// Danh sách phát ở đây là một "cửa sổ" nhỏ bám theo hàng đợi của app:
+//   [ ...các bài đã phát | bài đang phát | bài kế tiếp (link đã lấy sẵn) ]
+//  - hết bài: trình phát tự chuyển sang bài kế tiếp ngay (không có khoảng im lặng, chạy được cả khi tắt màn hình)
+//  - bấm Bài sau / Bài trước ở màn hình khoá: trình phát tự chuyển, rồi báo cho app (onTrackChange) để app cập nhật theo
+//  - app tự chọn bài (bấm bài khác, bấm Next trong app...): app gọi startTrack()
+// Mỗi ô trong danh sách gắn với một "key" = mã của bài trong hàng đợi (qid), để biết ô nào là bài nào.
+
+let pl: AudioPlaylist | null = null;
+let keys: string[] = [];
+let currentKey: string | null = null;
 let lockScreenOn = false;
+let trackListener: ((key: string) => void) | null = null;
 
-export function getPlayer(): AudioPlayer {
-  if (!player) {
+export function getPlayer(): AudioPlaylist {
+  if (!pl) {
     // shouldPlayInBackground: tắt màn hình / chuyển sang app khác vẫn phát tiếp
     // interruptionMode 'doNotMix': app nhạc chính (dừng app khác đang phát), bắt buộc để hiện điều khiển ở màn hình khoá
     setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' }).catch(() => {});
-    player = createAudioPlayer(null);
+    pl = createAudioPlaylist({ updateInterval: 500, loop: 'none' });
+    // Trình phát tự đổi bài (hết bài, hoặc bấm nút ở màn hình khoá): báo cho app
+    pl.addListener('trackChanged', ({ currentIndex }) => {
+      const key = keys[currentIndex];
+      if (!key || key === currentKey) return; // do chính app vừa yêu cầu → app đã biết rồi
+      currentKey = key;
+      trackListener?.(key);
+    });
   }
-  return player;
+  return pl;
 }
 
-// Hiện bài đang phát ở màn hình khoá / thanh thông báo (tên bài, ca sĩ, ảnh, nút phát/dừng, thanh tua).
+// App đăng ký để biết khi trình phát tự đổi bài
+export function onTrackChange(cb: ((key: string) => void) | null) {
+  trackListener = cb;
+}
+
+// App chọn phát một bài. Nếu bài đó đang nằm ngay sau / ngay trước trong danh sách thì chỉ việc chuyển (nhanh, không tải lại).
+// Không thì làm lại danh sách: [bài trước (nếu có link sẵn)], bài này
+export function startTrack(key: string, uri: string, prev?: { key: string; uri: string } | null) {
+  const p = getPlayer();
+  const cur = p.currentIndex;
+  currentKey = key;
+  if (keys[cur] === key && p.trackCount > 0) {
+    p.seekTo(0).catch(() => {});
+  } else if (keys[cur + 1] === key && cur + 1 < p.trackCount) {
+    p.next();
+  } else if (cur > 0 && keys[cur - 1] === key) {
+    p.previous();
+  } else {
+    p.clear();
+    keys = [];
+    if (prev) {
+      p.add({ uri: prev.uri });
+      keys.push(prev.key);
+    }
+    p.add({ uri });
+    keys.push(key);
+    if (prev) p.skipTo(1);
+  }
+  p.play();
+}
+
+// Đặt bài kế tiếp (link đã lấy sẵn). key = null: không có bài kế tiếp (hết hàng đợi, lặp 1 bài...)
+export function setNext(next: { key: string; uri: string } | null) {
+  const p = getPlayer();
+  const cur = p.currentIndex;
+  if (p.trackCount === 0) return;
+  if (next && keys[cur + 1] === next.key && p.trackCount === cur + 2) return; // đã đúng rồi
+  // Bỏ các ô sau bài đang phát (bỏ từ cuối lên: bỏ ô phía sau không làm gián đoạn bài đang phát)
+  for (let i = p.trackCount - 1; i > cur; i--) p.remove(i);
+  keys = keys.slice(0, cur + 1);
+  if (next) {
+    p.add({ uri: next.uri });
+    keys.push(next.key);
+  }
+}
+
+// Có bài kế tiếp xếp sẵn trong trình phát không (để biết hết bài là trình phát tự chuyển hay app phải lo)
+export function hasNext() {
+  const p = getPlayer();
+  return p.currentIndex < p.trackCount - 1;
+}
+
+export function setLoopOne(one: boolean) {
+  getPlayer().loop = one ? 'single' : 'none';
+}
+
+// Hiện bài đang phát ở màn hình khoá / Dynamic Island / thanh thông báo (tên bài, ca sĩ, ảnh, phát/dừng, bài trước/sau, thanh tua).
 // Trên Android đây cũng là thứ giữ cho nhạc chạy nền: không bật thì hệ điều hành dừng nhạc sau khoảng 3 phút.
 // Lần đầu bật điều khiển, các bài sau chỉ đổi thông tin. Lỗi (vd. Expo Go không hỗ trợ) thì bỏ qua, nhạc vẫn phát
 export function showNowPlaying(meta: AudioMetadata) {
   const p = getPlayer();
   try {
     if (!lockScreenOn) {
-      p.setActiveForLockScreen(true, meta, { showSeekForward: false, showSeekBackward: false });
+      p.setActiveForLockScreen(true, meta, { showNextTrack: true, showPreviousTrack: true });
       lockScreenOn = true;
     } else {
       p.updateLockScreenMetadata(meta);
@@ -29,4 +103,11 @@ export function showNowPlaying(meta: AudioMetadata) {
   } catch (e) {
     console.warn('[lockscreen]', e);
   }
+}
+
+// Trình phát riêng cho trang thử nghiệm phát nhạc (Playback lab trong Cài đặt), tách khỏi trình phát chính
+let lab: AudioPlayer | null = null;
+export function getLabPlayer(): AudioPlayer {
+  if (!lab) lab = createAudioPlayer(null);
+  return lab;
 }
