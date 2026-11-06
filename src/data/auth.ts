@@ -171,9 +171,17 @@ async function finishOAuth(): Promise<'ok' | 'pickUsername' | AuthError> {
   const { data: u } = await sb().auth.getUser();
   const user = u.user;
   if (!user) return 'unknown';
-  const { data: prof, error } = await sb().from('profiles').select('username').eq('id', user.id).maybeSingle();
-  if (error) return isNetwork(error) ? 'network' : 'unknown';
-  if (prof?.username) {
+  // Username giờ bị ẩn với mọi người (supabase/005) → hỏi qua hàm my_username(); server chưa chạy 005 thì đọc thẳng như cũ
+  let username: string | null = null;
+  const r = await sb().rpc('my_username');
+  if (!r.error) username = (r.data as string | null) ?? null;
+  else {
+    const { data: prof, error } = await sb().from('profiles').select('username').eq('id', user.id).maybeSingle();
+    if (error) return isNetwork(error) ? 'network' : 'unknown';
+    username = prof?.username ?? null;
+  }
+  if (username) {
+    const prof = { username };
     kvSet(CURRENT, { id: user.id, username: prof.username, email: user.email ?? '' });
     return 'ok';
   }

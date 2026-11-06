@@ -69,11 +69,30 @@ async function pushProfile(patch: Partial<Profile>) {
   if (!Object.keys(pending).length) return;
   try {
     const { error } = await sb().from('profiles').update(pending).eq('id', acc.id);
+    if (error?.code === '23505') {
+      // Tên#tag vừa bị người khác lấy mất: bỏ thay đổi đó, lấy lại tên / tag đang có trên server
+      kvSet(PENDING(), null);
+      (require('../components/toastBridge') as typeof import('../components/toastBridge')).showToast('profile.nameTagReset');
+      syncProfile();
+      return;
+    }
     if (error) throw error;
     kvSet(PENDING(), null);
   } catch (e) {
     kvSet(PENDING(), pending);
     console.warn('[profile] push', e);
+  }
+}
+
+// Tài khoản: Tên#tag mới còn trống không (cặp Tên#tag là duy nhất, kiểu Discord). Mất mạng / server chưa có hàm → cho qua
+export async function checkNameTag(name: string, tag: string): Promise<'ok' | 'taken'> {
+  if (!currentAccount()) return 'ok';
+  try {
+    const { data, error } = await sb().rpc('name_tag_free', { p_name: name, p_tag: tag });
+    if (error) return 'ok';
+    return data === false ? 'taken' : 'ok';
+  } catch {
+    return 'ok';
   }
 }
 

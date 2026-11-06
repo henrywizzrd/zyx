@@ -5,9 +5,9 @@ import type { Attachment, Post } from './social';
 
 const sb = () => (require('../backend/supabase') as typeof import('../backend/supabase')).supabase;
 
+// Người dùng công khai chỉ có Tên#tag (username chỉ dùng để đăng nhập, không lộ ra)
 export interface UserRow {
   id: string;
-  username: string;
   name: string;
   tag: string;
   avatar?: string;
@@ -29,12 +29,12 @@ export interface Comment {
   userId: string;
   text: string;
   createdAt: number;
-  author: { id: string; username: string; name: string; tag: string; avatar?: string; color: string };
+  author: { id: string; name: string; tag: string; avatar?: string; color: string };
 }
 
 const COLOR = '#8E6CF0';
 const WALL = '#0B4A7A';
-const nameOf = (r: { display_name?: string | null; username: string }) => r.display_name || r.username;
+const nameOf = (r: { display_name?: string | null }) => r.display_name || 'ZYX';
 
 // Chữ "không có mạng / chưa đăng nhập" để màn hình hiện thông báo phù hợp
 export class NeedAccount extends Error {}
@@ -50,9 +50,8 @@ export async function searchUsers(q: string): Promise<UserRow[]> {
   if (error) throw error;
   return (data ?? []).map((r: any) => ({
     id: r.id,
-    username: r.username,
     name: nameOf(r),
-    tag: r.tag || r.username,
+    tag: r.tag || '',
     avatar: r.avatar_url ?? undefined,
     color: r.avatar_color || COLOR,
     followers: Number(r.followers) || 0,
@@ -66,9 +65,8 @@ export async function getProfileCard(id: string): Promise<ProfileCard | null> {
   if (!r) return null;
   return {
     id: r.id,
-    username: r.username,
     name: nameOf(r),
-    tag: r.tag || r.username,
+    tag: r.tag || '',
     avatar: r.avatar_url ?? undefined,
     cover: r.cover_url ?? undefined,
     color: r.avatar_color || COLOR,
@@ -113,7 +111,7 @@ export async function fetchPosts(userId: string | null, before?: number): Promis
     author:
       r.user_id === me
         ? undefined
-        : { id: r.user_id, username: r.username, name: nameOf(r), tag: r.tag || r.username, avatar: r.avatar_url ?? undefined, color: r.avatar_color || COLOR },
+        : { id: r.user_id, name: nameOf(r), tag: r.tag || '', avatar: r.avatar_url ?? undefined, color: r.avatar_color || COLOR },
   }));
 }
 
@@ -137,7 +135,7 @@ export async function fetchComments(postId: string): Promise<Comment[]> {
     userId: r.user_id,
     text: r.body,
     createdAt: Date.parse(r.created_at),
-    author: { id: r.user_id, username: r.username, name: nameOf(r), tag: r.tag || r.username, avatar: r.avatar_url ?? undefined, color: r.avatar_color || COLOR },
+    author: { id: r.user_id, name: nameOf(r), tag: r.tag || '', avatar: r.avatar_url ?? undefined, color: r.avatar_color || COLOR },
   }));
 }
 

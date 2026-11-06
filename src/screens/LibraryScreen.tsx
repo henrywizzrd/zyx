@@ -14,7 +14,7 @@ import { LibraryEntry, useLibrary } from '../data/library';
 import { createPlaylist, getPlaylists } from '../data/db';
 import { SmartImage } from '../components/Cover';
 import { useNav } from '../nav/Nav';
-import { ensureCoverTone, ImageSlot, PickedImage, pickProfileImage, removeProfileImage, saveCroppedCover, updateProfile, useProfile } from '../data/profile';
+import { checkNameTag, ensureCoverTone, ImageSlot, PickedImage, pickProfileImage, removeProfileImage, saveCroppedCover, updateProfile, useProfile } from '../data/profile';
 import { CoverCropper } from '../components/CoverCropper';
 import { ProfileEditSheet } from '../components/ProfileEditSheet';
 import { sheet } from '../components/useSongMenu';
@@ -350,7 +350,9 @@ export function LibraryScreen() {
         name={profile.name}
         tag={profile.tag}
         onClose={() => setEditOpen(false)}
-        onSave={(name, tag) => {
+        onSave={async (name, tag) => {
+          // Cặp Tên#tag phải chưa ai dùng (kiểu Discord): trùng thì báo, giữ popup để đổi tag khác
+          if ((await checkNameTag(name, tag)) === 'taken') return Alert.alert(t('profile.nameTagTaken'));
           updateProfile({ name, tag });
           setEditOpen(false);
         }}

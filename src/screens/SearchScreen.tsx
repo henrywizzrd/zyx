@@ -476,9 +476,10 @@ export function SearchScreen() {
               </Pressable>
             </ScrollView>
   );
-  // Kết quả mục Người dùng: avatar, tên #tag, @username · số người theo dõi. Bấm vào để mở hồ sơ
+  // Kết quả mục Người dùng: avatar, Tên#tag, số người theo dõi. Bấm vào để mở hồ sơ
   const usersBody = (
     <View style={{ marginTop: 6 }}>
+      <Text style={{ color: textSecondary, fontSize: 13, marginBottom: 6 }}>{tr('community.searchHint')}</Text>
       {usersFailed ? (
         <Pressable onPress={() => runUsers(query)}>
           <Text style={{ color: textSecondary }}>{tr('community.loadFailed')}</Text>
@@ -499,7 +500,7 @@ export function SearchScreen() {
                 <Text style={{ color: textSecondary, fontWeight: '500' }}> #{u.tag}</Text>
               </Text>
               <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>
-                @{u.username} · {u.followers} {tr('community.followers')}
+                {u.followers} {tr('community.followers')}
               </Text>
             </View>
           </Pressable>

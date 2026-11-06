@@ -346,6 +346,9 @@ export const vi = {
   'search.recent': "Tìm kiếm gần đây",
   'search.clearHistory': "Xoá tất cả",
   'home.section.feed': "Bảng tin",
+  'community.searchHint': "Gõ Tên#tag (vd. Tyson#1234) để tìm đúng một người",
+  'profile.nameTagTaken': "Tên#tag này đã có người dùng. Đổi tag khác nhé!",
+  'profile.nameTagReset': "Tên#tag bị trùng nên đã trả về tên cũ",
 };
 
 export type StringKey = keyof typeof vi;
@@ -675,4 +678,7 @@ export const en: Record<StringKey, string> = {
   'search.recent': "Recent searches",
   'search.clearHistory': "Clear all",
   'home.section.feed': "Feed",
+  'community.searchHint': "Type Name#tag (e.g. Tyson#1234) to find one exact person",
+  'profile.nameTagTaken': "This Name#tag is already taken. Try another tag!",
+  'profile.nameTagReset': "That Name#tag was taken, so your old one was restored",
 };

@@ -17,7 +17,7 @@ import type { Post } from '../data/social';
 const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
 const COVER_H = 230;
 
-// Hồ sơ của một người dùng khác: ảnh bìa, avatar, tên #tag, @username, số bài / người theo dõi / đang theo dõi,
+// Hồ sơ của một người dùng khác: ảnh bìa, avatar, Tên#tag, số bài / người theo dõi / đang theo dõi,
 // nút Theo dõi, và các bài đăng của họ (thích, bình luận được)
 export function UserScreen({ page }: { page: UserPage }) {
   const { theme, landscape } = useTheme();
@@ -96,7 +96,6 @@ export function UserScreen({ page }: { page: UserPage }) {
         {c.name}
         <Text style={{ color: textSecondary, fontWeight: '600' }}> #{c.tag}</Text>
       </Text>
-      <Text style={{ color: textSecondary, fontSize: 14, marginTop: 2 }}>@{c.username}</Text>
       <View style={styles.stats}>
         {[
           [c.posts, t('community.postsCount')],
