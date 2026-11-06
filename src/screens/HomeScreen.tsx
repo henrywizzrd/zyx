@@ -1,9 +1,12 @@
 import { SplitPane } from '../components/SplitPane';
 import { PostCard } from '../components/PostCard';
-import { applyPatch, fetchPosts, onPostPatch } from '../data/community';
-import type { Post } from '../data/social';
+import { feedKey, useFeed } from '../components/FeedList';
+import RNMaskedView from '@react-native-masked-view/masked-view';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, PixelRatio, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Image, PixelRatio, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useContentInsets } from '../components/FloatingDock';
@@ -105,49 +108,38 @@ async function loadTrending(range: TrendingRange): Promise<{ title: string; play
 // ---------------------------------------------------------------------------
 // Bảng tin: bài đăng mới nhất của mọi người (cả người mình theo dõi lẫn chưa theo dõi), mới nhất trước.
 // Thích / bình luận ngay trong bảng tin, bấm tên / avatar để mở hồ sơ người đó
-// Một bài có thể xuất hiện nhiều lần trên bảng tin (bài gốc + mỗi lượt đăng lại)
-const feedKey = (p: Post) => `${p.id}:${p.repostedBy?.id ?? ''}`;
-
+// Bảng tin trên Home: một khung cao vừa phải chứa khoảng 5 bài mới nhất, cuộn bên trong khung.
+// Mép trên / dưới của khung mờ dần (nội dung tan dần chứ không cắt thành đường), không có thanh cuộn.
+// Muốn xem bài mới: kéo xuống ở đầu khung để làm mới, hoặc bấm >> để mở bảng tin đầy đủ
+const FEED_BOX_H = 460;
 function Feed() {
   const { theme } = useTheme();
   const t = useT();
-  const [posts, setPosts] = useState<Post[] | null>(null);
-  const [failed, setFailed] = useState<string | false>(false);
-  const [more, setMore] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const load = (older = false) => {
-    if (busy) return;
-    setBusy(true);
-    setFailed(false);
-    const last = older && posts?.length ? posts[posts.length - 1] : undefined;
-    const before = last ? last.itemTime ?? last.createdAt : undefined;
-    fetchPosts(null, before)
-      .then((l) => {
-        setPosts((cur) => (older && cur ? [...cur, ...l.filter((p) => !cur.some((c) => feedKey(c) === feedKey(p)))] : l));
-        setMore(l.length >= 30);
-      })
-      .catch((e) => setFailed(String(e?.message ?? e)))
-      .finally(() => setBusy(false));
-  };
-  useEffect(() => load(), []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => onPostPatch((p) => setPosts((l) => (l ? applyPatch(l, p) : l))), []);
+  const { push } = useNav();
+  const { posts, error, refreshing, refresh } = useFeed(5);
   const { textSecondary, accent } = theme.colors;
+  const fade = (
+    <LinearGradient
+      colors={['transparent', '#000', '#000', 'transparent']}
+      locations={[0, 0.07, 0.9, 1]}
+      style={{ flex: 1 }}
+    />
+  );
   return (
     <>
       <SectionTitle
         title={t('home.section.feed')}
         right={
-          <Pressable onPress={() => load()} hitSlop={10}>
-            {busy && !posts ? <ActivityIndicator color={accent} /> : <Ionicons name="refresh" size={20} color={textSecondary} />}
+          <Pressable onPress={() => push({ type: 'feed' })} hitSlop={10}>
+            <MaterialCommunityIcons name="chevron-double-right" size={28} color={textSecondary} />
           </Pressable>
         }
       />
       {posts === null ? (
-        failed ? (
-          <Pressable onPress={() => load()}>
+        error ? (
+          <Pressable onPress={() => refresh()}>
             <Text style={{ color: textSecondary }}>{t('community.loadFailed')}</Text>
-            {/* Lý do cụ thể (để biết server thiếu gì, vd. chưa chạy file SQL) */}
-            <Text style={{ color: textSecondary, fontSize: 12, marginTop: 4, opacity: 0.7 }}>{failed}</Text>
+            <Text style={{ color: textSecondary, fontSize: 12, marginTop: 4, opacity: 0.7 }}>{error}</Text>
           </Pressable>
         ) : (
           <ActivityIndicator color={accent} style={{ marginVertical: 16 }} />
@@ -155,16 +147,18 @@ function Feed() {
       ) : posts.length === 0 ? (
         <Text style={{ color: textSecondary }}>{t('community.feedEmpty')}</Text>
       ) : (
-        <>
-          {posts.map((p, i) => (
-            <PostCard key={feedKey(p)} post={p} showDivider={i < posts.length - 1} />
-          ))}
-          {more && (
-            <Pressable onPress={() => load(true)} style={{ alignSelf: 'center', paddingVertical: 10 }}>
-              {busy ? <ActivityIndicator color={accent} /> : <Ionicons name="chevron-down" size={22} color={textSecondary} />}
-            </Pressable>
-          )}
-        </>
+        <MaskedView style={{ maxHeight: FEED_BOX_H }} maskElement={fade}>
+          <ScrollView
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingVertical: 14 }}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => refresh(true)} tintColor={accent} colors={[accent]} />}
+          >
+            {posts.map((p, i) => (
+              <PostCard key={feedKey(p)} post={p} showDivider={i < posts.length - 1} />
+            ))}
+          </ScrollView>
+        </MaskedView>
       )}
     </>
   );

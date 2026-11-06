@@ -91,11 +91,11 @@ export async function setFollow(userId: string, follow: boolean) {
 
 // Bài đăng: userId = null → bảng tin (bài + lượt đăng lại của mọi người, mới nhất trước).
 // mode 'reposts': các bài userId đã đăng lại
-export async function fetchPosts(userId: string | null, before?: number, mode?: 'reposts'): Promise<Post[]> {
+export async function fetchPosts(userId: string | null, before?: number, mode?: 'reposts', limit = 30): Promise<Post[]> {
   const args: Record<string, unknown> = {
     p_user: userId,
     p_before: before ? new Date(before).toISOString() : null,
-    p_limit: 30,
+    p_limit: limit,
   };
   if (mode) args.p_mode = mode; // chỉ gửi khi cần: server chưa chạy file 006 vẫn tải được bảng tin / bài đăng
   const { data, error } = await sb().rpc('post_rows', args);

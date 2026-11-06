@@ -22,6 +22,7 @@ import { LibraryScreen } from './src/screens/LibraryScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { UserScreen } from './src/screens/UserScreen';
+import { FeedScreen } from './src/screens/FeedScreen';
 import { ComposerHost } from './src/components/PostComposer';
 import { syncSharedPlaylists } from './src/data/sharedSync';
 import { useDbVersion } from './src/data/db';
@@ -249,6 +250,8 @@ function Root() {
                   <GenreScreen page={pg} />
                 ) : pg.type === 'user' ? (
                   <UserScreen page={pg} />
+                ) : pg.type === 'feed' ? (
+                  <FeedScreen />
                 ) : (
                   <ThemeStudioScreen />
                 )}
