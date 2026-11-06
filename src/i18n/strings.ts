@@ -287,11 +287,14 @@ export const vi = {
   'auth.notExistBody': "Chưa có tài khoản nào tên \"{name}\". Đồng ý tạo tài khoản mới?",
   'auth.cancel': "Huỷ",
   'auth.agree': "Đồng ý",
-  'auth.localNote': "Bản thử nghiệm: tài khoản đang được lưu ngay trong máy này, chưa đồng bộ lên server.",
+  'auth.localNote': "Tài khoản ZYX dùng chung trên mọi máy. Mật khẩu được mã hoá trên server.",
   'settings.account': "Tài khoản",
   'settings.signedInAs': "Đang đăng nhập: @{name}",
   'settings.guestMode': "Đang dùng chế độ Khách",
   'settings.signOut': "Đăng xuất",
+  'auth.network': "Không kết nối được server. Kiểm tra mạng rồi thử lại nhé",
+  'auth.serverError': "Server đang gặp lỗi, thử lại sau nhé",
+  'auth.emailTaken': "Gmail này đã được dùng cho tài khoản khác",
 };
 
 export type StringKey = keyof typeof vi;
@@ -562,9 +565,12 @@ export const en: Record<StringKey, string> = {
   'auth.notExistBody': "There is no account named \"{name}\" yet. Create a new account?",
   'auth.cancel': "Cancel",
   'auth.agree': "Agree",
-  'auth.localNote': "Test build: accounts are stored on this device only, not synced to a server yet.",
+  'auth.localNote': "Your ZYX account works on every device. Passwords are encrypted on the server.",
   'settings.account': "Account",
   'settings.signedInAs': "Signed in as @{name}",
   'settings.guestMode': "Using Guest mode",
   'settings.signOut': "Sign out",
+  'auth.network': "Can't reach the server. Check your connection and try again",
+  'auth.serverError': "Server error, please try again later",
+  'auth.emailTaken': "This Gmail is already used by another account",
 };

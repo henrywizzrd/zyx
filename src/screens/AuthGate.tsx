@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { useSession } from '../data/auth';
+import { syncSession, useSession } from '../data/auth';
 import { AuthScreen } from './AuthScreen';
 
 // Chưa đăng nhập (lần đầu mở app, hoặc vừa Đăng xuất) thì hiện màn đăng nhập, xong rồi mới vào app.
@@ -11,6 +11,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!session) setEntered(false); // vừa đăng xuất
   }, [session]);
+  // Mở app: khớp lại với server (phiên hết hạn / bị đăng xuất ở chỗ khác thì quay về màn đăng nhập)
+  useEffect(() => {
+    syncSession();
+  }, []);
 
   if (!session && !entered) return <AuthScreen onDone={() => setEntered(true)} />;
   return (

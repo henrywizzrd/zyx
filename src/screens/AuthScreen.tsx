@@ -60,6 +60,8 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
     setBusy(true);
     const exists = await usernameExists(username);
     setBusy(false);
+    if (exists === 'network') return setError(t('auth.network'));
+    if (exists === 'unknown') return setError(t('auth.serverError'));
     if (exists) setStep('login');
     else setAskCreate(true); // popup: username chưa tồn tại, tạo mới?
   };
@@ -70,7 +72,7 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
     const r = await signIn(username, pass);
     setBusy(false);
     if (r === 'ok') onDone();
-    else setError(t('auth.wrongPassword'));
+    else setError(t(r === 'network' ? 'auth.network' : r === 'unknown' ? 'auth.serverError' : 'auth.wrongPassword'));
   };
 
   const create = async () => {
@@ -82,10 +84,10 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
     const r = await signUp(username, email, pass);
     setBusy(false);
     if (r === 'ok') onDone();
-    else {
-      setError(t('auth.taken'));
+    else if (r === 'taken') {
       reset('username');
-    }
+      setError(t('auth.taken'));
+    } else setError(t(r === 'emailTaken' ? 'auth.emailTaken' : r === 'network' ? 'auth.network' : 'auth.serverError'));
   };
 
   const guest = () => {
