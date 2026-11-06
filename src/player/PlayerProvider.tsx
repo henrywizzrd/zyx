@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Image, View } from 'react-native';
+import { AppState, Image, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Track } from '../data/mock';
 import { MiniAnchor, Position } from '../theme/types';
@@ -8,6 +8,7 @@ import { bigThumb } from '../components/Cover';
 import { getLikedIds, PlayContext, recordPlay, setLiked as saveLiked } from '../data/db';
 import { localUri } from '../data/downloads';
 import { Image as ExpoImage } from 'expo-image';
+import { showToast } from '../components/toastBridge';
 
 // ---- Link phát của từng bài, lấy sẵn trước khi cần
 // Ở chế độ nền (tắt màn hình), iPhone chỉ cho app chạy tiếp khi đang PHÁT âm thanh. Hết bài mà phải đợi vài giây lấy link
@@ -58,6 +59,24 @@ let qidSeq = 0;
 const single = (t: Track): PlayContext => ({ kind: 'search', id: t.id, title: t.title, thumb: t.thumb });
 const enqueue = (t: Track, ctx: PlayContext, auto = false): QueueItem => ({ ...t, qid: `q${++qidSeq}`, auto, ctx });
 const AUTOPLAY_KEY = 'zyx:autoplay';
+// Phiên nghe gần nhất (hàng đợi, bài đang phát, đang nghe tới giây nào, trộn/lặp) để mở lại app nghe tiếp
+const SESSION_KEY = 'zyx:session';
+const SESSION_MAX = 300; // lưu tối đa 300 bài quanh bài đang phát
+type SavedSession = { queue: QueueItem[]; index: number; position: number; shuffle: boolean; repeat: Repeat };
+
+// Còn mạng không: hỏi một địa chỉ siêu nhẹ của Google (trả về rỗng), quá 3 giây coi như mất mạng
+async function isOnline(): Promise<boolean> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 3000);
+  try {
+    const r = await fetch('https://www.gstatic.com/generate_204', { method: 'HEAD', signal: ctrl.signal });
+    return r.ok || r.status === 204;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 interface PlayerContextValue {
   track: Track;
@@ -157,6 +176,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const advanceRef = useRef<(auto: boolean) => void>(() => {});
   const autoplayRef = useRef(true);
   const radioBusy = useRef<Promise<boolean> | null>(null);
+  // Mở lại app: hàng đợi cũ đã hiện lại nhưng CHƯA nạp nhạc (bấm phát mới nạp, rồi tua tới chỗ đang nghe dở)
+  const needsLoad = useRef(false);
+  const resumeAt = useRef(0);
+  const pendingSeek = useRef<{ qid: string; at: number } | null>(null);
+  const goToRef = useRef<(i: number) => void>(() => {});
 
   // Đổi hàng đợi: luôn cập nhật cả bản sao (ref) lẫn state
   const commitQueue = useCallback((q: QueueItem[], i = indexRef.current) => {
@@ -187,6 +211,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const load = useCallback(async (t: QueueItem) => {
     if (!musicSupported) return;
+    needsLoad.current = false;
+    if (pendingSeek.current && pendingSeek.current.qid !== t.qid) pendingSeek.current = null;
     const id = ++reqId.current;
     loadingRef.current = true;
     // Tải trước ảnh bìa lớn để lúc mở player ảnh đã sẵn, không bị giật
@@ -211,6 +237,21 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       recordPlay({ ...t, duration: t.duration }, t.ctx);
     } catch (e) {
       console.warn('Không phát được', t.title, e);
+      // Mất mạng: tự chuyển sang bài kế tiếp ĐÃ TẢI VỀ trong hàng đợi (nếu có), không thì báo cho người dùng biết
+      if (id === reqId.current && !(await isOnline()) && id === reqId.current) {
+        const q = queueRef.current;
+        const k = q.findIndex((x) => x.qid === t.qid);
+        for (let j = 1; j < q.length; j++) {
+          const c = (k + j) % q.length;
+          if (localUri(q[c].id)) {
+            showToast('player.offlineSkip');
+            loadingRef.current = false;
+            goToRef.current(c);
+            return;
+          }
+        }
+        showToast('player.offline');
+      }
       if (id === reqId.current) {
         setFailed(true);
         failedRef.current = true;
@@ -234,6 +275,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     },
     [load]
   );
+  goToRef.current = goTo;
 
   const playTrack = useCallback(
     (t: Track, list?: Track[], ctx?: PlayContext) => {
@@ -449,6 +491,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const togglePlay = useCallback(() => {
     if (!musicSupported || queueRef.current.length === 0) return;
+    // Hàng đợi khôi phục từ lần mở app trước: nạp bài rồi tua tới chỗ đang nghe dở
+    if (needsLoad.current) {
+      const cur = queueRef.current[indexRef.current];
+      if (!cur) return;
+      pendingSeek.current = resumeAt.current > 3 ? { qid: cur.qid, at: resumeAt.current } : null;
+      load(cur);
+      return;
+    }
     // Bài trước đó không phát được: bấm phát là thử tải lại
     if (failedRef.current) {
       const cur = queueRef.current[indexRef.current];
@@ -462,6 +512,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const seekTo = useCallback((s: number) => {
     if (!musicSupported || queueRef.current.length === 0) return;
+    // Chưa nạp bài (vừa mở lại app): chỉ nhớ chỗ muốn nghe, bấm phát sẽ tua tới đó
+    if (needsLoad.current) {
+      resumeAt.current = Math.max(0, s);
+      setProgress(resumeAt.current);
+      return;
+    }
     audio().getPlayer().seekTo(Math.max(0, s));
   }, []);
 
@@ -470,6 +526,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (!musicSupported) return;
     const p = audio().getPlayer();
     const sub = p.addListener('playlistStatusUpdate', (s) => {
+      // Nghe tiếp từ lần trước: bài đã nạp xong thì tua tới chỗ đang nghe dở
+      const ps = pendingSeek.current;
+      if (ps && s.isLoaded && s.duration > 0 && queueRef.current[indexRef.current]?.qid === ps.qid) {
+        pendingSeek.current = null;
+        p.seekTo(Math.min(ps.at, Math.max(0, s.duration - 2))).catch(() => {});
+      }
       setIsPlaying(s.playing);
       setProgress(s.currentTime);
       // Độ dài bài khi phát qua mạng hay nhích lên xuống vài phần trăm giây mỗi lần báo:
@@ -513,6 +575,75 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     });
     return () => audio().onTrackChange(null);
   }, []);
+
+  // ---- Nhớ phiên nghe để mở lại app nghe tiếp
+  const restored = useRef(false);
+  const progressRef = useRef(0);
+  progressRef.current = progress;
+  const saveSession = useCallback(() => {
+    if (!restored.current) return; // chưa đọc xong phiên cũ thì đừng ghi đè
+    const q = queueRef.current;
+    if (q.length === 0) return;
+    const i = indexRef.current;
+    const from = Math.max(0, i - Math.floor(SESSION_MAX / 3));
+    const data: SavedSession = {
+      queue: q.slice(from, from + SESSION_MAX),
+      index: i - from,
+      position: needsLoad.current ? resumeAt.current : progressRef.current,
+      shuffle: shuffleRef.current,
+      repeat: repeatRef.current,
+    };
+    AsyncStorage.setItem(SESSION_KEY, JSON.stringify(data)).catch(() => {});
+  }, []);
+
+  // Mở app: đọc phiên cũ, hiện lại bài đang nghe (đang dừng) + hàng đợi, chưa nạp nhạc cho tới khi bấm phát
+  useEffect(() => {
+    AsyncStorage.getItem(SESSION_KEY)
+      .then((raw) => {
+        if (!raw || queueRef.current.length > 0) return; // đã kịp bấm phát bài khác thì thôi
+        const d = JSON.parse(raw) as SavedSession;
+        if (!Array.isArray(d.queue) || d.queue.length === 0) return;
+        const q = d.queue.map(({ qid: _q, auto, ctx, ...tr }) => enqueue(tr as Track, ctx ?? single(tr as Track), !!auto));
+        const i = Math.min(Math.max(0, d.index | 0), q.length - 1);
+        commitQueue(q, i);
+        shuffleRef.current = !!d.shuffle;
+        setShuffle(!!d.shuffle);
+        if (d.repeat === 'all' || d.repeat === 'one' || d.repeat === 'off') {
+          repeatRef.current = d.repeat;
+          setRepeat(d.repeat);
+          if (musicSupported) audio().setLoopOne(d.repeat === 'one');
+        }
+        needsLoad.current = true;
+        resumeAt.current = Math.max(0, Number(d.position) || 0);
+        setDuration(q[i].duration);
+        setProgress(resumeAt.current);
+        // Lấy sẵn link bài đó để bấm phát là chạy ngay
+        if (musicSupported) setTimeout(() => resolveUrl(q[i].id).catch(() => {}), 2500);
+      })
+      .catch(() => {})
+      .finally(() => {
+        restored.current = true;
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ghi lại khi đổi bài / hàng đợi / trộn / lặp, mỗi 10 giây khi đang phát, và khi app chuyển xuống nền
+  useEffect(() => {
+    saveSession();
+  }, [queue, index, shuffle, repeat, saveSession]);
+  useEffect(() => {
+    if (!isPlaying) {
+      saveSession(); // vừa dừng: ghi đúng chỗ đang dừng
+      return;
+    }
+    const id = setInterval(saveSession, 10000);
+    return () => clearInterval(id);
+  }, [isPlaying, saveSession]);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st !== 'active') saveSession();
+    });
+    return () => sub.remove();
+  }, [saveSession]);
 
   const value = useMemo<PlayerContextValue>(
     () => ({

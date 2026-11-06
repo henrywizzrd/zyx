@@ -18,6 +18,7 @@ import { sheet } from '../components/useSongMenu';
 import { useFrame } from '../components/layout';
 import { Reorderable } from '../components/Reorderable';
 import { ReorderableScrollView } from '../components/ReorderableScrollView';
+import { ProfileFeed } from '../components/ProfileFeed';
 
 const H_PAD = 16;
 const COVER_H = 520; // chiều cao vùng ảnh bìa: phủ phần đầu trang rồi mờ dần xuống tận danh sách
@@ -38,7 +39,8 @@ const LAYOUT_ICON: Record<LibraryLayout, keyof typeof Ionicons.glyphMap> = {
   covers3: 'apps-outline',
 };
 
-type Filter = 'all' | 'playlist' | 'album' | 'artist';
+// 'profile': phần Profile kiểu Threads (bài đăng, đăng lại, share) thay cho danh sách thư viện
+type Filter = 'all' | 'profile' | 'playlist' | 'album' | 'artist';
 type Item = LibraryEntry & { id: string }; // Reorderable cần trường id: dùng key của mục
 type Sort = 'recents' | 'alpha';
 
@@ -311,13 +313,6 @@ export function LibraryScreen() {
             </View>
           </Pressable>
           <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={[{ color: hero.text, fontSize: 12, fontWeight: '600' }, heroShadow]}>{t('lib.profile')}</Text>
-              {/* Nút bút: mở popup sửa tên và hashtag */}
-              <Pressable onPress={() => setEditOpen(true)} hitSlop={8} style={styles.penBtn}>
-                <Ionicons name="pencil" size={16} color="#FFFFFF" />
-              </Pressable>
-            </View>
             <Text numberOfLines={1} style={[{ color: hero.text, fontSize: 30, fontWeight: '800', marginTop: 2 }, heroShadow]}>
               {profile.name}
               <Text style={{ color: hero.sub, fontWeight: '600' }}> #{profile.tag}</Text>
@@ -339,17 +334,29 @@ export function LibraryScreen() {
                   </View>
                 ))}
               </View>
+              {/* Nút bút (cùng cỡ với nút đổi ảnh bìa): mở popup sửa tên và hashtag */}
+              <Pressable onPress={() => setEditOpen(true)} hitSlop={8} style={[styles.penBtn, { marginLeft: 10 }]}>
+                <Ionicons name="pencil-outline" size={18} color="#FFFFFF" />
+              </Pressable>
             </View>
           </View>
         </View>
 
         {/* Chip lọc */}
         <View style={{ paddingHorizontal: H_PAD, marginTop: 28, flexDirection: 'row', gap: 8 }}>
+          {chip(t('lib.profile'), filter === 'profile', () => toggleFilter('profile'))}
           {chip(t('lib.playlists'), filter === 'playlist', () => toggleFilter('playlist'))}
           {chip(t('lib.albums'), filter === 'album', () => toggleFilter('album'))}
           {chip(t('lib.artists'), filter === 'artist', () => toggleFilter('artist'))}
         </View>
 
+        {/* Mục Profile: bài đăng / đăng lại / share thay cho danh sách thư viện */}
+        {filter === 'profile' ? (
+          <View style={{ paddingHorizontal: H_PAD, marginTop: 12 }}>
+            <ProfileFeed />
+          </View>
+        ) : (
+        <>
         {/* Tìm kiếm, sắp xếp, đổi kiểu hiển thị */}
         <View style={{ paddingHorizontal: H_PAD, marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           {searchOpen ? (
@@ -398,6 +405,8 @@ export function LibraryScreen() {
         <View style={{ paddingHorizontal: H_PAD, marginTop: 16 }}>
           {renderItems()}
         </View>
+        </>
+        )}
       </View>
       {cropImg && (
         <CoverCropper
@@ -433,10 +442,10 @@ const styles = StyleSheet.create({
     position: 'absolute', right: 6, bottom: 6, width: 26, height: 26, borderRadius: 13,
     backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center',
   },
+  // Cùng cỡ và kiểu với nút đổi ảnh bìa (coverBtn)
   penBtn: {
     width: 34, height: 34, borderRadius: 17,
-    backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)',
-    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center',
   },
   coverBtn: {
     position: 'absolute', zIndex: 2, width: 34, height: 34, borderRadius: 17,

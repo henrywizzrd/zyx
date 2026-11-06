@@ -106,8 +106,34 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 }
 const CLIENT_TIMEOUT = 7000; // mỗi client tối đa 7 giây (lấy link + kiểm tra link)
 
+// Nhớ client nào lấy link thành công lần gần nhất, lần sau thử nó ĐẦU TIÊN.
+// Trước đây luôn thử theo thứ tự cố định: client đầu mà hỏng thì phải chờ nó hết thời gian (tới 7 giây) mới sang client sau,
+// nên bài đầu tiên sau khi mở app hay phát chậm
+const CLIENT_KEY = 'zyx:ytClient';
+let preferredClient: string | null = null;
+let preferredLoaded: Promise<void> | null = null;
+function loadPreferredClient() {
+  if (!preferredLoaded) {
+    preferredLoaded = (async () => {
+      try {
+        const AsyncStorage = (require('@react-native-async-storage/async-storage') as typeof import('@react-native-async-storage/async-storage')).default;
+        preferredClient = await AsyncStorage.getItem(CLIENT_KEY);
+      } catch {}
+    })();
+  }
+  return preferredLoaded;
+}
+function rememberClient(client: string) {
+  if (client === preferredClient) return;
+  preferredClient = client;
+  try {
+    const AsyncStorage = (require('@react-native-async-storage/async-storage') as typeof import('@react-native-async-storage/async-storage')).default;
+    AsyncStorage.setItem(CLIENT_KEY, client).catch(() => {});
+  } catch {}
+}
+
 export async function getAudio(videoId: string, log?: Log, muxed = false): Promise<AudioInfo> {
-  const yt = await withTimeout(getSession(log), 15000, 'tạo phiên');
+  const [yt] = await Promise.all([withTimeout(getSession(log), 15000, 'tạo phiên'), loadPreferredClient()]);
   const errors: string[] = [];
 
   // Lần 1: mọi client với chất lượng 360p. Lần 2 (bài không có bản 360p, ví dụ vài bài trong album): lấy bản tốt nhất có sẵn
@@ -115,6 +141,8 @@ export async function getAudio(videoId: string, log?: Log, muxed = false): Promi
     ...CLIENTS.map((client) => ({ client, quality: '360p' })),
     ...(muxed ? (['IOS', 'ANDROID'] as const).map((client) => ({ client, quality: 'best' })) : []),
   ];
+  // Client chạy được lần trước lên đầu (giữ nguyên thứ tự còn lại)
+  if (preferredClient) attempts.sort((a, b) => Number(b.client === preferredClient) - Number(a.client === preferredClient));
   const start = Date.now();
   for (const { client, quality } of attempts) {
     if (Date.now() - start > 25000) break; // tổng cộng tối đa ~25 giây rồi báo lỗi
@@ -147,6 +175,7 @@ export async function getAudio(videoId: string, log?: Log, muxed = false): Promi
       if (!probe.ok) throw new Error(`HTTP ${probe.status}`);
       const host = new URL(url).host;
       log?.(`Client ${client}: có link (${Date.now() - t0} ms), ${format.mime_type}`);
+      rememberClient(client);
       return { url, client, mime: format.mime_type, host };
     } catch (e) {
       const msg = String((e as Error)?.message ?? e).slice(0, 120);

@@ -10,7 +10,8 @@ import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, FadeIn, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useTheme } from '../theme/ThemeProvider';
-import { useT } from '../i18n';
+import { StringKey, useT } from '../i18n';
+import { getToastImpl, setToastImpl } from './toastBridge';
 import type { Track } from '../data/mock';
 import { usePlayerPick } from '../player/PlayerProvider';
 import { useNav } from '../nav/Nav';
@@ -131,6 +132,14 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
     [toastA]
   );
   useEffect(() => () => void (toastTimer.current && clearTimeout(toastTimer.current)), []);
+  useEffect(() => {
+    // Cho PlayerProvider (nằm ngoài tấm này) hiện thông báo nhỏ
+    const fn = (key: StringKey) => toast(t(key));
+    setToastImpl(fn);
+    return () => {
+      if (getToastImpl() === fn) setToastImpl(null);
+    };
+  }, [toast, t]);
 
   // ---- Các việc của một bài hát
   const goArtist = async (track: Track) => {
