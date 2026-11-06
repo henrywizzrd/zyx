@@ -109,7 +109,7 @@ function Feed() {
   const { theme } = useTheme();
   const t = useT();
   const [posts, setPosts] = useState<Post[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | false>(false);
   const [more, setMore] = useState(true);
   const [busy, setBusy] = useState(false);
   const load = (older = false) => {
@@ -122,7 +122,7 @@ function Feed() {
         setPosts((cur) => (older && cur ? [...cur, ...l.filter((p) => !cur.some((c) => c.id === p.id))] : l));
         setMore(l.length >= 30);
       })
-      .catch(() => setFailed(true))
+      .catch((e) => setFailed(String(e?.message ?? e)))
       .finally(() => setBusy(false));
   };
   useEffect(() => load(), []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -142,6 +142,8 @@ function Feed() {
         failed ? (
           <Pressable onPress={() => load()}>
             <Text style={{ color: textSecondary }}>{t('community.loadFailed')}</Text>
+            {/* Lý do cụ thể (để biết server thiếu gì, vd. chưa chạy file SQL) */}
+            <Text style={{ color: textSecondary, fontSize: 12, marginTop: 4, opacity: 0.7 }}>{failed}</Text>
           </Pressable>
         ) : (
           <ActivityIndicator color={accent} style={{ marginVertical: 16 }} />

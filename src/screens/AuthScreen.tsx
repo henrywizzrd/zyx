@@ -111,7 +111,8 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
 
   // Nhập mã 6 số
   const verify = async () => {
-    if (!/^\d{6}$/.test(code)) return setError(t('auth.badCode'));
+    // Supabase gửi mã 6 hoặc 8 số tuỳ cài đặt "Email OTP Length" → nhận cả hai
+    if (!/^\d{6,8}$/.test(code)) return setError(t('auth.badCode'));
     setBusy(true);
     const r = await verifyCode(username, pendingEmail, code);
     setBusy(false);
@@ -263,7 +264,7 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
                     <TextInput
                       value={code}
                       onChangeText={(v) => {
-                        setCode(v.replace(/\D/g, '').slice(0, 6));
+                        setCode(v.replace(/\D/g, '').slice(0, 8));
                         setError(null);
                       }}
                       placeholder="000000"
@@ -271,7 +272,7 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
                       keyboardType="number-pad"
                       textContentType="oneTimeCode"
                       autoComplete="one-time-code"
-                      maxLength={6}
+                      maxLength={8}
                       autoFocus
                       onSubmitEditing={verify}
                       style={[styles.input, { letterSpacing: 8, fontSize: 20, fontWeight: '700' }]}
