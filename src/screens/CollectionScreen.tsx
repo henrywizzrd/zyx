@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, PixelRatio, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, PixelRatio, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
@@ -19,6 +19,8 @@ import {
   renamePlaylist, setPlaylistPublic, setSaved, useDbVersion,
 } from '../data/db';
 import { useScreenSize } from '../components/ScreenSize';
+import Animated from 'react-native-reanimated';
+import { StretchyBg, useStretchScroll } from '../components/Stretchy';
 
 type Row = Track & { position?: number };
 type Info = { title: string; subtitle: string; thumb?: string; owner?: Collection['owner'] };
@@ -171,6 +173,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
 
   // ---- Phần đầu trang
   const heroH = Math.min(Math.round(width * 1.05), 480);
+  const { scrollY, onScroll } = useStretchScroll(); // ảnh bìa giãn ra khi kéo quá đầu trang
   const fadeTo = theme.background.type === 'preset' ? bg : bg + '00';
   const imgSize = Math.round(width * PixelRatio.get());
   const meta = [info.subtitle].filter(Boolean).join(' • ');
@@ -178,6 +181,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
   const Header = (
     <View>
       <View style={{ height: heroH, marginHorizontal: -(pad.left + 16) }}>
+        <StretchyBg scrollY={scrollY} height={heroH}>
         {info.thumb ? (
           <SmartImage url={info.thumb} size={imgSize} style={StyleSheet.absoluteFill} />
         ) : page.source === 'liked' ? (
@@ -191,6 +195,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
         )}
         {/* Tối nhẹ ở đỉnh cho nút back dễ thấy, cạnh dưới tan dần vào nền */}
         <LinearGradient colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0)', fadeTo]} locations={[0, 0.35, 1]} style={StyleSheet.absoluteFill} />
+        </StretchyBg>
         <View style={[styles.topBar, { top: pad.top + 6, left: pad.left + 16, right: pad.right + 16 }]}>
           <Pressable onPress={goBack} hitSlop={10} style={styles.glassBtn}>
             <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
@@ -280,13 +285,13 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <FlatList
+      <Animated.FlatList
         data={entered ? rows : rows.slice(0, 6)}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         keyExtractor={(r, i) => `${r.id}:${r.position ?? i}`}
         ListHeaderComponent={Header}
         ListFooterComponent={Footer}
-        bounces={false}
-        overScrollMode="never"
         initialNumToRender={14}
         contentContainerStyle={{ paddingHorizontal: pad.left + 16, paddingBottom: pad.bottom + pad.endPadding }}
         ItemSeparatorComponent={() => <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: border }} />}

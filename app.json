@@ -2,7 +2,7 @@
   "expo": {
     "name": "Zyx",
     "slug": "zyx",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -66,6 +66,7 @@
         "projectId": "7f4dcbef-7a9b-43e4-8cd6-6b6674c0ad03"
       }
     },
-    "owner": "tysonneee"
+    "owner": "tysonneee",
+    "scheme": "zyx"
   }
 }

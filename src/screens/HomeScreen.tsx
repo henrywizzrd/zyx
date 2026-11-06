@@ -140,7 +140,7 @@ function CoverCard({ title, subtitle, thumb, round, onPress, onLongPress, icon }
 
 function HRow({ children }: { children: React.ReactNode }) {
   return (
-    <ScrollView horizontal bounces={false} overScrollMode="never" showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingHorizontal: PAD }} style={{ marginHorizontal: -PAD }}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingHorizontal: PAD }} style={{ marginHorizontal: -PAD }}>
       {children}
     </ScrollView>
   );
@@ -514,8 +514,6 @@ export function HomeScreen() {
 
   return (
     <ScrollView
-      bounces={false}
-      overScrollMode="never"
       contentContainerStyle={{
         paddingTop: pad.top + 16,
         paddingBottom: pad.bottom + pad.endPadding,

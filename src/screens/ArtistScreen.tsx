@@ -14,6 +14,8 @@ import { musicSupported, toTrack, ytmusic } from '../music/lazy';
 import type { ArtistPage, Card } from '../music/ytmusic';
 import { isSaved, PlayContext, setSaved, useDbVersion } from '../data/db';
 import { useScreenSize } from '../components/ScreenSize';
+import Animated from 'react-native-reanimated';
+import { StretchyBg, useStretchScroll } from '../components/Stretchy';
 
 const PAD = 16;
 const HERO_H = 340;
@@ -37,6 +39,7 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
   const songMenu = useSongMenu();
   const dbv = useDbVersion();
   const { text, textSecondary, accent, onAccent, surface, border } = theme.colors;
+  const { scrollY, onScroll } = useStretchScroll();
 
   const [data, setData] = useState<ArtistPage | null>(pageCache.get(page.id) ?? null);
   const [status, setStatus] = useState<'loading' | 'done' | 'error'>(data ? 'done' : 'loading');
@@ -91,17 +94,20 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <ScrollView bounces={false} overScrollMode="never" contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}>
+      <Animated.ScrollView onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}>
         {/* Ảnh lớn của nghệ sĩ, tên đè lên phần dưới ảnh */}
         <View style={{ height: HERO_H }}>
-          {thumb ? (
-            <SmartImage url={thumb} size={imgSize} style={StyleSheet.absoluteFill} />
-          ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: surface, alignItems: 'center', justifyContent: 'center' }]}>
-              <Ionicons name="person" size={96} color={textSecondary} />
-            </View>
-          )}
-          <LinearGradient colors={['rgba(0,0,0,0.25)', 'rgba(0,0,0,0)', fadeTo]} locations={[0, 0.45, 1]} style={StyleSheet.absoluteFill} />
+          {/* Ảnh + lớp mờ: giãn ra khi kéo quá đầu trang */}
+          <StretchyBg scrollY={scrollY} height={HERO_H}>
+            {thumb ? (
+              <SmartImage url={thumb} size={imgSize} style={StyleSheet.absoluteFill} />
+            ) : (
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: surface, alignItems: 'center', justifyContent: 'center' }]}>
+                <Ionicons name="person" size={96} color={textSecondary} />
+              </View>
+            )}
+            <LinearGradient colors={['rgba(0,0,0,0.25)', 'rgba(0,0,0,0)', fadeTo]} locations={[0, 0.45, 1]} style={StyleSheet.absoluteFill} />
+          </StretchyBg>
           <Pressable onPress={goBack} hitSlop={10} style={[styles.back, { top: pad.top + 8, left: PAD }]}>
             <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </Pressable>
@@ -155,7 +161,7 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
         {(entered ? data?.shelves ?? [] : []).map((shelf, si) => (
           <View key={`${si}:${shelf.title}`}>
             <Text style={[styles.section, { color: text, paddingHorizontal: PAD }]}>{shelf.title}</Text>
-            <ScrollView horizontal bounces={false} overScrollMode="never" showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingHorizontal: PAD }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingHorizontal: PAD }}>
               {shelf.cards.map((c) => {
                 const round = c.kind === 'artist';
                 return (
@@ -175,7 +181,7 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
             </ScrollView>
           </View>
         ))}
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }

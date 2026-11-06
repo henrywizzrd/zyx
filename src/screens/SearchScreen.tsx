@@ -252,8 +252,6 @@ export function SearchScreen() {
 
   return (
     <ScrollView
-      bounces={false}
-      overScrollMode="never"
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
       contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}
@@ -376,7 +374,7 @@ export function SearchScreen() {
         ) : (
           // ---------- Đã bấm Search: kết quả đầy đủ, lọc theo loại ----------
           <View style={{ marginTop: 14, gap: 4 }}>
-            <ScrollView horizontal bounces={false} overScrollMode="never" showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 10 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 10 }}>
               {KINDS.map((k) => (
                 <Pressable
                   key={k}

@@ -15,6 +15,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    flowType: 'pkce', // đăng nhập Google qua trình duyệt: server trả về mã, app đổi mã lấy phiên (an toàn hơn)
   },
 });
 

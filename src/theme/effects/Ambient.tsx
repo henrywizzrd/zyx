@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
-import { Canvas, Group, Path, Picture, Skia, useClock } from '@shopify/react-native-skia';
+import { Canvas, Picture, Skia, useClock } from '@shopify/react-native-skia';
 import { useDerivedValue } from 'react-native-reanimated';
 import { useTheme } from '../ThemeProvider';
 import { drawFlake, FLAKE_SVGS } from './snowflakes';
 import { drawLeaf, LEAF_COLORS, LEAF_SVGS, makeLeafPaths } from './leaves';
-import { BEAN_COLORS, BEAN_SVG, BEANS } from './beans';
+import { BEAN_COLORS, BEAN_SVG } from './beans';
 import { drawBubble, drawFish, FISH_BODY, FISH_COLORS, FISH_FIN, FISH_TAIL } from './ocean';
 import { useScreenSize } from '../../components/ScreenSize';
 
@@ -13,7 +13,7 @@ import { useScreenSize } from '../../components/ScreenSize';
 //  - bộ Snow: bông tuyết
 //  - bộ Green: lá cây
 //  - bộ Ocean: bong bóng oxy như bể cá + vài chú cá bơi qua lại
-//  - bộ Latte: vài hạt cà phê trang trí đứng yên (vẽ một lần, không tốn pin)
+//  - bộ Latte: hạt cà phê trôi lững lờ khắp màn hình
 // Không chạy (không tốn pin) khi: bộ màu khác, đã tắt, đang mở Player (paused), hoặc app đang ở nền.
 export function AmbientEffect({ paused }: { paused?: boolean }) {
   const { theme } = useTheme();
@@ -235,26 +235,58 @@ function OceanCanvas({ onMedia }: { onMedia: boolean }) {
   return <Layer picture={picture} />;
 }
 
-// Bộ Latte: hạt cà phê đứng yên quanh mép màn hình. Không có đồng hồ chạy nên chỉ vẽ một lần
+// Bộ Latte: hạt cà phê trôi lững lờ khắp màn hình, mỗi hạt một hướng, xoay chậm và nhấp nhô nhẹ như đang trôi trên mặt cà phê.
+// Trôi ra khỏi mép này thì vòng lại từ mép đối diện. Vẽ bằng Skia trên UI thread như tuyết / lá
 function CoffeeBeans() {
   const { width, height } = useScreenSize();
-  const bean = useMemo(() => {
-    const p = Skia.Path.MakeFromSVGString(BEAN_SVG);
-    return p ? Skia.PathBuilder.MakeFromPath(p).setFillType(1).build() : null; // even-odd: rãnh giữa thành khe rỗng
-  }, []);
-  if (!bean) return null;
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Canvas style={StyleSheet.absoluteFill}>
-        {BEANS.map(([x, y, rot, size], i) => (
-          <Group
-            key={i}
-            transform={[{ translateX: x * width }, { translateY: y * height }, { rotate: (rot * Math.PI) / 180 }, { scale: size }]}
-          >
-            <Path path={bean} color={BEAN_COLORS[i % BEAN_COLORS.length]} opacity={0.55} />
-          </Group>
-        ))}
-      </Canvas>
-    </View>
-  );
+  const clock = useClock();
+  // Mỗi hạt 9 số: x, y ban đầu, hướng trôi (rad), tốc độ (px/giây), kích thước, tốc độ xoay, độ nhấp nhô, độ đậm, màu
+  const beans = useMemo(() => {
+    const out: number[] = [];
+    for (let i = 0; i < scaled(14, width, height); i++) {
+      const depth = rnd(i, 3);
+      out.push(
+        rnd(i, 1), rnd(i, 2), rnd(i, 4) * Math.PI * 2, 5 + depth * 9, 8 + depth * 7,
+        (rnd(i, 5) - 0.5) * 30, 4 + rnd(i, 6) * 8, 0.35 + depth * 0.3, i % BEAN_COLORS.length
+      );
+    }
+    return out;
+  }, [width, height]);
+
+  const picture = useDerivedValue(() => {
+    const t = clock.value / 1000;
+    const rec = Skia.PictureRecorder();
+    const canvas = rec.beginRecording(Skia.XYWHRect(0, 0, width, height));
+    try {
+      const raw = Skia.Path.MakeFromSVGString(BEAN_SVG);
+      if (raw) {
+        const bean = Skia.PathBuilder.MakeFromPath(raw).setFillType(1).build(); // even-odd: rãnh giữa thành khe rỗng
+        const paint = Skia.Paint();
+        paint.setAntiAlias(true);
+        const M = 30; // lề ngoài màn hình để hạt trôi ra / vào mượt
+        const W = width + M * 2;
+        const H = height + M * 2;
+        for (let i = 0, k = 0; i < beans.length; i += 9, k++) {
+          const dist = beans[i + 3] * t;
+          const bob = Math.sin(t * 0.6 + k * 1.3) * beans[i + 6];
+          let x = (beans[i] * W + Math.cos(beans[i + 2]) * dist) % W;
+          let y = (beans[i + 1] * H + Math.sin(beans[i + 2]) * dist + bob) % H;
+          if (x < 0) x += W;
+          if (y < 0) y += H;
+          paint.setColor(Skia.Color(BEAN_COLORS[beans[i + 8]]));
+          paint.setAlphaf(beans[i + 7]);
+          canvas.save();
+          canvas.translate(x - M, y - M);
+          canvas.rotate(k * 47 + t * beans[i + 5], 0, 0);
+          canvas.scale(beans[i + 4], beans[i + 4]);
+          canvas.drawPath(bean, paint);
+          canvas.restore();
+        }
+      }
+    } catch (e) {
+      // vẽ lỗi thì khung hình này để trống
+    }
+    return rec.finishRecordingAsPicture();
+  });
+  return <Layer picture={picture} />;
 }

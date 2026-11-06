@@ -63,6 +63,7 @@ interface Props {
   scrollEnabled?: boolean;
   // Báo vị trí cuộn ra ngoài (ví dụ tấm Hàng đợi cần biết danh sách đã ở trên cùng chưa)
   scrollYOut?: SharedValue<number>;
+  bounces?: boolean; // cho nảy khi kéo quá đầu/cuối (Thư viện bật; hàng chờ tắt để không đụng cử chỉ kéo đóng tấm)
   // Báo ra ngoài: đang nhấc một ô lên để đổi thứ tự (tấm Hàng đợi khi đó phải đứng yên)
   reorderingOut?: SharedValue<boolean>;
   // Cử chỉ cuộn gốc của danh sách (tạo ở ngoài bằng useNativeGesture), để cử chỉ khác (kéo tấm Hàng đợi)
@@ -70,7 +71,7 @@ interface Props {
   nativeGesture?: ReturnType<typeof useNativeGesture>;
 }
 
-export function ReorderableScrollView({ children, contentContainerStyle, style, scrollEnabled: allowScroll = true, scrollYOut, reorderingOut, nativeGesture }: Props) {
+export function ReorderableScrollView({ children, contentContainerStyle, style, scrollEnabled: allowScroll = true, scrollYOut, reorderingOut, nativeGesture, bounces = false }: Props) {
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const { height: winHeight } = useScreenSize();
   const [scrollEnabled, setScrollEnabled] = useState(true);
@@ -261,8 +262,8 @@ export function ReorderableScrollView({ children, contentContainerStyle, style, 
           scrollEnabled={scrollEnabled && allowScroll}
           onScroll={onScroll}
           scrollEventThrottle={16}
-          bounces={false}
-          overScrollMode="never"
+          bounces={bounces}
+          overScrollMode={bounces ? 'auto' : 'never'}
           onContentSizeChange={(_, h) => {
             contentH.value = h;
           }}

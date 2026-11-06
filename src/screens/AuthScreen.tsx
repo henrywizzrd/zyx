@@ -8,7 +8,7 @@ import Animated, { Easing, FadeIn, FadeInDown, useAnimatedStyle, useSharedValue,
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useT } from '../i18n';
 import { useScreenSize } from '../components/ScreenSize';
-import { cleanUsername, continueAsGuest, EMAIL_RE, PASSWORD_MIN, signIn, signUp, USERNAME_RE, usernameExists } from '../data/auth';
+import { chooseUsername, cleanUsername, continueAsGuest, EMAIL_RE, PASSWORD_MIN, resendCode, signIn, signInWithGoogle, signUp, USERNAME_RE, usernameExists, verifyCode } from '../data/auth';
 
 // Màn đăng nhập (hiện lần đầu mở app, hoặc sau khi Đăng xuất). Luôn nền đen, không theo theme.
 //  - chữ ZYX lớn, màu xanh lá gradient chạy chậm liên tục
@@ -28,7 +28,8 @@ const GREEN = '#1DB954';
 const RED = '#FF5A5F';
 const GRADIENT = ['#00512E', '#0FA958', '#5CFFA1', '#1DB954', '#0B7A45', '#7DFFB8', '#00512E'] as const;
 
-type Step = 'choose' | 'username' | 'login' | 'signup';
+// verify: nhập mã 6 số gửi về Gmail. pick: đăng nhập Google lần đầu, chọn username
+type Step = 'choose' | 'username' | 'login' | 'signup' | 'verify' | 'pick';
 
 export function AuthScreen({ onDone }: { onDone: () => void }) {
   const t = useT();
@@ -44,6 +45,22 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [askCreate, setAskCreate] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+  const [pendingEmail, setPendingEmail] = useState(''); // Gmail đang chờ nhập mã
+  const [cooldown, setCooldown] = useState(0); // giây còn lại mới được gửi lại mã
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [cooldown]);
+  const goVerify = (mail: string) => {
+    setPendingEmail(mail);
+    setCode('');
+    setError(null);
+    setStep('verify');
+    setCooldown(60);
+  };
+  const errText = (r: string) => t(r === 'network' ? 'auth.network' : 'auth.serverError');
 
   const reset = (to: Step) => {
     setStep(to);
@@ -72,7 +89,8 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
     const r = await signIn(username, pass);
     setBusy(false);
     if (r === 'ok') onDone();
-    else setError(t(r === 'network' ? 'auth.network' : r === 'unknown' ? 'auth.serverError' : 'auth.wrongPassword'));
+    else if (typeof r === 'object') goVerify(r.verify); // chưa nhập mã xác nhận lần trước: gửi lại mã
+    else setError(r === 'wrong' ? t('auth.wrongPassword') : errText(r));
   };
 
   const create = async () => {
@@ -84,10 +102,53 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
     const r = await signUp(username, email, pass);
     setBusy(false);
     if (r === 'ok') onDone();
+    else if (r === 'verify') goVerify(email.trim());
     else if (r === 'taken') {
       reset('username');
       setError(t('auth.taken'));
     } else setError(t(r === 'emailTaken' ? 'auth.emailTaken' : r === 'network' ? 'auth.network' : 'auth.serverError'));
+  };
+
+  // Nhập mã 6 số
+  const verify = async () => {
+    if (!/^\d{6}$/.test(code)) return setError(t('auth.badCode'));
+    setBusy(true);
+    const r = await verifyCode(username, pendingEmail, code);
+    setBusy(false);
+    if (r === 'ok') onDone();
+    else setError(r === 'wrong' ? t('auth.wrongCode') : errText(r));
+  };
+  const resend = async () => {
+    if (cooldown > 0) return;
+    setError(null);
+    const r = await resendCode(pendingEmail);
+    if (r === 'ok') {
+      setCooldown(60);
+      setNote(t('auth.codeResent'));
+    } else setError(r === 'tooSoon' ? t('auth.tooSoon') : errText(r));
+  };
+
+  // Google
+  const google = async () => {
+    if (busy) return;
+    setNote(null);
+    setBusy(true);
+    const r = await signInWithGoogle();
+    setBusy(false);
+    if (r === 'ok') onDone();
+    else if (r === 'pickUsername') {
+      setUsername('');
+      setError(null);
+      setStep('pick');
+    } else if (r !== 'cancelled') setNote(errText(r));
+  };
+  const pick = async () => {
+    if (!USERNAME_RE.test(username)) return setError(t('auth.badUsername'));
+    setBusy(true);
+    const r = await chooseUsername(username);
+    setBusy(false);
+    if (r === 'ok') onDone();
+    else setError(r === 'taken' ? t('auth.usernameTaken') : r === 'invalid' ? t('auth.badUsername') : errText(r));
   };
 
   const guest = () => {
@@ -151,8 +212,6 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
       <StatusBar style="light" />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView
-          bounces={false}
-          overScrollMode="never"
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top, paddingBottom: insets.bottom + 24, paddingHorizontal: 24 }}
         >
@@ -173,7 +232,8 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
             <View style={{ gap: 12, marginTop: 28 }}>
               {option('person-outline', t('auth.guest'), t('auth.guestSub'), guest, 0)}
               {option('sparkles-outline', t('auth.zyx'), t('auth.zyxSub'), () => reset('username'), 80)}
-              {option('logo-google', 'Google', t('auth.googleSub'), () => setNote(t('auth.googleSoon')), 160)}
+              {option('logo-google', 'Google', t('auth.googleSub'), google, 160)}
+              {busy && <ActivityIndicator color={GREEN} style={{ marginTop: 4 }} />}
               {note && <Text style={[styles.error, { color: SUB, textAlign: 'center' }]}>{note}</Text>}
             </View>
           ) : (
@@ -183,11 +243,50 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
                 <Text style={{ color: SUB, fontWeight: '600' }}>{t('auth.otherWays')}</Text>
               </Pressable>
               <Text style={styles.formTitle}>
-                {step === 'signup' ? t('auth.createTitle') : step === 'login' ? t('auth.welcomeBack') : t('auth.zyx')}
+                {step === 'signup'
+                  ? t('auth.createTitle')
+                  : step === 'login'
+                    ? t('auth.welcomeBack')
+                    : step === 'verify'
+                      ? t('auth.verifyTitle')
+                      : step === 'pick'
+                        ? t('auth.pickTitle')
+                        : t('auth.zyx')}
               </Text>
 
-              {/* Username luôn hiện. Sửa username thì quay lại bước kiểm tra */}
-              {field(
+              {/* Nhập mã 6 số gửi về Gmail */}
+              {step === 'verify' && (
+                <>
+                  <Text style={styles.hint}>{t('auth.verifyBody', { email: pendingEmail })}</Text>
+                  <View style={styles.field}>
+                    <Ionicons name="keypad-outline" size={18} color={SUB} />
+                    <TextInput
+                      value={code}
+                      onChangeText={(v) => {
+                        setCode(v.replace(/\D/g, '').slice(0, 6));
+                        setError(null);
+                      }}
+                      placeholder="000000"
+                      placeholderTextColor="#5A5A5A"
+                      keyboardType="number-pad"
+                      textContentType="oneTimeCode"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      autoFocus
+                      onSubmitEditing={verify}
+                      style={[styles.input, { letterSpacing: 8, fontSize: 20, fontWeight: '700' }]}
+                    />
+                  </View>
+                </>
+              )}
+
+              {/* Đăng nhập Google lần đầu: chọn username */}
+              {step === 'pick' && <Text style={styles.hint}>{t('auth.pickBody')}</Text>}
+              {step === 'pick' &&
+                field(username, (v) => setUsername(cleanUsername(v)), t('auth.username'), 'at', { onSubmit: pick, autoFocus: true })}
+
+              {/* Username (bước tài khoản ZYX). Sửa username thì quay lại bước kiểm tra */}
+              {(step === 'username' || step === 'login' || step === 'signup') && field(
                 username,
                 (v) => {
                   setUsername(cleanUsername(v));
@@ -213,6 +312,16 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
               {step === 'username' && mainButton(t('auth.continue'), checkUsername)}
               {step === 'login' && mainButton(t('auth.signIn'), login)}
               {step === 'signup' && mainButton(t('auth.create'), create)}
+              {step === 'verify' && mainButton(t('auth.verify'), verify)}
+              {step === 'verify' && (
+                <Pressable onPress={resend} disabled={cooldown > 0} hitSlop={8} style={{ alignSelf: 'center', marginTop: 4 }}>
+                  <Text style={{ color: cooldown > 0 ? SUB : GREEN, fontWeight: '700' }}>
+                    {cooldown > 0 ? t('auth.resendIn', { n: cooldown }) : t('auth.resend')}
+                  </Text>
+                </Pressable>
+              )}
+              {step === 'verify' && note && <Text style={[styles.error, { color: SUB, textAlign: 'center' }]}>{note}</Text>}
+              {step === 'pick' && mainButton(t('auth.finish'), pick)}
               <Text style={styles.localNote}>{t('auth.localNote')}</Text>
             </Animated.View>
           )}
@@ -287,6 +396,7 @@ const styles = StyleSheet.create({
   optionTitle: { color: TEXT, fontSize: 16, fontWeight: '800' },
   optionSub: { color: SUB, fontSize: 13, marginTop: 2 },
   back: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start' },
+  hint: { color: '#BDBDBD', fontSize: 14, lineHeight: 20 },
   formTitle: { color: TEXT, fontSize: 22, fontWeight: '800', marginBottom: 4 },
   field: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: CARD, borderRadius: 14, borderWidth: 1, borderColor: LINE, paddingHorizontal: 14, height: 52 },
   input: { flex: 1, color: TEXT, fontSize: 16, paddingVertical: 0 },

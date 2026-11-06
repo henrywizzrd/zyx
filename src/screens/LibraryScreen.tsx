@@ -19,6 +19,8 @@ import { useFrame } from '../components/layout';
 import { Reorderable } from '../components/Reorderable';
 import { ReorderableScrollView } from '../components/ReorderableScrollView';
 import { ProfileFeed } from '../components/ProfileFeed';
+import { StretchyBg } from '../components/Stretchy';
+import { useSharedValue } from 'react-native-reanimated';
 
 const H_PAD = 16;
 const COVER_H = 520; // chiều cao vùng ảnh bìa: phủ phần đầu trang rồi mờ dần xuống tận danh sách
@@ -91,6 +93,7 @@ export function LibraryScreen() {
   };
   const pad = useContentInsets();
   const { width } = useFrame();
+  const scrollY = useSharedValue(0); // để ảnh bìa giãn ra khi kéo quá đầu trang
 
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('recents');
@@ -265,11 +268,12 @@ export function LibraryScreen() {
   };
 
   return (
-    <ReorderableScrollView contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}>
+    <ReorderableScrollView bounces scrollYOut={scrollY} contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}>
       <View style={{ width: '100%' }}>
         {/* Ảnh bìa (wall) của profile: ảnh người dùng chọn, mờ dần xuống màu nền. Chưa có ảnh thì là dải màu như cũ */}
         {profile.cover ? (
           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: COVER_H }}>
+            <StretchyBg scrollY={scrollY} height={COVER_H}>
             <Image source={{ uri: profile.cover }} resizeMode="cover" style={StyleSheet.absoluteFill} />
             <LinearGradient
               // Phần trên: phủ nhẹ màu tối/sáng của theme (ngược với màu chữ) cho chữ nổi.
@@ -283,12 +287,17 @@ export function LibraryScreen() {
               locations={[0, 0.4, 0.75, 1]}
               style={StyleSheet.absoluteFill}
             />
+            </StretchyBg>
           </View>
         ) : (
-          <LinearGradient
-            colors={[theme.colors.glassTint === 'dark' ? profile.wallColor : profile.wallColor + '55', fadeTo]}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 320 }}
-          />
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 320 }}>
+            <StretchyBg scrollY={scrollY} height={320}>
+              <LinearGradient
+                colors={[theme.colors.glassTint === 'dark' ? profile.wallColor : profile.wallColor + '55', fadeTo]}
+                style={StyleSheet.absoluteFill}
+              />
+            </StretchyBg>
+          </View>
         )}
         {/* Nút đổi ảnh bìa */}
         <Pressable

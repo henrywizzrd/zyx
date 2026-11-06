@@ -169,8 +169,6 @@ export function ThemeStudioScreen() {
   return (
     <View style={StyleSheet.absoluteFill}>
       <ScrollView
-        bounces={false}
-        overScrollMode="never"
         contentContainerStyle={{
           paddingTop: pad.top + 8,
           paddingBottom: pad.bottom + pad.endPadding,

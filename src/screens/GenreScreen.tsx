@@ -13,6 +13,8 @@ import { useT } from '../i18n';
 import { musicSupported, toTrack, ytmusic } from '../music/lazy';
 import type { Card, Shelf } from '../music/ytmusic';
 import { cachedGenre, GENRE_CARD, loadGenre } from '../music/genreCache';
+import Animated from 'react-native-reanimated';
+import { StretchyBg, useStretchScroll } from '../components/Stretchy';
 
 const PAD = 16;
 const CARD = GENRE_CARD;
@@ -32,6 +34,7 @@ export function GenreScreen({ page }: { page: GenrePage }) {
   const { playTrack, shuffle, toggleShuffle } = usePlayerPick('playTrack', 'shuffle', 'toggleShuffle');
   const sheet = useActionSheet();
   const { text, textSecondary, accent, surface, bg } = theme.colors;
+  const { scrollY, onScroll } = useStretchScroll();
 
   // Có sẵn trên máy (đã mở hoặc đã tải trước): hiện ngay, cũ quá thì làm mới ngầm
   const [shelves, setShelves] = useState<Shelf[] | null>(() => cachedGenre(page.params)?.shelves ?? null);
@@ -88,10 +91,12 @@ export function GenreScreen({ page }: { page: GenrePage }) {
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <ScrollView bounces={false} overScrollMode="never" contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}>
+      <Animated.ScrollView onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}>
         {/* Màu của ô thể loại tan dần vào nền, tên thể loại đè lên */}
         <View style={{ height: HERO_H + pad.top }}>
-          <LinearGradient colors={[page.color, page.color + 'AA', fadeTo]} locations={[0, 0.5, 1]} style={StyleSheet.absoluteFill} />
+          <StretchyBg scrollY={scrollY} height={HERO_H + pad.top}>
+            <LinearGradient colors={[page.color, page.color + 'AA', fadeTo]} locations={[0, 0.5, 1]} style={StyleSheet.absoluteFill} />
+          </StretchyBg>
           <Pressable onPress={goBack} hitSlop={10} style={[styles.back, { top: pad.top + 6, left: PAD }]}>
             <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </Pressable>
@@ -121,7 +126,7 @@ export function GenreScreen({ page }: { page: GenrePage }) {
         {(shelves ?? []).slice(0, entered ? undefined : 1).map((shelf, si) => (
           <View key={`${si}:${shelf.title}`}>
             {!!shelf.title && <Text style={[styles.section, { color: text }]}>{shelf.title}</Text>}
-            <ScrollView horizontal bounces={false} overScrollMode="never" showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingHorizontal: PAD }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingHorizontal: PAD }}>
               {shelf.cards.map((c) => {
                 const round = c.kind === 'artist';
                 return (
@@ -141,7 +146,7 @@ export function GenreScreen({ page }: { page: GenrePage }) {
             </ScrollView>
           </View>
         ))}
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }

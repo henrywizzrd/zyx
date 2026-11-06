@@ -6,6 +6,8 @@ import { kvGet, kvSet, useDbVersion } from './db';
 //  - tài khoản ZYX = tài khoản Supabase Auth (Gmail + mật khẩu), kèm username riêng không trùng (bảng profiles)
 //  - đăng nhập bằng USERNAME: hỏi server "username này + mật khẩu này đúng không" (hàm login_email),
 //    đúng thì server trả về Gmail để đăng nhập. Server không bao giờ trả Gmail của người khác khi sai mật khẩu
+//  - tạo tài khoản: server gửi MÃ 6 SỐ về Gmail (kèm lời chào mừng), nhập đúng mã mới tạo xong → Gmail chắc chắn có thật
+//  - Google: mở trang đăng nhập Google trong trình duyệt của app; lần đầu thì chọn username
 //  - Khách: không có tài khoản, chỉ nhớ trong máy là đã chọn Khách
 // Phiên đăng nhập được Supabase nhớ trong máy: lần sau mở app vào thẳng. Đăng xuất trong Cài đặt.
 // ---------------------------------------------------------------------------
@@ -64,7 +66,8 @@ export async function usernameExists(username: string): Promise<boolean | AuthEr
   }
 }
 
-export async function signUp(username: string, email: string, password: string): Promise<'ok' | 'taken' | 'emailTaken' | AuthError> {
+// Kết quả 'verify': đã gửi mã 6 số về Gmail, chờ người dùng nhập (verifyCode)
+export async function signUp(username: string, email: string, password: string): Promise<'ok' | 'verify' | 'taken' | 'emailTaken' | AuthError> {
   try {
     const { data, error } = await sb().auth.signUp({ email: email.trim(), password, options: { data: { username } } });
     if (error) {
@@ -73,7 +76,9 @@ export async function signUp(username: string, email: string, password: string):
       if (m.includes('database error')) return 'taken'; // username vừa bị người khác lấy (bảng profiles chặn trùng)
       return isNetwork(error) ? 'network' : 'unknown';
     }
-    if (!data.session) return 'unknown'; // còn bật "Confirm email" trên Supabase
+    // Gmail đã thuộc tài khoản khác: Supabase không báo lỗi (để người lạ không dò được), nhưng trả về tài khoản rỗng
+    if (data.user && (data.user.identities?.length ?? 0) === 0) return 'emailTaken';
+    if (!data.session) return 'verify'; // bật "Confirm email": chờ nhập mã gửi về Gmail
     kvSet(CURRENT, { username, email: email.trim() });
     return 'ok';
   } catch {
@@ -81,13 +86,20 @@ export async function signUp(username: string, email: string, password: string):
   }
 }
 
-export async function signIn(username: string, password: string): Promise<'ok' | 'wrong' | AuthError> {
+// Kết quả { verify: gmail }: đúng mật khẩu nhưng tài khoản chưa nhập mã xác nhận → gửi lại mã về Gmail đó
+export async function signIn(username: string, password: string): Promise<'ok' | 'wrong' | { verify: string } | AuthError> {
   try {
     const { data: email, error } = await sb().rpc('login_email', { p_username: username, p_password: password });
     if (error) return isNetwork(error) ? 'network' : 'unknown';
     if (!email) return 'wrong';
     const r = await sb().auth.signInWithPassword({ email, password });
-    if (r.error) return isNetwork(r.error) ? 'network' : 'wrong';
+    if (r.error) {
+      if ((r.error as { code?: string }).code === 'email_not_confirmed' || /not confirmed/i.test(r.error.message)) {
+        await sb().auth.resend({ type: 'signup', email }).catch(() => {});
+        return { verify: email };
+      }
+      return isNetwork(r.error) ? 'network' : 'wrong';
+    }
     kvSet(CURRENT, { username, email });
     return 'ok';
   } catch {
@@ -97,3 +109,77 @@ export async function signIn(username: string, password: string): Promise<'ok' |
 
 const isNetwork = (e: { message?: string }) => /network|fetch|timed? ?out/i.test(e?.message ?? '');
 
+// ---- Mã xác nhận 6 số gửi về Gmail
+export async function verifyCode(username: string, email: string, code: string): Promise<'ok' | 'wrong' | AuthError> {
+  try {
+    const { data, error } = await sb().auth.verifyOtp({ email, token: code, type: 'signup' });
+    if (error || !data.session) return error && isNetwork(error) ? 'network' : 'wrong';
+    kvSet(CURRENT, { username, email });
+    return 'ok';
+  } catch {
+    return 'network';
+  }
+}
+
+export async function resendCode(email: string): Promise<'ok' | 'tooSoon' | AuthError> {
+  try {
+    const { error } = await sb().auth.resend({ type: 'signup', email });
+    if (!error) return 'ok';
+    if ((error as { status?: number }).status === 429 || /seconds|rate/i.test(error.message)) return 'tooSoon';
+    return isNetwork(error) ? 'network' : 'unknown';
+  } catch {
+    return 'network';
+  }
+}
+
+// ---- Đăng nhập Google: mở trang Google trong trình duyệt của app, đăng nhập xong Google gọi ngược về app (zyx://auth-callback)
+export const OAUTH_REDIRECT = 'zyx://auth-callback';
+
+// 'pickUsername': đăng nhập Google lần đầu, cần chọn username (chooseUsername)
+export async function signInWithGoogle(): Promise<'ok' | 'pickUsername' | 'cancelled' | AuthError> {
+  try {
+    const WebBrowser = require('expo-web-browser') as typeof import('expo-web-browser');
+    const { data, error } = await sb().auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: OAUTH_REDIRECT, skipBrowserRedirect: true },
+    });
+    if (error || !data?.url) return error && isNetwork(error) ? 'network' : 'unknown';
+    const res = await WebBrowser.openAuthSessionAsync(data.url, OAUTH_REDIRECT);
+    if (res.type !== 'success' || !res.url) return 'cancelled';
+    const code = new URL(res.url).searchParams.get('code');
+    if (!code) return 'unknown';
+    const ex = await sb().auth.exchangeCodeForSession(code);
+    if (ex.error || !ex.data.session) return ex.error && isNetwork(ex.error) ? 'network' : 'unknown';
+    return await finishOAuth();
+  } catch {
+    return 'network';
+  }
+}
+
+// Đã có phiên Google: có username rồi thì vào app, chưa có thì phải chọn
+async function finishOAuth(): Promise<'ok' | 'pickUsername' | AuthError> {
+  const { data: u } = await sb().auth.getUser();
+  const user = u.user;
+  if (!user) return 'unknown';
+  const { data: prof, error } = await sb().from('profiles').select('username').eq('id', user.id).maybeSingle();
+  if (error) return isNetwork(error) ? 'network' : 'unknown';
+  if (prof?.username) {
+    kvSet(CURRENT, { username: prof.username, email: user.email ?? '' });
+    return 'ok';
+  }
+  return 'pickUsername';
+}
+
+export async function chooseUsername(username: string): Promise<'ok' | 'taken' | 'invalid' | AuthError> {
+  try {
+    const { data, error } = await sb().rpc('set_username', { p_username: username });
+    if (error) return isNetwork(error) ? 'network' : 'unknown';
+    if (data === 'taken') return 'taken';
+    if (data === 'invalid') return 'invalid';
+    if (data !== 'ok' && data !== 'already_set') return 'unknown';
+    const r = await finishOAuth();
+    return r === 'ok' ? 'ok' : r === 'pickUsername' ? 'unknown' : r;
+  } catch {
+    return 'network';
+  }
+}
