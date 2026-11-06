@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, PixelRatio, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { holdPortrait, releasePortrait } from '../data/images';
 import RNMaskedView from '@react-native-masked-view/masked-view';
 const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
 import { Ionicons } from '@expo/vector-icons';
@@ -78,12 +79,23 @@ export function LibraryScreen() {
   const fadeTo = theme.background.type === 'preset' ? theme.background.color : theme.background.color + '00';
   const [cropImg, setCropImg] = useState<PickedImage | null>(null); // ảnh bìa đang chờ cắt
   const [editOpen, setEditOpen] = useState(false); // popup sửa tên / hashtag
+  const cropping = useRef(false);
+  // Đóng màn cắt ảnh bìa: mở lại tự xoay
+  useEffect(() => {
+    if (cropImg) return;
+    if (cropping.current) {
+      cropping.current = false;
+      releasePortrait();
+    }
+  }, [cropImg]);
 
   // Bấm avatar / nút đổi ảnh bìa: chọn ảnh, chụp ảnh, hoặc xoá
   const editImage = (slot: ImageSlot) => {
     // iOS: chờ menu đóng hẳn rồi mới mở trình chọn ảnh, mở ngay dễ bị hệ thống chặn
+    // Tạm khoá màn hình dọc trong lúc chọn / cắt ảnh (màn cắt ảnh nằm ngang bị khuất), xong thì mở lại tự xoay
     const run = (source: 'library' | 'camera') =>
-      new Promise((ok) => setTimeout(ok, Platform.OS === 'ios' ? 350 : 0)).then(() => pickProfileImage(slot, source, setCropImg)).then((r) => {
+      new Promise((ok) => setTimeout(ok, Platform.OS === 'ios' ? 350 : 0)).then(() => holdPortrait()).then(() => pickProfileImage(slot, source, (img) => { cropping.current = !!img; setCropImg(img); })).then((r) => {
+        if (!cropping.current) releasePortrait();
         if (r === 'denied') Alert.alert(t('profile.takePhoto'), t('profile.cameraDenied'));
         else if (r === 'failed') Alert.alert(t(slot === 'avatar' ? 'profile.avatar' : 'profile.cover'), t('profile.failed'));
       });

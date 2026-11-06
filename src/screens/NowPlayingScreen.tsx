@@ -14,7 +14,7 @@ import { useLyrics } from '../music/lyrics';
 import { audio, musicSupported } from '../music/lazy';
 import { QueueSheet } from '../components/QueueSheet';
 import { useSongMenu } from '../components/useSongMenu';
-import { useActionSheet } from '../components/ActionSheet';
+import { useActionSheet, useSheetOpen } from '../components/ActionSheet';
 import { BlurView } from 'expo-blur';
 import type { LyricLook } from '../theme/types';
 import RNMaskedView from '@react-native-masked-view/masked-view';
@@ -101,6 +101,9 @@ const posMemo = { ax: 0, ay: 0, lx: 0, ly: 0, ok: false };
 export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const { theme, setLyricLook } = useTheme();
   const sheet = useActionSheet();
+  // Đang mở hàng chờ / bảng thao tác: duỗi phẳng hai trang sách. Trang nghiêng 3D chồm ra phía trước nên iPhone vẽ nó
+  // đè lên mọi thứ ở trên (hàng chờ, bảng "Thêm vào playlist"), kể cả khi các bảng đó nằm ở lớp trên
+  const sheetOpen = useSheetOpen();
   const look = theme.player.lyricLook;
   // Chọn kiểu hiện lời: phát sáng / karaoke / nảy chữ
   const pickLook = () => {
@@ -434,7 +437,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
               </View>
               <View style={{ marginTop: 14 }}>{Progress}</View>
             </View>
-            <View {...swipe.panHandlers}>{SideButtons}</View>
+            <View {...swipe.panHandlers} style={{ alignSelf: 'stretch', flexDirection: 'row' }}>{SideButtons}</View>
           </View>
           {GrabBar}
           <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} />
@@ -451,6 +454,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     // Mỗi trang xoay quanh MÉP TRONG (phía gáy): mép trong đứng yên, mép ngoài nghiêng về phía người xem.
     // (Trước đây xoay quanh giữa trang: nửa trong lùi ra sau mặt phẳng màn hình nên bị nền che mất → trang bị cắt cụt)
     const SEAM = 140;
+    const flat = queueOpen || sheetOpen;
     return (
       <View style={{ flex: 1 }}>
         {Background}
@@ -458,7 +462,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         <View style={rowStyle}>
           <View
             {...swipe.panHandlers}
-            style={{ width: leftW, justifyContent: 'center', transformOrigin: 'right center', transform: [{ perspective: 1400 }, { rotateY: '12deg' }] }}
+            style={{ width: leftW, justifyContent: 'center', transformOrigin: 'right center', transform: [{ perspective: 1400 }, { rotateY: flat ? '0deg' : '12deg' }] }}
           >
             <View style={{ alignItems: 'center' }}>
               <Cover track={track} size={1200} style={{ width: art, height: art, borderRadius: 10 }}>
@@ -478,10 +482,10 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
               {controls(false)}
             </View>
           </View>
-          <View style={{ flex: 1, transformOrigin: 'left center', transform: [{ perspective: 1400 }, { rotateY: '-10deg' }] }}>
+          <View style={{ flex: 1, transformOrigin: 'left center', transform: [{ perspective: 1400 }, { rotateY: flat ? '0deg' : '-10deg' }] }}>
             <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} look={look} />
           </View>
-          <View {...swipe.panHandlers}>{SideButtons}</View>
+          <View {...swipe.panHandlers} style={{ alignSelf: 'stretch', flexDirection: 'row' }}>{SideButtons}</View>
         </View>
         {/* Gáy sách: dải kính mờ phủ lên mép trong của hai trang, mờ dần ra hai bên → ảnh và lời nối liền nhau */}
         <View pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, left: spineX - SEAM / 2, width: SEAM }}>
@@ -491,8 +495,9 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
               <LinearGradient colors={['transparent', '#000', '#000', 'transparent']} locations={[0, 0.4, 0.6, 1]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={{ flex: 1 }} />
             }
           >
-            {Platform.OS !== 'web' && <BlurView intensity={60} tint="dark" style={StyleSheet.absoluteFill} />}
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.25)' }]} />
+            {/* Chính lớp nền của player (đặt đúng vị trí như nền thật) → hai trang hoà vào nền ở gáy sách,
+                không còn dải tối khác màu như lớp kính mờ tối trước đây */}
+            <View style={{ position: 'absolute', top: 0, bottom: 0, left: -(spineX - SEAM / 2), width: win.width }}>{Background}</View>
           </MaskedView>
         </View>
         {GrabBar}

@@ -105,6 +105,8 @@ export function SwipeBack({ onBack, fade, children }: { onBack: () => void; fade
 
   const pageStyle = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
   const coverStyle = useAnimatedStyle(() => ({ opacity: cover.value }));
+  // Bóng mép trái chỉ hiện khi trang đang trượt (màn hình ngang có chừa tai thỏ bên trái → nếu luôn hiện sẽ thành một lằn tối)
+  const shadowStyle = useAnimatedStyle(() => ({ opacity: Math.min(1, x.value / 24) }));
   const bg = theme.background.type === 'preset' ? theme.colors.bg : theme.colors.bg + 'EE';
 
   return (
@@ -114,13 +116,9 @@ export function SwipeBack({ onBack, fade, children }: { onBack: () => void; fade
           <GestureDetector gesture={pan}>
             <Animated.View style={[StyleSheet.absoluteFill, pageStyle]}>
               {/* Bóng mềm ngay bên trái mép trang (chỉ thấy khi trang đã trượt sang phải) */}
-              <LinearGradient
-                pointerEvents="none"
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.16)']}
-                style={{ position: 'absolute', top: 0, bottom: 0, left: -SHADOW_W, width: SHADOW_W }}
-              />
+              <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: 0, bottom: 0, left: -SHADOW_W, width: SHADOW_W }, shadowStyle]}>
+                <LinearGradient start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.16)']} style={StyleSheet.absoluteFill} />
+              </Animated.View>
               <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: bg }, coverStyle]} />
               {children}
             </Animated.View>

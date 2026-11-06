@@ -260,24 +260,23 @@ function Recent({ list }: { list?: boolean }) {
     search: t('kind.song'), liked: t('kind.playlist'), local: t('kind.playlist'), playlist: t('kind.playlist'),
     album: t('kind.album'), chart: t('kind.chart'), mix: t('kind.mix'), artist: t('kind.artist'),
   };
+  // Màn hình ngang: ảnh bìa to, 2 cột, trải dọc xuống (giống lưới trong Thư viện)
   if (list) {
     return (
       <View style={styles.grid}>
         {items.map((r) => (
-          <Pressable key={`${r.kind}:${r.id}`} onPress={() => open(r)} style={[styles.chip, { backgroundColor: theme.colors.surface }]}>
+          <Pressable key={`${r.kind}:${r.id}`} onPress={() => open(r)} style={({ pressed }) => [styles.bigItem, pressed && { opacity: 0.7 }]}>
             {r.kind !== 'liked' && r.thumb ? (
-              <Image source={{ uri: r.thumb }} style={[styles.chipCover, r.kind === 'artist' && { borderRadius: 28 }]} />
+              <Image source={{ uri: r.thumb }} style={[styles.bigCover, r.kind === 'artist' && { borderRadius: 999 }]} />
             ) : (
-              <View style={[styles.chipCover, { backgroundColor: r.kind === 'liked' ? '#5B3CC4' : theme.colors.skeleton, alignItems: 'center', justifyContent: 'center' }]}>
-                <Ionicons name={r.kind === 'liked' ? 'heart' : 'musical-notes'} size={22} color={r.kind === 'liked' ? '#FFFFFF' : theme.colors.textSecondary} />
+              <View style={[styles.bigCover, { backgroundColor: r.kind === 'liked' ? '#5B3CC4' : theme.colors.skeleton, alignItems: 'center', justifyContent: 'center' }]}>
+                <Ionicons name={r.kind === 'liked' ? 'heart' : 'musical-notes'} size={44} color={r.kind === 'liked' ? '#FFFFFF' : theme.colors.textSecondary} />
               </View>
             )}
-            <View style={{ flex: 1, marginHorizontal: 10 }}>
-              <Text numberOfLines={1} style={{ color: theme.colors.text, fontSize: 13, fontWeight: '700' }}>{r.kind === 'liked' ? t('home.liked') : r.title}</Text>
-              <Text numberOfLines={1} style={{ color: theme.colors.textSecondary, fontSize: 12, marginTop: 2 }}>
-                {r.kind === 'search' ? r.track?.artist ?? label[r.kind] : label[r.kind]}
-              </Text>
-            </View>
+            <Text numberOfLines={1} style={{ color: theme.colors.text, fontSize: 15, fontWeight: '700', marginTop: 8 }}>{r.kind === 'liked' ? t('home.liked') : r.title}</Text>
+            <Text numberOfLines={1} style={{ color: theme.colors.textSecondary, fontSize: 13, marginTop: 2 }}>
+              {r.kind === 'search' ? r.track?.artist ?? label[r.kind] : label[r.kind]}
+            </Text>
           </Pressable>
         ))}
       </View>
@@ -613,7 +612,10 @@ const styles = StyleSheet.create({
   editRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 8 },
   sectionTitle: { fontSize: 20, fontWeight: '800', flexShrink: 1 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  // space-between + rowGap thay cho gap: 2 ô 48.8% luôn vừa một hàng ở mọi bề rộng (cột trái lúc ngang hẹp → trước đây rớt còn 1 cột)
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 8 },
+  bigItem: { width: '48.4%', marginBottom: 14 },
+  bigCover: { width: '100%', aspectRatio: 1, borderRadius: 8 },
   chip: { width: '48.8%', height: 56, borderRadius: 6, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
   chipCover: { width: 56, height: 56 },
   chipTitle: { flex: 1, marginHorizontal: 10, fontSize: 13, fontWeight: '700' },

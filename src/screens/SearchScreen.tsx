@@ -219,7 +219,9 @@ export function SearchScreen() {
   // Màn hình ngang: thể loại nằm ở cột phải (khoảng 58% bề rộng)
   // Màn hình ngang: thể loại nằm ở cột phải của SplitPane (58% phần còn lại sau khe 8px), trừ lề 2 bên.
   // Tính đúng từng điểm ảnh (trước đây tính dư vài điểm nên ô thứ hai bị đẩy xuống dòng → chỉ còn 1 cột)
-  const innerW = Math.floor((landscape ? (width - 8) * 0.58 : width) - H_PAD * 2) - 1;
+  // Màn hình ngang: đo bề rộng thật của cột phải rồi chia ô theo đó (tính ước lượng dễ lệch vài điểm → ô thứ hai rớt dòng)
+  const [rightW, setRightW] = useState(0);
+  const innerW = landscape && rightW > 0 ? Math.floor(rightW) - 1 : Math.floor((landscape ? (width - 8) * 0.64 : width) - H_PAD * 2) - 1;
   const cols = landscape ? Math.max(2, Math.floor(innerW / 200)) : Math.max(2, Math.floor(innerW / 180));
   const tileW = Math.floor((innerW - GAP * (cols - 1)) / cols);
   const tileH = landscape ? 78 : 96;
@@ -528,7 +530,7 @@ export function SearchScreen() {
       : null;
     return (
       <SplitPane
-        ratio={0.42}
+        ratio={0.36}
         topExtra={16}
         left={
           <>
@@ -539,7 +541,7 @@ export function SearchScreen() {
           </>
         }
         right={
-          !searching ? <View style={{ marginTop: -28 }}>{browse}</View> : !showResults ? <View style={{ marginTop: -12 }}>{suggestions}</View> : <View style={{ gap: 4 }}>{resultsBody}</View>
+          !searching ? <View style={{ marginTop: -28 }} onLayout={(e) => setRightW(e.nativeEvent.layout.width)}>{browse}</View> : !showResults ? <View style={{ marginTop: -12 }}>{suggestions}</View> : <View style={{ gap: 4 }}>{resultsBody}</View>
         }
       />
     );

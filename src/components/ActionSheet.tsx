@@ -53,6 +53,9 @@ type Ctx = {
   toast: (msg: string) => void;
 };
 const SheetContext = createContext<Ctx | null>(null);
+// Bảng đang hiện hay không (tách riêng để các màn hình khác không phải vẽ lại mỗi lần mở / đóng bảng)
+const SheetOpenContext = createContext(false);
+export const useSheetOpen = () => useContext(SheetOpenContext);
 export const useActionSheet = () => {
   const c = useContext(SheetContext);
   if (!c) throw new Error('useActionSheet must be used inside ActionSheetProvider');
@@ -72,7 +75,7 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
   const { width: winW, height: winH } = useScreenSize();
   // Màn hình ngang: bảng hẹp lại (nằm giữa, không phủ hết bề ngang) và phần nội dung cuộn được trong chiều cao còn lại
   const landscape = winW > winH;
-  const bodyMax = Math.max(160, winH - insets.top - insets.bottom - 150);
+  const bodyMax = Math.max(150, Math.min(winH * 0.5, winH - insets.top - insets.bottom - 150)); // khoảng nửa màn hình, không che hết
   const { liked, toggleLike, playNext, addToQueue } = usePlayerPick('liked', 'toggleLike', 'playNext', 'addToQueue');
   const { push } = useNav();
   const dlState = useDownloads();
@@ -352,7 +355,7 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
 
   return (
     <SheetContext.Provider value={ctx}>
-      {children}
+      <SheetOpenContext.Provider value={!!content}>{children}</SheetOpenContext.Provider>
 
       {/* Thông báo nhỏ ở đáy màn hình */}
       {toastMsg && (

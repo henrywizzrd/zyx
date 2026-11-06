@@ -215,14 +215,17 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
   // Nằm ngoài ô cửa sổ và tự co giãn đều (không bị kéo méo), bo góc đúng như ảnh ở mini player:
   // lúc thu về mini player sẽ khớp đúng hình tròn / bo góc, không còn bị vuông vuông rồi mới tròn lại
   // Bo góc của lớp cắt bên trong ảnh album bay (bằng lớp ngoài)
+  // Ảnh bay là hình vuông cạnh A = cạnh ngắn của màn hình. Màn hình ngang: trước đây lấy cạnh = bề ngang (dài hơn
+  // chiều cao) nên ảnh thò ra dưới khung player lúc thu nhỏ → cạnh dưới vuông, trông sượng
+  const A = Math.min(W, H);
   const artClip = useAnimatedStyle(() => {
-    const sw = interpolate(p.value, [0, 1], [ow.value / W, 1]);
+    const sw = interpolate(p.value, [0, 1], [ow.value / A, 1]);
     const r = radiusAt(p.value);
     return { borderRadius: r / sw };
   });
 
   const art = useAnimatedStyle(() => {
-    const sw = interpolate(p.value, [0, 1], [ow.value / W, 1]);
+    const sw = interpolate(p.value, [0, 1], [ow.value / A, 1]);
     const r = radiusAt(p.value);
     return {
       opacity: interpolate(p.value, [0.25, 0.6], [1, 0], 'clamp'),
@@ -251,7 +254,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
           </TransitionContext.Provider>
         </Animated.View>
       </Animated.View>
-      <Animated.View pointerEvents="none" style={[styles.artShadow, { width: W, height: W }, art]}>
+      <Animated.View pointerEvents="none" style={[styles.artShadow, { width: A, height: A }, art]}>
         <Animated.View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }, artClip]}>
           {track.thumb ? (
             <>

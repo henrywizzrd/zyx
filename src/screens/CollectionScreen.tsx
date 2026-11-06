@@ -41,7 +41,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
   const { theme, landscape } = useTheme();
   const t = useT();
   const pad = useContentInsets();
-  const { width } = useScreenSize();
+  const { width, height } = useScreenSize();
   const { push, pop } = useNav();
   const goBack = useAnimatedBack() ?? pop; // trượt ra rồi mới đóng
   // Trượt vào xong mới dựng hết danh sách (trước đó chỉ vài bài đầu) để hiệu ứng mở trang không bị khựng
@@ -222,11 +222,11 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
   const actionsBlock = (
     <>
       {/* Trộn bài | Phát | Lưu */}
-      <View style={styles.actions}>
+      <View style={[styles.actions, landscape && { gap: 12 }]}>
         <Pressable onPress={() => playAll(true)} disabled={!rows.length} style={[styles.roundBtn, { backgroundColor: border }]}>
           <Ionicons name="shuffle" size={24} color={shuffle ? accent : text} />
         </Pressable>
-        <Pressable onPress={() => playAll(false)} disabled={!rows.length} style={[styles.playBtn, { backgroundColor: text, opacity: rows.length ? 1 : 0.4 }]}>
+        <Pressable onPress={() => playAll(false)} disabled={!rows.length} style={[styles.playBtn, landscape && { width: undefined, flex: 1, maxWidth: 160 }, { backgroundColor: text, opacity: rows.length ? 1 : 0.4 }]}>
           <Ionicons name="play" size={22} color={bg} />
           <Text style={{ color: bg, fontSize: 18, fontWeight: '800' }}>{t('col.play')}</Text>
         </Pressable>
@@ -326,8 +326,9 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
   // ================= Màn hình ngang =================
   // Trái: ảnh bìa vuông + tên + nút Phát / Trộn / Lưu (cuộn riêng nếu dài). Phải: danh sách bài cuộn riêng
   if (landscape) {
-    const leftW = Math.round(width * 0.4);
-    const art = Math.min(leftW - 64, 260);
+    const leftW = Math.round(width * 0.42);
+    // Ảnh vừa đủ để tên + các nút Phát / Trộn / Lưu bên dưới vẫn nằm trong màn hình
+    const art = Math.max(110, Math.min(leftW - 64, 220, height - pad.top - pad.bottom - 260));
     return (
       <View style={[StyleSheet.absoluteFill, { flexDirection: 'row' }]}>
         <ScrollView style={{ width: leftW, flexGrow: 0 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: pad.top + 10, paddingBottom: pad.bottom + pad.endPadding, paddingHorizontal: 16 }}>
