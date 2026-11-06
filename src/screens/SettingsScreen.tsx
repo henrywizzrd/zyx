@@ -6,6 +6,7 @@ import { MiniPlayerVariant } from '../theme/types';
 import { LANGUAGES, useT } from '../i18n';
 import { Ionicons } from '@expo/vector-icons';
 import { useNav } from '../nav/Nav';
+import { signOut, useSession } from '../data/auth';
 
 const PlaybackLab: React.ComponentType | null =
   Platform.OS === 'web' ? null : require('../components/PlaybackLab').PlaybackLab;
@@ -38,6 +39,7 @@ export function SettingsScreen() {
   const { push } = useNav();
   const pad = useContentInsets();
   const label = { color: theme.colors.textSecondary, marginTop: 24, marginBottom: 12 };
+  const session = useSession();
 
   return (
     <ScrollView
@@ -97,6 +99,20 @@ export function SettingsScreen() {
         onSelect={(v) => setMerged(v === 'on')}
         labels={{ on: t('common.on'), off: t('common.off') }}
       />
+
+      {/* Tài khoản: đang đăng nhập tên gì (hoặc Khách) + Đăng xuất (quay về màn đăng nhập) */}
+      <Text style={label}>{t('settings.account')}</Text>
+      <View style={[styles.row, { marginTop: 0, backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={[styles.rowIcon, { backgroundColor: theme.colors.accent }]}>
+          <Ionicons name={session?.mode === 'account' ? 'person' : 'person-outline'} size={20} color={theme.colors.onAccent} />
+        </View>
+        <Text style={{ flex: 1, color: theme.colors.text, fontSize: 15, fontWeight: '600' }} numberOfLines={1}>
+          {session?.mode === 'account' ? t('settings.signedInAs', { name: session.username }) : t('settings.guestMode')}
+        </Text>
+        <Pressable onPress={signOut} hitSlop={8} style={[styles.chip, { backgroundColor: theme.colors.bg }]}>
+          <Text style={{ color: '#E5484D', fontWeight: '700' }}>{t('settings.signOut')}</Text>
+        </Pressable>
+      </View>
 
       <Pressable
         onPress={resetTheme}

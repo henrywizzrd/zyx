@@ -64,6 +64,10 @@ const SESSION_KEY = 'zyx:session';
 const SESSION_MAX = 300; // lưu tối đa 300 bài quanh bài đang phát
 type SavedSession = { queue: QueueItem[]; index: number; position: number; shuffle: boolean; repeat: Repeat };
 
+// Thông tin bài cho màn hình khoá / thông báo nhạc chạy nền.
+// Ảnh: lấy bản lớn (600px). Trước đây đưa thẳng ảnh nhỏ của danh sách (60–120px) nên ảnh trên thông báo bị mờ
+const nowPlayingMeta = (t: Track) => ({ title: t.title, artist: t.artist, artworkUrl: t.thumb ? bigThumb(t.thumb, 600) : undefined });
+
 // Còn mạng không: hỏi một địa chỉ siêu nhẹ của Google (trả về rỗng), quá 3 giây coi như mất mạng
 async function isOnline(): Promise<boolean> {
   const ctrl = new AbortController();
@@ -232,7 +236,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const beforeUri = before ? cachedUrl(before.id) : null;
       audio().startTrack(t.qid, uri, before && beforeUri ? { key: before.qid, uri: beforeUri } : null);
       // Màn hình khoá / thanh thông báo (Android: cần cái này để nhạc chạy nền lâu dài)
-      audio().showNowPlaying({ title: t.title, artist: t.artist, artworkUrl: t.thumb });
+      audio().showNowPlaying(nowPlayingMeta(t));
       // Ghi lịch sử nghe (thêm đủ thông tin bài để Home dựng Recent / Recommend)
       recordPlay({ ...t, duration: t.duration }, t.ctx);
     } catch (e) {
@@ -570,7 +574,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setProgress(0);
       setDuration(t.duration);
       if (t.thumb) ExpoImage.prefetch(bigThumb(t.thumb, 1200), 'memory-disk').catch(() => {});
-      audio().showNowPlaying({ title: t.title, artist: t.artist, artworkUrl: t.thumb });
+      audio().showNowPlaying(nowPlayingMeta(t));
       recordPlay({ ...t, duration: t.duration }, t.ctx);
     });
     return () => audio().onTrackChange(null);
