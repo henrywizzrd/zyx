@@ -21,6 +21,7 @@ import { DropPreview } from './src/components/DropPreview';
 import { LibraryScreen } from './src/screens/LibraryScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { UserScreen } from './src/screens/UserScreen';
 import { PlayerTransition } from './src/components/PlayerTransition';
 import { BackdropBlur } from './src/components/BackdropBlur';
 import { NavProvider, Page, useNav, useNavStack } from './src/nav/Nav';
@@ -62,6 +63,7 @@ function pageKey(pg: Page, i: number) {
   if (pg.type === 'collection') return `${i}:col:${pg.source}:${pg.id}`;
   if (pg.type === 'artist') return `${i}:artist:${pg.id}`;
   if (pg.type === 'genre') return `${i}:genre:${pg.params}`;
+  if (pg.type === 'user') return `${i}:user:${pg.id}`;
   return `${i}:${pg.type}`;
 }
 
@@ -241,6 +243,8 @@ function Root() {
                   <ArtistScreen page={pg} />
                 ) : pg.type === 'genre' ? (
                   <GenreScreen page={pg} />
+                ) : pg.type === 'user' ? (
+                  <UserScreen page={pg} />
                 ) : (
                   <ThemeStudioScreen />
                 )}

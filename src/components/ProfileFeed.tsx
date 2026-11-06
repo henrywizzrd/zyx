@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
@@ -6,6 +6,11 @@ import { useT } from '../i18n';
 import { useProfile } from '../data/profile';
 import { sampleReposts, useMyPosts } from '../data/social';
 import { PostCard } from './PostCard';
+import { currentAccount } from '../data/auth';
+import { fetchPosts, onPostPatch } from '../data/community';
+import type { Post } from '../data/social';
+
+type Counts = Record<string, Pick<Post, 'likes' | 'liked' | 'comments'>>;
 import { PostComposer } from './PostComposer';
 
 type Tab = 'home' | 'reposts' | 'share';
@@ -18,7 +23,25 @@ export function ProfileFeed() {
   const { theme } = useTheme();
   const t = useT();
   const profile = useProfile();
-  const posts = useMyPosts();
+  const local = useMyPosts();
+  // Tài khoản: lấy số lượt thích / bình luận thật trên server ghép vào bài trong máy (người khác thích bài mình cũng thấy)
+  const [counts, setCounts] = useState<Counts>({});
+  const accId = currentAccount()?.id;
+  useEffect(() => {
+    if (!accId) return;
+    fetchPosts(accId)
+      .then((l) => setCounts(Object.fromEntries(l.map((p) => [p.id, { likes: p.likes, liked: p.liked, comments: p.comments }]))))
+      .catch(() => {});
+  }, [accId, local.length]);
+  useEffect(
+    () =>
+      onPostPatch((p) => {
+        if (p.deleted) return;
+        setCounts((c) => (c[p.id] ? { ...c, [p.id]: { ...c[p.id], ...p } } : c));
+      }),
+    []
+  );
+  const posts = useMemo(() => local.map((p) => (counts[p.id] ? { ...p, ...counts[p.id], remote: true } : p)), [local, counts]);
   const reposts = useMemo(() => sampleReposts(), []);
   const [tab, setTab] = useState<Tab>('home');
   const [composing, setComposing] = useState(false);

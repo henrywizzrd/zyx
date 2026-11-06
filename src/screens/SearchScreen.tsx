@@ -9,7 +9,19 @@ import { genres, type Track } from '../data/mock';
 import { useLibrary, type LibraryEntry } from '../data/library';
 import { musicSupported, toTrack, ytmusic } from '../music/lazy';
 import type { Card, GenreGroup, SearchKind, SearchResults, SuggestItem, Suggestions } from '../music/ytmusic';
-import { cacheGet, cacheSet } from '../data/db';
+import { cacheGet, cacheSet, kvGet, kvSet, useDbVersion } from '../data/db';
+import { searchUsers, UserRow } from '../data/community';
+
+// Lịch sử tìm kiếm: các từ khoá gần đây (mới nhất trước), hiện khi bấm vào ô tìm kiếm còn trống
+const HISTORY = 'search:history';
+const HISTORY_MAX = 12;
+const addHistory = (q: string) => {
+  const v = q.trim();
+  if (!v) return;
+  const list = (kvGet<string[]>(HISTORY) ?? []).filter((x) => x.toLowerCase() !== v.toLowerCase());
+  kvSet(HISTORY, [v, ...list].slice(0, HISTORY_MAX));
+};
+const removeHistory = (q: string) => kvSet(HISTORY, (kvGet<string[]>(HISTORY) ?? []).filter((x) => x !== q));
 import { warmGenres } from '../music/genreCache';
 import { useFrame } from '../components/layout';
 import { useSongMenu } from '../components/useSongMenu';
@@ -117,6 +129,14 @@ export function SearchScreen() {
   const [resultsFor, setResultsFor] = useState<string | null>(null); // kết quả đang hiện là của từ khoá + loại nào ("all:abc")
   const [resultsBusy, setResultsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Mục "Người dùng": chỉ tìm người dùng khi bấm vào mục này
+  const [userMode, setUserMode] = useState(false);
+  const [users, setUsers] = useState<UserRow[] | null>(null);
+  const [usersFor, setUsersFor] = useState<string | null>(null);
+  const [usersFailed, setUsersFailed] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const dbv = useDbVersion();
+  const history = useMemo(() => kvGet<string[]>(HISTORY) ?? [], [dbv]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Từ khoá mới nhất: kết quả về muộn của từ khoá cũ thì bỏ qua.
   // Tách riêng cho gợi ý (lúc gõ) và kết quả (sau khi bấm Search): trước đây dùng chung một biến,
@@ -152,10 +172,15 @@ export function SearchScreen() {
     };
   }, [query, mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const runSearch = (raw: string, k: SearchKind = kind) => {
+  // music = true: luôn tìm nhạc (bấm một mục nhạc khi đang ở mục Người dùng)
+  const runSearch = (raw: string, k: SearchKind = kind, music = false) => {
     const q = raw.trim();
     const key = `${k}:${q}`;
-    if (!q || !musicSupported) return;
+    if (!q) return;
+    if (userMode && !music) return runUsers(q); // đang ở mục Người dùng: bấm Tìm là tìm người dùng
+    if (!musicSupported) return;
+    setUserMode(false);
+    addHistory(q);
     Keyboard.dismiss(); // đã chọn xong từ khoá thì cất bàn phím đi để thấy hết danh sách
     latestSearch.current = key;
     setQuery(q);
@@ -177,6 +202,27 @@ export function SearchScreen() {
       });
   };
 
+  const runUsers = (raw: string) => {
+    const q = raw.trim();
+    if (!q) return;
+    Keyboard.dismiss();
+    addHistory(q);
+    setQuery(q);
+    setUserMode(true);
+    setMode('results');
+    setUsersFailed(false);
+    latestSearch.current = `users:${q}`;
+    searchUsers(q)
+      .then((l) => {
+        if (latestSearch.current !== `users:${q}`) return;
+        setUsers(l);
+        setUsersFor(q);
+      })
+      .catch(() => {
+        if (latestSearch.current === `users:${q}`) setUsersFailed(true);
+      });
+  };
+
   const onChangeText = (t: string) => {
     setQuery(t);
     setMode('typing');
@@ -193,6 +239,9 @@ export function SearchScreen() {
     setResultsFor(null);
     setKind('all');
     setError(null);
+    setUserMode(false);
+    setUsers(null);
+    setUsersFor(null);
   };
 
   // Bấm vào một gợi ý: bài hát thì phát luôn, album/playlist/nghệ sĩ thì mở trang của nó
@@ -289,7 +338,9 @@ export function SearchScreen() {
           <TextInput
             value={query}
             onChangeText={onChangeText}
-            onSubmitEditing={() => runSearch(query)}
+            onSubmitEditing={() => (userMode ? runUsers(query) : runSearch(query))}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
             returnKeyType="search"
             autoCorrect={false}
             autoCapitalize="none"
@@ -403,20 +454,85 @@ export function SearchScreen() {
   );
   const chipRow = (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 10 }}>
-              {KINDS.map((k) => (
-                <Pressable
-                  key={k}
-                  onPress={() => k !== kind && runSearch(query, k)}
-                  style={[styles.chip, { backgroundColor: k === kind ? accent : theme.colors.surface }]}
-                >
-                  <Text style={{ color: k === kind ? theme.colors.onAccent : text, fontWeight: '700', fontSize: 13 }}>{tr(`search.filter.${k}`)}</Text>
-                </Pressable>
-              ))}
+              {KINDS.map((k) => {
+                const on = !userMode && k === kind;
+                return (
+                  <Pressable
+                    key={k}
+                    onPress={() => {
+                      if (on) return;
+                      setUserMode(false);
+                      runSearch(query, k, true);
+                    }}
+                    style={[styles.chip, { backgroundColor: on ? accent : theme.colors.surface }]}
+                  >
+                    <Text style={{ color: on ? theme.colors.onAccent : text, fontWeight: '700', fontSize: 13 }}>{tr(`search.filter.${k}`)}</Text>
+                  </Pressable>
+                );
+              })}
+              {/* Người dùng: chỉ khi bấm vào mục này mới tìm các tài khoản khớp với từ khoá */}
+              <Pressable onPress={() => !userMode && runUsers(query)} style={[styles.chip, { backgroundColor: userMode ? accent : theme.colors.surface }]}>
+                <Text style={{ color: userMode ? theme.colors.onAccent : text, fontWeight: '700', fontSize: 13 }}>{tr('search.filter.users')}</Text>
+              </Pressable>
             </ScrollView>
   );
-  const resultsBody = (
+  // Kết quả mục Người dùng: avatar, tên #tag, @username · số người theo dõi. Bấm vào để mở hồ sơ
+  const usersBody = (
+    <View style={{ marginTop: 6 }}>
+      {usersFailed ? (
+        <Pressable onPress={() => runUsers(query)}>
+          <Text style={{ color: textSecondary }}>{tr('community.loadFailed')}</Text>
+        </Pressable>
+      ) : usersFor !== query.trim() || !users ? (
+        <ActivityIndicator color={accent} style={{ marginTop: 20 }} />
+      ) : users.length === 0 ? (
+        <Text style={{ color: textSecondary, marginTop: 10 }}>{tr('community.noUsers')}</Text>
+      ) : (
+        users.map((u) => (
+          <Pressable key={u.id} onPress={() => push({ type: 'user', id: u.id })} style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}>
+            <View style={[styles.cover, { borderRadius: 28, backgroundColor: u.color, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }]}>
+              {u.avatar ? <Image source={{ uri: u.avatar }} style={StyleSheet.absoluteFill} /> : <Text style={{ color: '#fff', fontWeight: '800', fontSize: 20 }}>{u.name.slice(0, 1).toUpperCase()}</Text>}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text numberOfLines={1} style={{ color: text, fontSize: 16, fontWeight: '700' }}>
+                {u.name}
+                <Text style={{ color: textSecondary, fontWeight: '500' }}> #{u.tag}</Text>
+              </Text>
+              <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>
+                @{u.username} · {u.followers} {tr('community.followers')}
+              </Text>
+            </View>
+          </Pressable>
+        ))
+      )}
+    </View>
+  );
+
+  // Lịch sử tìm kiếm (bấm vào ô tìm kiếm còn trống)
+  const historyList = (
+    <View style={{ marginTop: 22 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+        <Text style={{ flex: 1, color: text, fontSize: 18, fontWeight: '700' }}>{tr('search.recent')}</Text>
+        <Pressable onPress={() => kvSet(HISTORY, [])} hitSlop={8}>
+          <Text style={{ color: accent, fontWeight: '700', fontSize: 14 }}>{tr('search.clearHistory')}</Text>
+        </Pressable>
+      </View>
+      {history.map((h) => (
+        <Pressable key={h} onPress={() => runSearch(h)} style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 }, pressed && { opacity: 0.6 }]}>
+          <Ionicons name="time-outline" size={20} color={textSecondary} />
+          <Text numberOfLines={1} style={{ flex: 1, color: text, fontSize: 16 }}>{h}</Text>
+          <Pressable onPress={() => removeHistory(h)} hitSlop={10}>
+            <Ionicons name="close" size={18} color={textSecondary} />
+          </Pressable>
+        </Pressable>
+      ))}
+    </View>
+  );
+  const showHistory = focused && !searching && history.length > 0;
+
+  const musicBody = (
     <>
-          // ---------- Đã bấm Search: kết quả đầy đủ, lọc theo loại ----------
+          {/* ---------- Đã bấm Search: kết quả đầy đủ, lọc theo loại ---------- */}
           <View style={{ marginTop: 14, gap: 4 }}>
             {error && <Text style={{ color: textSecondary }}>{tr('search.error', { msg: error })}</Text>}
             {!resultsReady && !error &&
@@ -522,10 +638,12 @@ export function SearchScreen() {
     </>
   );
 
+  const resultsBody = userMode ? usersBody : musicBody;
+
   // Màn hình ngang: trái = tiêu đề + ô tìm kiếm (+ các mục lọc Tất cả / Bài hát... và kết quả hàng đầu khi đã tìm),
   // phải = phần còn lại (thể loại, gợi ý khi đang gõ, danh sách kết quả). Mỗi bên cuộn riêng
   if (landscape) {
-    const topCard = showResults && resultsReady && results && kind === 'all' && results.top
+    const topCard = !userMode && showResults && resultsReady && results && kind === 'all' && results.top
       ? renderTop(results.top, [...results.songs, ...results.videos].map(toTrack))
       : null;
     return (
@@ -541,7 +659,7 @@ export function SearchScreen() {
           </>
         }
         right={
-          !searching ? <View style={{ marginTop: -28 }} onLayout={(e) => setRightW(e.nativeEvent.layout.width)}>{browse}</View> : !showResults ? <View style={{ marginTop: -12 }}>{suggestions}</View> : <View style={{ gap: 4 }}>{resultsBody}</View>
+          showHistory ? <View style={{ marginTop: -22 }}>{historyList}</View> : !searching ? <View style={{ marginTop: -28 }} onLayout={(e) => setRightW(e.nativeEvent.layout.width)}>{browse}</View> : !showResults ? <View style={{ marginTop: -12 }}>{suggestions}</View> : <View style={{ gap: 4 }}>{resultsBody}</View>
         }
       />
     );
@@ -559,7 +677,7 @@ export function SearchScreen() {
 
         {searchBox}
 
-        {!searching ? browse : !showResults ? suggestions : (
+        {showHistory ? historyList : !searching ? browse : !showResults ? suggestions : (
           <View style={{ marginTop: 14, gap: 4 }}>
             {chipRow}
             {resultsBody}

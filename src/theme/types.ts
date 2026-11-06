@@ -9,7 +9,7 @@ export interface MiniAnchor { edge: Edge; t: number }
 
 export type TabId = 'home' | 'search' | 'library' | 'settings' | 'player';
 // Các khối của Home (thứ tự trong home.sections = thứ tự hiển thị)
-export type HomeSection = 'myPlaylists' | 'recent' | 'trending' | 'recommended' | 'playlistPicks';
+export type HomeSection = 'myPlaylists' | 'recent' | 'feed' | 'trending' | 'recommended' | 'playlistPicks';
 export type TrendingRange = 'week' | 'month' | 'year';
 export type MiniPlayerVariant = 'pill' | 'rect';
 export type LibraryLayout = 'list' | 'columns' | 'covers2' | 'covers3';

@@ -18,7 +18,9 @@ export type ArtistPage = { type: 'artist'; id: string; name: string; thumb?: str
 // Trang một thể loại / tâm trạng (mở từ lưới ô ở Search)
 export type GenrePage = { type: 'genre'; title: string; params: string; color: string };
 // Theme Studio: chọn bộ màu, nền, độ mờ kính (mở từ Cài đặt)
-export type Page = CollectionPage | ArtistPage | GenrePage | { type: 'themeStudio' };
+// Hồ sơ của một người dùng khác (mở từ Tìm kiếm → Người dùng, hoặc bấm vào tên / avatar trong bài đăng)
+export type UserPage = { type: 'user'; id: string };
+export type Page = CollectionPage | ArtistPage | GenrePage | UserPage | { type: 'themeStudio' };
 
 interface NavValue {
   push: (p: Page) => void;

@@ -1,4 +1,7 @@
 import { SplitPane } from '../components/SplitPane';
+import { PostCard } from '../components/PostCard';
+import { applyPatch, fetchPosts, onPostPatch } from '../data/community';
+import type { Post } from '../data/social';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, PixelRatio, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -100,6 +103,67 @@ async function loadTrending(range: TrendingRange): Promise<{ title: string; play
 // ---------------------------------------------------------------------------
 // Thành phần giao diện
 // ---------------------------------------------------------------------------
+// Bảng tin: bài đăng mới nhất của mọi người (cả người mình theo dõi lẫn chưa theo dõi), mới nhất trước.
+// Thích / bình luận ngay trong bảng tin, bấm tên / avatar để mở hồ sơ người đó
+function Feed() {
+  const { theme } = useTheme();
+  const t = useT();
+  const [posts, setPosts] = useState<Post[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [more, setMore] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const load = (older = false) => {
+    if (busy) return;
+    setBusy(true);
+    setFailed(false);
+    const before = older && posts?.length ? posts[posts.length - 1].createdAt : undefined;
+    fetchPosts(null, before)
+      .then((l) => {
+        setPosts((cur) => (older && cur ? [...cur, ...l.filter((p) => !cur.some((c) => c.id === p.id))] : l));
+        setMore(l.length >= 30);
+      })
+      .catch(() => setFailed(true))
+      .finally(() => setBusy(false));
+  };
+  useEffect(() => load(), []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => onPostPatch((p) => setPosts((l) => (l ? applyPatch(l, p) : l))), []);
+  const { textSecondary, accent } = theme.colors;
+  return (
+    <>
+      <SectionTitle
+        title={t('home.section.feed')}
+        right={
+          <Pressable onPress={() => load()} hitSlop={10}>
+            {busy && !posts ? <ActivityIndicator color={accent} /> : <Ionicons name="refresh" size={20} color={textSecondary} />}
+          </Pressable>
+        }
+      />
+      {posts === null ? (
+        failed ? (
+          <Pressable onPress={() => load()}>
+            <Text style={{ color: textSecondary }}>{t('community.loadFailed')}</Text>
+          </Pressable>
+        ) : (
+          <ActivityIndicator color={accent} style={{ marginVertical: 16 }} />
+        )
+      ) : posts.length === 0 ? (
+        <Text style={{ color: textSecondary }}>{t('community.feedEmpty')}</Text>
+      ) : (
+        <>
+          {posts.map((p, i) => (
+            <PostCard key={p.id} post={p} showDivider={i < posts.length - 1} />
+          ))}
+          {more && (
+            <Pressable onPress={() => load(true)} style={{ alignSelf: 'center', paddingVertical: 10 }}>
+              {busy ? <ActivityIndicator color={accent} /> : <Ionicons name="chevron-down" size={22} color={textSecondary} />}
+            </Pressable>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
 function SectionTitle({ title, right }: { title: string; right?: React.ReactNode }) {
   const { theme } = useTheme();
   return (
@@ -267,7 +331,8 @@ function Recent({ list }: { list?: boolean }) {
         {items.map((r) => (
           <Pressable key={`${r.kind}:${r.id}`} onPress={() => open(r)} style={({ pressed }) => [styles.bigItem, pressed && { opacity: 0.7 }]}>
             {r.kind !== 'liked' && r.thumb ? (
-              <Image source={{ uri: r.thumb }} style={[styles.bigCover, r.kind === 'artist' && { borderRadius: 999 }]} />
+              // Ảnh nét theo cỡ ô to (ảnh nhỏ của hàng trượt ngang phóng lên bị mờ)
+              <SmartImage url={r.thumb} size={600} style={[styles.bigCover, r.kind === 'artist' && { borderRadius: 999 }]} />
             ) : (
               <View style={[styles.bigCover, { backgroundColor: r.kind === 'liked' ? '#5B3CC4' : theme.colors.skeleton, alignItems: 'center', justifyContent: 'center' }]}>
                 <Ionicons name={r.kind === 'liked' ? 'heart' : 'musical-notes'} size={44} color={r.kind === 'liked' ? '#FFFFFF' : theme.colors.textSecondary} />
@@ -517,6 +582,8 @@ export function HomeScreen() {
             <Recent list={landscape} />
           </>
         );
+      case 'feed':
+        return <Feed />;
       case 'trending':
         return <Trending />;
       case 'recommended':

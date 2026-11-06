@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Image, PixelRatio, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
@@ -9,6 +9,8 @@ import { useNav } from '../nav/Nav';
 import { Attachment, deletePost, Post, timeAgo, toggleLikePost } from '../data/social';
 import { SmartImage } from './Cover';
 import { useActionSheet } from './ActionSheet';
+import { CommentsSheet } from './CommentsSheet';
+import { emitPostPatch, NeedAccount, setLike } from '../data/community';
 
 const AVATAR = 38;
 
@@ -82,27 +84,52 @@ export function PostCard({ post, showDivider = true }: { post: Post; showDivider
   const sheet = useActionSheet();
   const openAttach = useOpenAttachment();
   const { text, textSecondary, border, accent } = theme.colors;
+  const { push } = useNav();
   const mine = !post.author;
   const author = post.author ?? { name: profile.name, tag: profile.tag, color: profile.avatarColor, avatar: profile.avatar ?? undefined };
   const soon = () => sheet.toast(t('social.soon'));
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  // Bấm avatar / tên người khác: mở hồ sơ của họ
+  const openUser = (id?: string) => id && push({ type: 'user', id });
 
   const menu = () =>
     sheet.openActions({ title: t('social.post'), subtitle: post.text.slice(0, 60) || undefined, icon: 'chatbubble-ellipses-outline' }, [
-      { label: t('social.delete'), icon: 'trash-outline', destructive: true, run: () => deletePost(post.id) },
+      {
+        label: t('social.delete'),
+        icon: 'trash-outline',
+        destructive: true,
+        run: () => {
+          deletePost(post.id);
+          emitPostPatch({ id: post.id, deleted: true });
+        },
+      },
     ]);
+
+  // Thích: bài trên server thì lưu trên server (ai cũng thấy số lượt thích), đổi ngay trên màn hình rồi mới gửi
+  const like = () => {
+    if (!post.remote) return mine ? toggleLikePost(post.id) : soon();
+    const liked = !post.liked;
+    const likes = Math.max(0, post.likes + (liked ? 1 : -1));
+    emitPostPatch({ id: post.id, liked, likes });
+    setLike(post.id, liked).catch((e) => {
+      emitPostPatch({ id: post.id, liked: post.liked, likes: post.likes });
+      sheet.toast(t(e instanceof NeedAccount ? 'community.needAccount' : 'community.failed'));
+    });
+  };
+  const comment = () => (post.remote ? setCommentsOpen(true) : soon());
 
   return (
     <View style={[styles.post, showDivider && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: border }]}>
-      <View style={[styles.avatar, { backgroundColor: author.color }]}>
+      <Pressable onPress={() => openUser(post.author?.id)} disabled={!post.author?.id} style={[styles.avatar, { backgroundColor: author.color }]}>
         {author.avatar ? (
           <Image source={{ uri: author.avatar }} style={StyleSheet.absoluteFill} />
         ) : (
           <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>{author.name.slice(0, 1).toUpperCase()}</Text>
         )}
-      </View>
+      </Pressable>
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Text numberOfLines={1} style={{ color: text, fontWeight: '700', fontSize: 15, flexShrink: 1 }}>
+          <Text numberOfLines={1} onPress={post.author?.id ? () => openUser(post.author?.id) : undefined} style={{ color: text, fontWeight: '700', fontSize: 15, flexShrink: 1 }}>
             {author.name}
             <Text style={{ color: textSecondary, fontWeight: '500' }}> #{author.tag}</Text>
           </Text>
@@ -121,12 +148,13 @@ export function PostCard({ post, showDivider = true }: { post: Post; showDivider
           </View>
         )}
         <View style={styles.actions}>
-          <Pressable onPress={() => (mine ? toggleLikePost(post.id) : soon())} hitSlop={8} style={styles.action}>
+          <Pressable onPress={like} hitSlop={8} style={styles.action}>
             <Ionicons name={post.liked ? 'heart' : 'heart-outline'} size={20} color={post.liked ? '#E5484D' : textSecondary} />
             {post.likes > 0 && <Text style={{ color: textSecondary, fontSize: 13 }}>{post.likes}</Text>}
           </Pressable>
-          <Pressable onPress={soon} hitSlop={8} style={styles.action}>
+          <Pressable onPress={comment} hitSlop={8} style={styles.action}>
             <Ionicons name="chatbubble-outline" size={19} color={textSecondary} />
+            {!!post.comments && <Text style={{ color: textSecondary, fontSize: 13 }}>{post.comments}</Text>}
           </Pressable>
           <Pressable onPress={soon} hitSlop={8} style={styles.action}>
             <Ionicons name="repeat" size={21} color={post.author ? accent : textSecondary} />
@@ -136,6 +164,18 @@ export function PostCard({ post, showDivider = true }: { post: Post; showDivider
           </Pressable>
         </View>
       </View>
+      {commentsOpen && (
+        <CommentsSheet
+          postId={post.id}
+          postMine={mine}
+          visible
+          onClose={() => setCommentsOpen(false)}
+          onOpenUser={(id) => {
+            setCommentsOpen(false);
+            openUser(id);
+          }}
+        />
+      )}
     </View>
   );
 }

@@ -15,7 +15,7 @@ const POSITIONS: Position[] = [
 const EDGES: Edge[] = ['top', 'bottom', 'left', 'right'];
 const VARIANTS: MiniPlayerVariant[] = ['pill', 'rect'];
 const TABS: TabId[] = ['home', 'search', 'library', 'settings'];
-const SECTIONS: HomeSection[] = ['myPlaylists', 'recent', 'trending', 'recommended', 'playlistPicks'];
+const SECTIONS: HomeSection[] = ['myPlaylists', 'recent', 'feed', 'trending', 'recommended', 'playlistPicks'];
 const RANGES: TrendingRange[] = ['week', 'month', 'year'];
 const LANGS = ['vi', 'en'] as const;
 const BG_TYPES = ['preset', 'image', 'video'] as const;
@@ -79,7 +79,13 @@ function sanitize(t: Theme): Theme {
   const items = t.dock.items.filter((i) => TABS.includes(i));
   // Giữ thứ tự đã lưu, bỏ khối lạ (bản cũ), thêm khối mới chưa có vào cuối
   const kept = t.home.sections.filter((s, i, a) => SECTIONS.includes(s) && a.indexOf(s) === i);
-  const sections = kept.length ? [...kept, ...SECTIONS.filter((s) => !kept.includes(s))] : d.home.sections;
+  let sections = kept.length ? [...kept, ...SECTIONS.filter((s) => !kept.includes(s))] : d.home.sections;
+  // Bản cũ chưa có Bảng tin: đặt ngay sau "Nghe gần đây" thay vì cuối trang
+  if (kept.length && !kept.includes('feed')) {
+    const rest = sections.filter((s) => s !== 'feed');
+    const at = rest.indexOf('recent') + 1;
+    sections = [...rest.slice(0, at), 'feed', ...rest.slice(at)];
+  }
   return derive({
     ...t,
     background: {

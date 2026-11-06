@@ -29,6 +29,8 @@ export interface Author {
   tag: string;
   color: string; // màu avatar chữ cái (người dùng giả)
   avatar?: string;
+  id?: string; // tài khoản trên server (bấm vào để mở hồ sơ người đó)
+  username?: string;
 }
 
 export interface Post {
@@ -40,6 +42,8 @@ export interface Post {
   liked: boolean;
   author?: Author; // bỏ trống = chính mình
   pending?: boolean; // tài khoản: bài đăng lúc mất mạng, chưa gửi lên server
+  remote?: boolean; // bài trên server: thích / bình luận lưu trên server, ai cũng thấy
+  comments?: number;
 }
 
 // Khách: bài lưu trong máy. Tài khoản: bài nằm trên server (bảng posts), máy giữ bản sao riêng cho từng tài khoản

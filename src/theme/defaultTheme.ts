@@ -29,7 +29,7 @@ export const defaultTheme: Theme = {
   player: { lyricLook: 'glow' },
   library: { layout: 'list', order: [] },
   home: {
-    sections: ['myPlaylists', 'recent', 'trending', 'recommended', 'playlistPicks'],
+    sections: ['myPlaylists', 'recent', 'feed', 'trending', 'recommended', 'playlistPicks'],
     hidden: [],
     trendingRange: 'week',
   },
