@@ -497,7 +497,7 @@ export function SearchScreen() {
             <View style={{ flex: 1 }}>
               <Text numberOfLines={1} style={{ color: text, fontSize: 16, fontWeight: '700' }}>
                 {u.name}
-                <Text style={{ color: textSecondary, fontWeight: '500' }}> #{u.tag}</Text>
+                <Text style={{ color: textSecondary, fontWeight: '500' }}>{u.tag ? ` #${u.tag}` : ''}</Text>
               </Text>
               <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>
                 {u.followers} {tr('community.followers')}

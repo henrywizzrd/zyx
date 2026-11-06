@@ -131,7 +131,7 @@ export function PostCard({ post, showDivider = true }: { post: Post; showDivider
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Text numberOfLines={1} onPress={post.author?.id ? () => openUser(post.author?.id) : undefined} style={{ color: text, fontWeight: '700', fontSize: 15, flexShrink: 1 }}>
             {author.name}
-            <Text style={{ color: textSecondary, fontWeight: '500' }}> #{author.tag}</Text>
+            <Text style={{ color: textSecondary, fontWeight: '500' }}>{author.tag ? ` #${author.tag}` : ''}</Text>
           </Text>
           <Text style={{ color: textSecondary, fontSize: 13, marginLeft: 6 }}>· {timeAgo(post.createdAt, theme.language)}</Text>
           <View style={{ flex: 1 }} />

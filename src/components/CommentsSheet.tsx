@@ -109,7 +109,7 @@ export function CommentsSheet({ postId, postMine, visible, onClose, onOpenUser }
                       <View style={{ flex: 1 }}>
                         <Text numberOfLines={1} style={{ color: text, fontWeight: '700', fontSize: 14 }}>
                           {c.author.name}
-                          <Text style={{ color: textSecondary, fontWeight: '500' }}> #{c.author.tag} · {timeAgo(c.createdAt, theme.language)}</Text>
+                          <Text style={{ color: textSecondary, fontWeight: '500' }}>{c.author.tag ? ` #${c.author.tag}` : ''} · {timeAgo(c.createdAt, theme.language)}</Text>
                         </Text>
                         <Text style={{ color: text, fontSize: 15, lineHeight: 20, marginTop: 2 }}>{c.text}</Text>
                       </View>

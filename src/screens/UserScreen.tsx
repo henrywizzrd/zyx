@@ -29,6 +29,9 @@ export function UserScreen({ page }: { page: UserPage }) {
   const { text, textSecondary, accent, onAccent, surface, border } = theme.colors;
   const me = currentAccount()?.id;
   const isMe = me === page.id;
+  // Màu nền để cuối ảnh bìa hoà vào (nền ảnh / video thì dùng màu nền chính, vẫn hoà đẹp)
+  const bgHex = (theme.background.color || theme.colors.bg).slice(0, 7);
+  const fadeEnd = theme.background.type === 'preset' ? bgHex : bgHex + '00';
 
   const [card, setCard] = useState<ProfileCard | null | 'missing'>(null);
   const [posts, setPosts] = useState<Post[] | null>(null);
@@ -83,7 +86,9 @@ export function UserScreen({ page }: { page: UserPage }) {
           )}
         </>
       ) : null}
-      <LinearGradient colors={['rgba(0,0,0,0.25)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.45)']} locations={[0, 0.4, 1]} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={['rgba(0,0,0,0.25)', 'rgba(0,0,0,0)']} locations={[0, 0.4]} style={StyleSheet.absoluteFill} />
+      {/* Cuối ảnh bìa hoà dần vào nền (giống trang Hồ sơ của mình), không bị cắt ngang thành một đường */}
+      <LinearGradient colors={[bgHex + '00', fadeEnd]} locations={[0.45, 1]} style={StyleSheet.absoluteFill} />
     </View>
   );
 
@@ -94,7 +99,7 @@ export function UserScreen({ page }: { page: UserPage }) {
       </View>
       <Text numberOfLines={1} style={{ color: text, fontSize: 26, fontWeight: '800', marginTop: 10 }}>
         {c.name}
-        <Text style={{ color: textSecondary, fontWeight: '600' }}> #{c.tag}</Text>
+        <Text style={{ color: textSecondary, fontWeight: '600' }}>{c.tag ? ` #${c.tag}` : ''}</Text>
       </Text>
       <View style={styles.stats}>
         {[

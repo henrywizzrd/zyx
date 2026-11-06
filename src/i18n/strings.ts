@@ -349,6 +349,8 @@ export const vi = {
   'community.searchHint': "Gõ Tên#tag (vd. Tyson#1234) để tìm đúng một người",
   'profile.nameTagTaken': "Tên#tag này đã có người dùng. Đổi tag khác nhé!",
   'profile.nameTagReset': "Tên#tag bị trùng nên đã trả về tên cũ",
+  'settings.syncError': "Hồ sơ chưa lên được server (tên / ảnh người khác chưa thấy). Lý do: {msg}",
+  'settings.syncRetry': "Thử lại",
 };
 
 export type StringKey = keyof typeof vi;
@@ -681,4 +683,6 @@ export const en: Record<StringKey, string> = {
   'community.searchHint': "Type Name#tag (e.g. Tyson#1234) to find one exact person",
   'profile.nameTagTaken': "This Name#tag is already taken. Try another tag!",
   'profile.nameTagReset': "That Name#tag was taken, so your old one was restored",
+  'settings.syncError': "Your profile hasn't reached the server yet (others can't see your name / photos). Reason: {msg}",
+  'settings.syncRetry': "Retry",
 };

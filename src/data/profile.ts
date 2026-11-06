@@ -68,7 +68,8 @@ async function pushProfile(patch: Partial<Profile>) {
   const pending = { ...(kvGet<Record<string, string | null>>(PENDING()) ?? {}), ...toRow(patch) };
   if (!Object.keys(pending).length) return;
   try {
-    const { error } = await sb().from('profiles').update(pending).eq('id', acc.id);
+    // .select: biết chắc có đúng 1 dòng được sửa (phiên đăng nhập hết hạn / sai tài khoản thì không báo lỗi mà sửa 0 dòng)
+    const { data, error } = await sb().from('profiles').update(pending).eq('id', acc.id).select('id');
     if (error?.code === '23505') {
       // Tên#tag vừa bị người khác lấy mất: bỏ thay đổi đó, lấy lại tên / tag đang có trên server
       kvSet(PENDING(), null);
@@ -77,11 +78,22 @@ async function pushProfile(patch: Partial<Profile>) {
       return;
     }
     if (error) throw error;
+    if (!data?.length) throw new Error('Không sửa được hồ sơ trên server (phiên đăng nhập có thể đã hết hạn — đăng xuất rồi đăng nhập lại)');
     kvSet(PENDING(), null);
+    kvSet(SYNC_ERR(), null);
   } catch (e) {
     kvSet(PENDING(), pending);
+    // Ghi lại lý do để hiện trong Cài đặt → Tài khoản (biết vì sao tên / ảnh chưa lên server)
+    kvSet(SYNC_ERR(), String((e as { message?: string })?.message ?? e));
     console.warn('[profile] push', e);
   }
+}
+
+const SYNC_ERR = () => `profile:syncErr:${currentAccount()?.id}`;
+// Hồ sơ đang có thay đổi chưa lên được server không, và vì sao (null = đã đồng bộ)
+export function useProfileSyncError(): string | null {
+  const v = useDbVersion();
+  return useMemo(() => (currentAccount() ? kvGet<string>(SYNC_ERR()) ?? null : null), [v]);
 }
 
 // Tài khoản: Tên#tag mới còn trống không (cặp Tên#tag là duy nhất, kiểu Discord). Mất mạng / server chưa có hàm → cho qua
@@ -110,21 +122,28 @@ export async function syncProfile() {
     if (error || !data || currentAccount()?.id !== acc.id) return;
     const cur = getProfile();
     const patch: Partial<Profile> = {};
-    if (data.display_name) patch.name = data.display_name;
-    if (data.tag) patch.tag = data.tag;
-    if (data.avatar_color) patch.avatarColor = data.avatar_color;
-    if (data.wall_color) patch.wallColor = data.wall_color;
+    // Trường nào còn đang chờ gửi lên (gửi chưa được) thì GIỮ bản trong máy, không lấy bản cũ trên server đè lên
+    const waiting = kvGet<Record<string, unknown>>(PENDING()) ?? {};
+    const keep = (col: string) => col in waiting;
+    if (data.display_name && !keep('display_name')) patch.name = data.display_name;
+    if (data.tag && !keep('tag')) patch.tag = data.tag;
+    if (data.avatar_color && !keep('avatar_color')) patch.avatarColor = data.avatar_color;
+    if (data.wall_color && !keep('wall_color')) patch.wallColor = data.wall_color;
     // Ảnh: server đổi (đổi ở máy khác) thì dùng ảnh trên server; giống nhau thì giữ file trong máy cho nhanh
-    if ((data.avatar_url ?? undefined) !== cur.avatarRemote) {
+    if (!keep('avatar_url') && (data.avatar_url ?? undefined) !== cur.avatarRemote) {
       patch.avatarRemote = data.avatar_url ?? undefined;
       patch.avatar = data.avatar_url ?? undefined;
     }
-    if ((data.cover_url ?? undefined) !== cur.coverRemote) {
+    if (!keep('cover_url') && (data.cover_url ?? undefined) !== cur.coverRemote) {
       patch.coverRemote = data.cover_url ?? undefined;
       patch.cover = data.cover_url ?? undefined;
       patch.coverTone = (data.cover_tone as CoverTone | null) ?? undefined;
     }
     if (Object.keys(patch).length) writeLocal(patch);
+    // Ảnh chọn trong máy mà chưa tải lên được (vd. lúc đó server chưa có kho ảnh, hoặc mất mạng): tải lại
+    const now = getProfile();
+    if (now.avatar?.startsWith('file:') && !now.avatarRemote) uploadImage('avatar', now.avatar);
+    if (now.cover?.startsWith('file:') && !now.coverRemote) uploadImage('cover', now.cover);
   } catch (e) {
     console.warn('[profile] sync', e);
   }
@@ -148,6 +167,7 @@ async function uploadImage(slot: ImageSlot, localUri: string) {
     updateProfile(slot === 'avatar' ? { avatarRemote: url } : { coverRemote: url });
     removeRemote(old);
   } catch (e) {
+    kvSet(SYNC_ERR(), String((e as { message?: string })?.message ?? e));
     console.warn('[profile] upload', e);
   }
 }

@@ -1,5 +1,5 @@
 import { SplitPane } from '../components/SplitPane';
-import { useProfile } from '../data/profile';
+import { syncProfile, useProfile, useProfileSyncError } from '../data/profile';
 import React from 'react';
 import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
@@ -43,6 +43,7 @@ export function SettingsScreen() {
   const label = { color: theme.colors.textSecondary, marginTop: 24, marginBottom: 12 };
   const session = useSession();
   const profile = useProfile();
+  const syncErr = useProfileSyncError();
 
   const settingsPart = (
     <>
@@ -133,7 +134,13 @@ export function SettingsScreen() {
           <Text style={{ color: '#E5484D', fontWeight: '700' }}>{t('settings.signOut')}</Text>
         </Pressable>
       </View>
-
+      {/* Hồ sơ chưa đồng bộ được: hiện lý do + nút thử lại */}
+      {!!syncErr && (
+        <Pressable onPress={() => syncProfile()} style={{ marginTop: 8, padding: 12, borderRadius: 12, backgroundColor: theme.colors.surface }}>
+          <Text style={{ color: '#E5484D', fontSize: 13, lineHeight: 18 }}>{t('settings.syncError', { msg: syncErr })}</Text>
+          <Text style={{ color: theme.colors.accent, fontWeight: '700', marginTop: 6 }}>{t('settings.syncRetry')}</Text>
+        </Pressable>
+      )}
     </>
   );
   const extraPart = (
