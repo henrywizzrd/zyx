@@ -217,9 +217,12 @@ export function SearchScreen() {
 
   const { text, textSecondary, accent } = theme.colors;
   // Màn hình ngang: thể loại nằm ở cột phải (khoảng 58% bề rộng)
-  const innerW = (landscape ? width * 0.58 : width) - H_PAD * 2;
-  const cols = Math.max(2, Math.floor(innerW / 180));
-  const tileW = (innerW - GAP * (cols - 1)) / cols;
+  // Màn hình ngang: thể loại nằm ở cột phải của SplitPane (58% phần còn lại sau khe 8px), trừ lề 2 bên.
+  // Tính đúng từng điểm ảnh (trước đây tính dư vài điểm nên ô thứ hai bị đẩy xuống dòng → chỉ còn 1 cột)
+  const innerW = Math.floor((landscape ? (width - 8) * 0.58 : width) - H_PAD * 2) - 1;
+  const cols = landscape ? Math.max(2, Math.floor(innerW / 200)) : Math.max(2, Math.floor(innerW / 180));
+  const tileW = Math.floor((innerW - GAP * (cols - 1)) / cols);
+  const tileH = landscape ? 78 : 96;
 
   // Mục trong Thư viện khớp từ khoá (hiện ở cuối khi xem Tất cả)
   const library = useLibrary();
@@ -317,7 +320,7 @@ export function SearchScreen() {
                       <Pressable
                         key={g.params}
                         onPress={() => push({ type: 'genre', title: g.title, params: g.params, color: g.color })}
-                        style={({ pressed }) => [styles.tile, { width: tileW, backgroundColor: g.color, opacity: pressed ? 0.8 : 1 }]}
+                        style={({ pressed }) => [styles.tile, { width: tileW, height: tileH, backgroundColor: g.color, opacity: pressed ? 0.8 : 1 }]}
                       >
                         <Text numberOfLines={2} style={styles.tileTitle}>{g.title}</Text>
                         <View style={styles.tileDeco} />
@@ -332,7 +335,7 @@ export function SearchScreen() {
                 <Text style={{ color: text, fontSize: 18, fontWeight: '700', marginTop: 28, marginBottom: 14 }}>{tr('search.browseAll')}</Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
                   {genres.map((g) => (
-                    <Pressable key={g.id} onPress={() => runSearch(g.title)} style={[styles.tile, { width: tileW, backgroundColor: g.color }]}>
+                    <Pressable key={g.id} onPress={() => runSearch(g.title)} style={[styles.tile, { width: tileW, height: tileH, backgroundColor: g.color }]}>
                       <Text style={styles.tileTitle}>{g.title}</Text>
                       <View style={styles.tileDeco} />
                     </Pressable>

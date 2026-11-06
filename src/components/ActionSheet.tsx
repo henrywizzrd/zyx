@@ -69,7 +69,10 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
   const { theme } = useTheme();
   const t = useT();
   const insets = useSafeAreaInsets();
-  const { height: winH } = useScreenSize();
+  const { width: winW, height: winH } = useScreenSize();
+  // Màn hình ngang: bảng hẹp lại (nằm giữa, không phủ hết bề ngang) và phần nội dung cuộn được trong chiều cao còn lại
+  const landscape = winW > winH;
+  const bodyMax = Math.max(160, winH - insets.top - insets.bottom - 150);
   const { liked, toggleLike, playNext, addToQueue } = usePlayerPick('liked', 'toggleLike', 'playNext', 'addToQueue');
   const { push } = useNav();
   const dlState = useDownloads();
@@ -302,7 +305,7 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
             </View>
             <Text style={[styles.rowLabel, { color: text }]}>{t('sheet.newPlaylist')}</Text>
           </Pressable>
-          <ScrollView style={{ maxHeight: winH * 0.45 }} bounces={false} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ maxHeight: landscape ? bodyMax : winH * 0.45 }} bounces={false} showsVerticalScrollIndicator={false}>
             {lists.map((p) => {
               const has = playlistHas(p.id, track.id);
               return (
@@ -372,7 +375,7 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.kav} pointerEvents="box-none">
             <Animated.View
               onLayout={(e) => onCardLayout(e.nativeEvent.layout.height)}
-              style={[styles.card, { marginBottom: Math.max(8, insets.bottom - 26) }, cardStyle]}
+              style={[styles.card, { marginBottom: Math.max(8, insets.bottom - 26) }, landscape && { width: Math.min(winW - 32, 560), alignSelf: 'center', marginHorizontal: 0 }, cardStyle]}
             >
               {/* Kính mờ theo theme */}
               {Platform.OS === 'ios' && <BlurView intensity={50} tint={glassTint} style={StyleSheet.absoluteFill} />}
@@ -400,7 +403,13 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
               </GestureDetector>
 
               <Animated.View key={content.kind} entering={FadeIn.duration(160)} style={{ paddingVertical: 6 }}>
-                {renderBody(content)}
+                {landscape && content.kind !== 'playlists' ? (
+                  <ScrollView style={{ maxHeight: bodyMax }} bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                    {renderBody(content)}
+                  </ScrollView>
+                ) : (
+                  renderBody(content)
+                )}
               </Animated.View>
             </Animated.View>
           </KeyboardAvoidingView>

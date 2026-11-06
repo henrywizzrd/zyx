@@ -188,7 +188,8 @@ export function QueueSheet({ visible, onClose }: { visible: boolean; onClose: ()
   if (!armed) return <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={(e) => setBox(e.nativeEvent.layout)} />;
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents={visible ? 'auto' : 'none'} onLayout={(e) => setBox(e.nativeEvent.layout)}>
+    // zIndex cao: màn player ngang có hai "trang sách" nghiêng 3D chồm ra phía trước, không nâng lên thì chúng đè lên hàng chờ
+    <View style={[StyleSheet.absoluteFill, { zIndex: 500, elevation: 50 }]} pointerEvents={visible ? 'auto' : 'none'} onLayout={(e) => setBox(e.nativeEvent.layout)}>
       {/* Phủ tối rất nhẹ phía sau, bấm vào để đóng */}
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }, backdropStyle]}>
         <Pressable style={{ flex: 1 }} onPress={onClose} />

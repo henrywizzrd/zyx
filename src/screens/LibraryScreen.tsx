@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Image, PixelRatio, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { BlurView } from 'expo-blur';
+import RNMaskedView from '@react-native-masked-view/masked-view';
+const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
@@ -363,11 +364,17 @@ export function LibraryScreen() {
           <View style={[styles.landCard, { backgroundColor: profile.wallColor }]}>
             {profile.cover ? (
               <>
+                {/* Ảnh bìa: rõ ở nửa trên, mờ dần xuống dưới (bản mờ chồng lên, lộ dần theo dải chuyển từ trong suốt → đặc) */}
                 <Image source={{ uri: profile.cover }} resizeMode="cover" style={StyleSheet.absoluteFill} />
-                {Platform.OS !== 'web' && <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} />}
+                <MaskedView
+                  style={StyleSheet.absoluteFill}
+                  maskElement={<LinearGradient colors={['transparent', '#000']} locations={[0.3, 0.75]} style={{ flex: 1 }} />}
+                >
+                  <Image source={{ uri: profile.cover }} resizeMode="cover" blurRadius={22} style={StyleSheet.absoluteFill} />
+                </MaskedView>
               </>
             ) : null}
-            <LinearGradient colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.45)']} style={StyleSheet.absoluteFill} />
+            <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.5)']} locations={[0.35, 1]} style={StyleSheet.absoluteFill} />
             <Pressable onPress={() => editImage('cover')} hitSlop={8} style={[styles.coverBtn, { top: 10, right: 10 }]}>
               <Ionicons name="camera-outline" size={18} color="#FFFFFF" />
             </Pressable>

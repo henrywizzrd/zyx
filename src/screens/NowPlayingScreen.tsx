@@ -410,14 +410,14 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     };
 
     if (!landLyrics) {
-      const art = Math.max(0, usableH - 8);
+      const art = Math.max(0, Math.round(usableH * 0.8)); // nhỏ lại một chút cho thoáng
       return (
         <View style={{ flex: 1 }}>
           {Background}
           <StatusBar barStyle="light-content" />
           <View style={rowStyle}>
             <View style={{ justifyContent: 'center' }} {...swipe.panHandlers}>
-              <Cover track={track} size={900} style={{ width: art, height: art, borderRadius: 12 }}>
+              <Cover track={track} size={1200} style={{ width: art, height: art, borderRadius: 12 }}>
                 <Ionicons name="musical-notes" size={48} color="rgba(255,255,255,0.8)" />
               </Cover>
             </View>
@@ -445,7 +445,8 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     // Hiệu ứng QUYỂN SÁCH: trang trái (ảnh bìa + điều khiển) và trang phải (lời) nghiêng vào giữa như cuốn sách đang mở,
     // gáy sách ở giữa được che bằng một dải kính mờ mềm nối hai trang
     const leftW = Math.min(340, win.width * 0.34);
-    const art = Math.max(0, Math.min(leftW, usableH - 150));
+    // Chừa đủ chỗ cho nút thích, tên bài, thanh thời gian và hàng điều khiển bên dưới ảnh (trước đây ảnh to quá, đẩy nút phát ra ngoài màn hình)
+    const art = Math.max(90, Math.min(leftW - 24, usableH - 210));
     const spineX = insets.left + 20 + leftW + 14; // vị trí gáy sách (giữa hai trang)
     // Mỗi trang xoay quanh MÉP TRONG (phía gáy): mép trong đứng yên, mép ngoài nghiêng về phía người xem.
     // (Trước đây xoay quanh giữa trang: nửa trong lùi ra sau mặt phẳng màn hình nên bị nền che mất → trang bị cắt cụt)
@@ -459,17 +460,19 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
             {...swipe.panHandlers}
             style={{ width: leftW, justifyContent: 'center', transformOrigin: 'right center', transform: [{ perspective: 1400 }, { rotateY: '12deg' }] }}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={{ flex: 1 }} />
-              {LikeButton}
-            </View>
-            <View style={{ alignItems: 'center', marginTop: 4 }}>
-              <Cover track={track} size={600} style={{ width: art, height: art, borderRadius: 10 }}>
+            <View style={{ alignItems: 'center' }}>
+              <Cover track={track} size={1200} style={{ width: art, height: art, borderRadius: 10 }}>
                 <Ionicons name="musical-notes" size={40} color="rgba(255,255,255,0.8)" />
               </Cover>
             </View>
-            <Text numberOfLines={1} style={[styles.title, { fontSize: 19, marginTop: 10 }]}>{title}</Text>
-            <Text numberOfLines={1} style={[styles.artist, { fontSize: 14 }]}>{artist}</Text>
+            {/* Tên bài + nút thích cùng một hàng (trước đây nút thích nằm riêng phía trên ảnh, bị đẩy ra khỏi màn hình) */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text numberOfLines={1} style={[styles.title, { fontSize: 19 }]}>{title}</Text>
+                <Text numberOfLines={1} style={[styles.artist, { fontSize: 14 }]}>{artist}</Text>
+              </View>
+              {LikeButton}
+            </View>
             <View style={{ marginTop: 6 }}>{Progress}</View>
             <View style={{ marginTop: 2 }}>
               {controls(false)}
