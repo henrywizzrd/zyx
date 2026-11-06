@@ -89,13 +89,16 @@ export async function setFollow(userId: string, follow: boolean) {
   }
 }
 
-// Bài đăng: userId = null → bảng tin (mọi người, mới nhất trước)
-export async function fetchPosts(userId: string | null, before?: number): Promise<Post[]> {
-  const { data, error } = await sb().rpc('post_rows', {
+// Bài đăng: userId = null → bảng tin (bài + lượt đăng lại của mọi người, mới nhất trước).
+// mode 'reposts': các bài userId đã đăng lại
+export async function fetchPosts(userId: string | null, before?: number, mode?: 'reposts'): Promise<Post[]> {
+  const args: Record<string, unknown> = {
     p_user: userId,
     p_before: before ? new Date(before).toISOString() : null,
     p_limit: 30,
-  });
+  };
+  if (mode) args.p_mode = mode; // chỉ gửi khi cần: server chưa chạy file 006 vẫn tải được bảng tin / bài đăng
+  const { data, error } = await sb().rpc('post_rows', args);
   if (error) throw error;
   const me = currentAccount()?.id;
   return (data ?? []).map((r: any) => ({
@@ -106,6 +109,10 @@ export async function fetchPosts(userId: string | null, before?: number): Promis
     likes: Number(r.likes) || 0,
     liked: !!r.liked,
     comments: Number(r.comments) || 0,
+    reposts: Number(r.reposts) || 0,
+    reposted: !!r.reposted,
+    repostedBy: r.reposter_id ? { id: r.reposter_id, name: r.reposter_name || 'ZYX' } : undefined,
+    itemTime: r.item_time ? Date.parse(r.item_time) : Date.parse(r.created_at),
     remote: true,
     // bài của chính mình: bỏ trống author → thẻ bài dùng tên / ảnh trong hồ sơ của mình và hiện nút xoá
     author:
@@ -124,6 +131,69 @@ export async function setLike(postId: string, like: boolean) {
     const { error } = await sb().from('post_likes').delete().eq('post_id', postId).eq('user_id', acc.id);
     if (error) throw error;
   }
+}
+
+export async function setRepost(postId: string, on: boolean) {
+  const acc = requireAccount();
+  if (on) {
+    const { error } = await sb().from('reposts').insert({ post_id: postId });
+    if (error && error.code !== '23505') throw error;
+  } else {
+    const { error } = await sb().from('reposts').delete().eq('post_id', postId).eq('user_id', acc.id);
+    if (error) throw error;
+  }
+}
+
+// ---- Playlist công khai của một người (tab Share / Playlist trong hồ sơ)
+export interface SharedPlaylist {
+  id: string;
+  userId: string;
+  localId: string;
+  title: string;
+  description?: string;
+  cover?: string;
+  count: number;
+  tracks?: import('./mock').Track[];
+}
+export async function fetchSharedPlaylists(userId: string): Promise<SharedPlaylist[]> {
+  const { data, error } = await sb()
+    .from('shared_playlists')
+    .select('id, user_id, local_id, title, description, cover_url, tracks')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    userId: r.user_id,
+    localId: r.local_id,
+    title: r.title,
+    description: r.description ?? undefined,
+    cover: r.cover_url ?? r.tracks?.[0]?.thumb ?? undefined,
+    count: Array.isArray(r.tracks) ? r.tracks.length : 0,
+  }));
+}
+// Bản Công khai trên server của một playlist trong máy người khác (theo tài khoản + id trong máy)
+export async function findSharedPlaylist(userId: string, localId: string): Promise<string | null> {
+  const { data, error } = await sb().from('shared_playlists').select('id').eq('user_id', userId).eq('local_id', localId).maybeSingle();
+  if (error) throw error;
+  return (data?.id as string) ?? null;
+}
+export async function fetchSharedPlaylist(id: string): Promise<SharedPlaylist | null> {
+  const { data, error } = await sb().from('shared_playlists').select('id, user_id, local_id, title, description, cover_url, tracks').eq('id', id).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const tracks = (Array.isArray(data.tracks) ? data.tracks : []) as import('./mock').Track[];
+  return {
+    id: data.id,
+    userId: data.user_id,
+    localId: data.local_id,
+    title: data.title,
+    description: data.description ?? undefined,
+    cover: data.cover_url ?? tracks[0]?.thumb ?? undefined,
+    count: tracks.length,
+    tracks,
+  };
 }
 
 export async function fetchComments(postId: string): Promise<Comment[]> {
@@ -152,7 +222,7 @@ export async function deleteComment(id: string) {
 }
 
 // Báo cho các danh sách bài đang mở biết một bài vừa đổi (thích / bình luận / xoá) để cập nhật ngay
-type Patch = { id: string; likes?: number; liked?: boolean; comments?: number; deleted?: boolean };
+type Patch = { id: string; likes?: number; liked?: boolean; comments?: number; reposts?: number; reposted?: boolean; deleted?: boolean };
 const listeners = new Set<(p: Patch) => void>();
 export const onPostPatch = (fn: (p: Patch) => void) => {
   listeners.add(fn);

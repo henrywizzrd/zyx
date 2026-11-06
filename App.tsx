@@ -22,6 +22,10 @@ import { LibraryScreen } from './src/screens/LibraryScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { UserScreen } from './src/screens/UserScreen';
+import { ComposerHost } from './src/components/PostComposer';
+import { syncSharedPlaylists } from './src/data/sharedSync';
+import { useDbVersion } from './src/data/db';
+import { useSession } from './src/data/auth';
 import { PlayerTransition } from './src/components/PlayerTransition';
 import { BackdropBlur } from './src/components/BackdropBlur';
 import { NavProvider, Page, useNav, useNavStack } from './src/nav/Nav';
@@ -255,6 +259,8 @@ function Root() {
         })}
         </ContentArea>
         <DropPreview />
+        <ComposerHost />
+        <SharedSyncer />
         {/* Bong bóng ẩn từ lúc bấm mở player tới khi player thu hẳn về (playerUp), để không thấy hai ảnh cùng lúc */}
         {/* Bấm mở player: nền phía sau (tab + hiệu ứng) mờ dần theo độ mở; đóng thì từ mờ trở lại rõ dần */}
         {(tab === 'player' || playerUp) && <BackdropBlur />}
@@ -288,6 +294,20 @@ function ContentArea({ children }: { children: React.ReactNode }) {
       <ScreenSizeProvider>{children}</ScreenSizeProvider>
     </View>
   );
+}
+
+// Playlist công khai: dữ liệu trong máy đổi (thêm bài, đổi tên, bật Công khai...) → vài giây sau đồng bộ lên server.
+// Tách thành thành phần riêng để mỗi lần dữ liệu đổi chỉ chỗ này chạy lại, không vẽ lại cả app
+function SharedSyncer() {
+  const dbv = useDbVersion();
+  const session = useSession();
+  const acc = session?.mode === 'account' ? session.id : undefined;
+  useEffect(() => {
+    if (!acc) return;
+    const id = setTimeout(syncSharedPlaylists, 2500);
+    return () => clearTimeout(id);
+  }, [dbv, acc]);
+  return null;
 }
 
 // Màn hình chờ lúc mở app: chuẩn bị sẵn mọi thứ của YouTube Music trước khi hiện giao diện.

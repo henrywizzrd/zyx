@@ -10,7 +10,9 @@ import { Attachment, deletePost, Post, timeAgo, toggleLikePost } from '../data/s
 import { SmartImage } from './Cover';
 import { useActionSheet } from './ActionSheet';
 import { CommentsSheet } from './CommentsSheet';
-import { emitPostPatch, NeedAccount, setLike } from '../data/community';
+import { currentAccount } from '../data/auth';
+import { emitPostPatch, findSharedPlaylist, NeedAccount, setLike, setRepost } from '../data/community';
+import { getPlaylist } from '../data/db';
 
 const AVATAR = 38;
 
@@ -44,7 +46,16 @@ export function useOpenAttachment() {
     }
     if (a.kind === 'artist') return push({ type: 'artist', id: a.id, name: a.title, thumb: a.thumb });
     if (a.source === 'liked') return push({ type: 'collection', source: 'liked', kind: 'playlist', id: 'liked', title: a.title });
-    if (a.source === 'local') return push({ type: 'collection', source: 'local', kind: 'playlist', id: a.id, title: a.title, thumb: a.thumb });
+    if (a.source === 'shared') return push({ type: 'collection', source: 'shared', kind: 'playlist', id: a.id, title: a.title, thumb: a.thumb });
+    if (a.source === 'local') {
+      // Playlist trong máy: của mình thì mở thẳng; của người khác thì mở bản Công khai của họ trên server (nếu có)
+      if (getPlaylist(a.id)) return push({ type: 'collection', source: 'local', kind: 'playlist', id: a.id, title: a.title, thumb: a.thumb });
+      if (!a.ownerId) return toast(t('community.playlistPrivate'));
+      findSharedPlaylist(a.ownerId, a.id)
+        .then((id) => (id ? push({ type: 'collection', source: 'shared', kind: 'playlist', id, title: a.title, thumb: a.thumb }) : toast(t('community.playlistPrivate'))))
+        .catch(() => toast(t('community.failed')));
+      return;
+    }
     push({ type: 'collection', source: 'yt', kind: a.kind, id: a.id, title: a.title, thumb: a.thumb });
   };
 }
@@ -85,6 +96,7 @@ export function PostCard({ post, showDivider = true }: { post: Post; showDivider
   const openAttach = useOpenAttachment();
   const { text, textSecondary, border, accent } = theme.colors;
   const { push } = useNav();
+  const myId = currentAccount()?.id;
   const mine = !post.author;
   const author = post.author ?? { name: profile.name, tag: profile.tag, color: profile.avatarColor, avatar: profile.avatar ?? undefined };
   const soon = () => sheet.toast(t('social.soon'));
@@ -117,9 +129,33 @@ export function PostCard({ post, showDivider = true }: { post: Post; showDivider
     });
   };
   const comment = () => (post.remote ? setCommentsOpen(true) : soon());
+  // Đăng lại kiểu Threads: bấm là đăng lại ngay (hiện trong tab Đăng lại của mình và trên bảng tin), bấm lần nữa để bỏ.
+  // Không đăng lại bài của chính mình
+  const repost = () => {
+    if (!post.remote) return soon();
+    if (mine) return;
+    const reposted = !post.reposted;
+    const reposts = Math.max(0, (post.reposts ?? 0) + (reposted ? 1 : -1));
+    emitPostPatch({ id: post.id, reposted, reposts });
+    sheet.toast(t(reposted ? 'community.reposted' : 'community.unreposted'));
+    setRepost(post.id, reposted).catch((e) => {
+      emitPostPatch({ id: post.id, reposted: post.reposted, reposts: post.reposts });
+      sheet.toast(t(e instanceof NeedAccount ? 'community.needAccount' : 'community.failed'));
+    });
+  };
 
+  const me = post.repostedBy && post.repostedBy.id === myId;
   return (
-    <View style={[styles.post, showDivider && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: border }]}>
+    <View style={showDivider && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: border }}>
+    {post.repostedBy && (
+      <Pressable onPress={() => !me && openUser(post.repostedBy!.id)} style={styles.repostLine}>
+        <Ionicons name="repeat" size={14} color={textSecondary} />
+        <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, fontWeight: '600' }}>
+          {me ? t('community.youReposted') : t('community.xReposted', { name: post.repostedBy.name })}
+        </Text>
+      </Pressable>
+    )}
+    <View style={[styles.post, post.repostedBy && { paddingTop: 6 }]}>
       <Pressable onPress={() => openUser(post.author?.id)} disabled={!post.author?.id} style={[styles.avatar, { backgroundColor: author.color }]}>
         {author.avatar ? (
           <Image source={{ uri: author.avatar }} style={StyleSheet.absoluteFill} />
@@ -156,11 +192,9 @@ export function PostCard({ post, showDivider = true }: { post: Post; showDivider
             <Ionicons name="chatbubble-outline" size={19} color={textSecondary} />
             {!!post.comments && <Text style={{ color: textSecondary, fontSize: 13 }}>{post.comments}</Text>}
           </Pressable>
-          <Pressable onPress={soon} hitSlop={8} style={styles.action}>
-            <Ionicons name="repeat" size={21} color={post.author ? accent : textSecondary} />
-          </Pressable>
-          <Pressable onPress={soon} hitSlop={8} style={styles.action}>
-            <Ionicons name="paper-plane-outline" size={19} color={textSecondary} />
+          <Pressable onPress={repost} disabled={mine && !!post.remote} hitSlop={8} style={[styles.action, mine && !!post.remote && { opacity: 0.35 }]}>
+            <Ionicons name="repeat" size={21} color={post.reposted ? accent : textSecondary} />
+            {!!post.reposts && <Text style={{ color: post.reposted ? accent : textSecondary, fontSize: 13 }}>{post.reposts}</Text>}
           </Pressable>
         </View>
       </View>
@@ -177,11 +211,13 @@ export function PostCard({ post, showDivider = true }: { post: Post; showDivider
         />
       )}
     </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   post: { flexDirection: 'row', gap: 12, paddingVertical: 14 },
+  repostLine: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 12, paddingLeft: 24 },
   avatar: { width: AVATAR, height: AVATAR, borderRadius: AVATAR / 2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   attach: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 14, padding: 10 },
   actions: { flexDirection: 'row', gap: 22, marginTop: 12, alignItems: 'center' },

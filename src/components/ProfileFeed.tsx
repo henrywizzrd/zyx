@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useT } from '../i18n';
 import { useProfile } from '../data/profile';
-import { sampleReposts, useMyPosts } from '../data/social';
+import { useMyPosts } from '../data/social';
+import { getPlaylists, useDbVersion } from '../data/db';
+import { useNav } from '../nav/Nav';
+import { PlaylistRows } from './PlaylistRows';
 import { PostCard } from './PostCard';
 import { currentAccount } from '../data/auth';
-import { fetchPosts, onPostPatch } from '../data/community';
+import { applyPatch, fetchPosts, onPostPatch } from '../data/community';
 import type { Post } from '../data/social';
 
 type Counts = Record<string, Pick<Post, 'likes' | 'liked' | 'comments'>>;
@@ -42,7 +45,26 @@ export function ProfileFeed() {
     []
   );
   const posts = useMemo(() => local.map((p) => (counts[p.id] ? { ...p, ...counts[p.id], remote: true } : p)), [local, counts]);
-  const reposts = useMemo(() => sampleReposts(), []);
+  // Đăng lại: các bài (của người khác) mình đã đăng lại, lấy từ server
+  const [reposts, setReposts] = useState<Post[] | null>(null);
+  useEffect(() => {
+    if (!accId) return;
+    fetchPosts(accId, undefined, 'reposts')
+      .then(setReposts)
+      .catch(() => setReposts([]));
+  }, [accId]);
+  useEffect(
+    () =>
+      onPostPatch((p) => {
+        setReposts((l) => (l ? (p.reposted === false || p.deleted ? l.filter((x) => x.id !== p.id) : applyPatch(l, p)) : l));
+        if (p.reposted === true && accId) fetchPosts(accId, undefined, 'reposts').then(setReposts).catch(() => {});
+      }),
+    [accId]
+  );
+  // Share: playlist trong máy đang để Công khai (được đưa lên server cho người khác xem)
+  const dbv = useDbVersion();
+  const shared = useMemo(() => getPlaylists().filter((p) => p.isPublic), [dbv]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { push } = useNav();
   const [tab, setTab] = useState<Tab>('home');
   const [composing, setComposing] = useState(false);
   const { text, textSecondary, border, surface } = theme.colors;
@@ -96,22 +118,36 @@ export function ProfileFeed() {
         </View>
       )}
 
-      {tab === 'reposts' && (
-        <View>
-          <Text style={{ color: textSecondary, fontSize: 12, marginTop: 10 }}>{t('social.sampleNote')}</Text>
-          {reposts.map((p, i) => (
-            <View key={p.id}>
-              <View style={styles.repostLabel}>
-                <Ionicons name="repeat" size={14} color={textSecondary} />
-                <Text style={{ color: textSecondary, fontSize: 12, fontWeight: '600' }}>{t('social.youReposted')}</Text>
-              </View>
-              <PostCard post={p} showDivider={i < reposts.length - 1} />
-            </View>
-          ))}
-        </View>
-      )}
+      {tab === 'reposts' &&
+        (!accId
+          ? empty('repeat', t('community.repostsNeedAccount'))
+          : reposts === null
+            ? <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 24 }} />
+            : reposts.length === 0
+              ? empty('repeat', t('community.noReposts'))
+              : reposts.map((p, i) => <PostCard key={p.id} post={{ ...p, repostedBy: undefined }} showDivider={i < reposts.length - 1} />))}
 
-      {tab === 'share' && empty('share-social-outline', t('social.shareSoon'))}
+      {tab === 'share' &&
+        (!accId ? (
+          empty('share-social-outline', t('community.shareNeedAccount'))
+        ) : (
+          <View>
+            <Text style={{ color: textSecondary, fontSize: 13, marginTop: 12, lineHeight: 18 }}>{t('community.shareHint')}</Text>
+            {shared.length === 0 ? (
+              empty('globe-outline', t('community.noShared'))
+            ) : (
+              <PlaylistRows
+                items={shared.map((p) => ({
+                  key: p.id,
+                  title: p.title,
+                  subtitle: t('community.songsCount', { n: p.count }),
+                  thumb: p.thumb,
+                  onPress: () => push({ type: 'collection', source: 'local', kind: 'playlist', id: p.id, title: p.title, thumb: p.thumb }),
+                }))}
+              />
+            )}
+          </View>
+        ))}
 
       <PostComposer visible={composing} onClose={() => setComposing(false)} />
     </View>

@@ -22,6 +22,9 @@ import { useScreenSize } from '../components/ScreenSize';
 import Animated from 'react-native-reanimated';
 import { StretchyBg, useStretchScroll } from '../components/Stretchy';
 import { deleteAppFile, pickSquareImage } from '../data/images';
+import { openComposer } from '../components/PostComposer';
+import { currentAccount } from '../data/auth';
+import { fetchSharedPlaylist } from '../data/community';
 
 type Row = Track & { position?: number };
 type Info = { title: string; subtitle: string; thumb?: string; owner?: Collection['owner']; description?: string; cover?: string };
@@ -81,6 +84,25 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
     };
   }, [page, retry]);
 
+  // Playlist công khai của một người dùng: tải từ server ZYX
+  useEffect(() => {
+    if (page.source !== 'shared') return;
+    let dead = false;
+    setStatus('loading');
+    fetchSharedPlaylist(page.id)
+      .then((p) => {
+        if (dead) return;
+        if (!p) return setStatus('error');
+        setRows(p.tracks ?? []);
+        setInfo({ title: p.title, subtitle: t('community.songsCount', { n: p.count }), thumb: p.cover, description: p.description });
+        setStatus('done');
+      })
+      .catch(() => !dead && setStatus('error'));
+    return () => {
+      dead = true;
+    };
+  }, [page, retry, t]);
+
   // Liked Songs / playlist tự tạo: đọc từ máy, tự cập nhật khi dữ liệu đổi
   useEffect(() => {
     if (page.source === 'liked') {
@@ -101,6 +123,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
   const ctx = useMemo<PlayContext>(() => {
     if (page.source === 'liked') return { kind: 'liked', id: 'liked', title: t('home.liked') };
     if (page.source === 'local') return { kind: 'local', id: page.id, title: info.title, thumb: info.thumb };
+    if (page.source === 'shared') return { kind: 'shared', id: page.id, title: info.title, thumb: info.thumb };
     return { kind: page.kind, id: page.id, title: info.title, thumb: info.thumb };
   }, [page, info.title, info.thumb, t]);
 
@@ -167,6 +190,28 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
         },
       });
     }
+    // Đăng lên hồ sơ: mở màn soạn bài, playlist / album này được đính kèm sẵn
+    if (page.source !== 'shared') {
+      actions.push({
+        label: t('sheet.postToProfile'),
+        icon: 'create-outline',
+        run: () => {
+          setTimeout(
+            () =>
+              openComposer({
+                kind: page.kind,
+                id: page.id,
+                title: info.title,
+                subtitle: info.owner?.name || (page.source === 'yt' ? info.subtitle : '') || '',
+                thumb: info.thumb,
+                source: page.source,
+                ownerId: page.source === 'local' ? currentAccount()?.id : undefined,
+              }),
+            250
+          );
+        },
+      });
+    }
     if (yt) {
       const url = page.kind === 'album' ? `https://music.youtube.com/browse/${page.id}` : `https://music.youtube.com/playlist?list=${page.id}`;
       actions.push({ label: t('sheet.share'), icon: 'share-outline', run: () => void Share.share({ message: `${info.title}\n${url}` }).catch(() => {}) });
@@ -210,8 +255,8 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
         )}
         {!!meta && <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 14, marginTop: 6 }}>{meta}</Text>}
         {/* Mô tả của playlist tự tạo (bấm để sửa) */}
-        {local && !!info.description && (
-          <Pressable onPress={editDescription} style={{ marginTop: 8, paddingHorizontal: 12 }}>
+        {(local || page.source === 'shared') && !!info.description && (
+          <Pressable onPress={editDescription} disabled={!local} style={{ marginTop: 8, paddingHorizontal: 12 }}>
             <Text numberOfLines={3} style={{ color: textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 20 }}>{info.description}</Text>
           </Pressable>
         )}

@@ -10,7 +10,8 @@ import { useAnimatedBack } from '../nav/SwipeBack';
 import { useContentInsets } from '../components/FloatingDock';
 import { useActionSheet } from '../components/ActionSheet';
 import { PostCard } from '../components/PostCard';
-import { applyPatch, fetchPosts, getProfileCard, NeedAccount, onPostPatch, ProfileCard, setFollow } from '../data/community';
+import { applyPatch, fetchPosts, fetchSharedPlaylists, getProfileCard, NeedAccount, onPostPatch, ProfileCard, setFollow, SharedPlaylist } from '../data/community';
+import { PlaylistRows } from '../components/PlaylistRows';
 import { currentAccount } from '../data/auth';
 import type { Post } from '../data/social';
 
@@ -37,6 +38,16 @@ export function UserScreen({ page }: { page: UserPage }) {
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  // 3 tab: Bài đăng / Đăng lại / Playlist (playlist công khai của họ)
+  const [tab, setTab] = useState<'posts' | 'reposts' | 'playlists'>('posts');
+  const [reposts, setReposts] = useState<Post[] | null>(null);
+  const [lists, setLists] = useState<SharedPlaylist[] | null>(null);
+  useEffect(() => {
+    if (tab === 'reposts' && reposts === null) fetchPosts(page.id, undefined, 'reposts').then(setReposts).catch(() => setReposts([]));
+    if (tab === 'playlists' && lists === null) fetchSharedPlaylists(page.id).then(setLists).catch(() => setLists([]));
+  }, [tab, page.id, reposts, lists]);
+  useEffect(() => onPostPatch((p) => setReposts((l) => (l ? applyPatch(l, p) : l))), []);
+  const { push } = useNav();
 
   const load = () => {
     setFailed(false);
@@ -123,7 +134,47 @@ export function UserScreen({ page }: { page: UserPage }) {
     </>
   );
 
-  const postList =
+  const tabBtn = (k: typeof tab, label: string) => {
+    const on = tab === k;
+    return (
+      <Pressable key={k} onPress={() => setTab(k)} style={[styles.tab, { borderBottomColor: on ? text : border }]}>
+        <Text style={{ color: on ? text : textSecondary, fontWeight: on ? '800' : '600', fontSize: 15 }}>{label}</Text>
+      </Pressable>
+    );
+  };
+  const tabs = (
+    <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+      {tabBtn('posts', t('community.tabPosts'))}
+      {tabBtn('reposts', t('community.tabReposts'))}
+      {tabBtn('playlists', t('community.tabPlaylists'))}
+    </View>
+  );
+  const repostList =
+    reposts === null ? (
+      <ActivityIndicator color={accent} style={{ marginTop: 30 }} />
+    ) : reposts.length === 0 ? (
+      <Text style={{ color: textSecondary, marginTop: 24 }}>{t('community.noReposts')}</Text>
+    ) : (
+      reposts.map((p, i) => <PostCard key={p.id} post={{ ...p, repostedBy: undefined }} showDivider={i < reposts.length - 1} />)
+    );
+  const playlistList =
+    lists === null ? (
+      <ActivityIndicator color={accent} style={{ marginTop: 30 }} />
+    ) : lists.length === 0 ? (
+      <Text style={{ color: textSecondary, marginTop: 24 }}>{t('community.noShared')}</Text>
+    ) : (
+      <PlaylistRows
+        items={lists.map((l) => ({
+          key: l.id,
+          title: l.title,
+          subtitle: t('community.songsCount', { n: l.count }),
+          thumb: l.cover,
+          onPress: () => push({ type: 'collection', source: 'shared', kind: 'playlist', id: l.id, title: l.title, thumb: l.cover }),
+        }))}
+      />
+    );
+
+  const postsOnly =
     posts === null ? (
       failed ? null : <ActivityIndicator color={accent} style={{ marginTop: 30 }} />
     ) : posts.length === 0 ? (
@@ -131,6 +182,12 @@ export function UserScreen({ page }: { page: UserPage }) {
     ) : (
       posts.map((p, i) => <PostCard key={p.id} post={p} showDivider={i < posts.length - 1} />)
     );
+  const postList = (
+    <>
+      {tabs}
+      {tab === 'posts' ? postsOnly : tab === 'reposts' ? repostList : playlistList}
+    </>
+  );
 
   const status =
     card === 'missing' ? (
@@ -181,4 +238,5 @@ const styles = StyleSheet.create({
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 10 },
   followBtn: { marginTop: 14, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28, alignSelf: 'flex-start', minWidth: 150 },
   landCard: { height: 190, borderRadius: 22, overflow: 'hidden' },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1.5 },
 });

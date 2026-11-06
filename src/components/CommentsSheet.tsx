@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, FlatList, Image, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
@@ -69,16 +69,26 @@ export function CommentsSheet({ postId, postMine, visible, onClose, onOpenUser }
   };
 
   const cardW = Math.min(width - 16, 620);
+  // Lớp tối phía sau mờ dần tại chỗ, chỉ bảng trượt lên (trước đây cả khối trượt lên nên lớp tối lộ một mép ngang)
+  const show = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (visible) Animated.spring(show, { toValue: 1, friction: 9, tension: 70, useNativeDriver: true }).start();
+  }, [visible, show]);
+  const close = () =>
+    Animated.timing(show, { toValue: 0, duration: 200, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => onClose());
+  const translateY = show.interpolate({ inputRange: [0, 1], outputRange: [height, 0] });
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}>
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={close} supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}>
       <View style={{ flex: 1 }}>
-        <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)' }]} onPress={onClose} />
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)', opacity: show }]}>
+          <Pressable style={{ flex: 1 }} onPress={close} />
+        </Animated.View>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }} pointerEvents="box-none">
-          <View style={[styles.card, { width: cardW, maxHeight: height * 0.78, backgroundColor: theme.colors.bg, borderColor: border, paddingBottom: Math.max(10, insets.bottom) }]}>
+          <Animated.View style={[styles.card, { width: cardW, maxHeight: height * 0.78, backgroundColor: theme.colors.bg, borderColor: border, paddingBottom: Math.max(10, insets.bottom), transform: [{ translateY }] }]}>
             <View style={[styles.grab, { backgroundColor: textSecondary }]} />
             <View style={styles.head}>
               <Text style={{ flex: 1, color: text, fontSize: 18, fontWeight: '800' }}>{t('community.comments')}</Text>
-              <Pressable onPress={onClose} hitSlop={10}>
+              <Pressable onPress={close} hitSlop={10}>
                 <Ionicons name="close" size={24} color={textSecondary} />
               </Pressable>
             </View>
@@ -144,7 +154,7 @@ export function CommentsSheet({ postId, postMine, visible, onClose, onOpenUser }
             ) : (
               <Text style={{ color: textSecondary, textAlign: 'center', paddingVertical: 12 }}>{t('community.needAccount')}</Text>
             )}
-          </View>
+          </Animated.View>
         </KeyboardAvoidingView>
       </View>
     </Modal>

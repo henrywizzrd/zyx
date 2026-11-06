@@ -20,8 +20,9 @@ export interface Attachment {
   title: string;
   subtitle: string;
   thumb?: string;
-  source: 'yt' | 'local' | 'liked'; // playlist trong máy / Liked Songs / trên YouTube Music
+  source: 'yt' | 'local' | 'liked' | 'shared'; // trên YouTube Music / playlist trong máy / Liked Songs / playlist công khai
   track?: Track; // với bài hát: đủ thông tin để bấm là phát
+  ownerId?: string; // playlist trong máy: tài khoản người đăng (người khác bấm vào thì mở bản công khai trên server)
 }
 
 export interface Author {
@@ -44,6 +45,10 @@ export interface Post {
   pending?: boolean; // tài khoản: bài đăng lúc mất mạng, chưa gửi lên server
   remote?: boolean; // bài trên server: thích / bình luận lưu trên server, ai cũng thấy
   comments?: number;
+  reposts?: number; // số lượt đăng lại
+  reposted?: boolean; // mình đã đăng lại bài này
+  repostedBy?: { id: string; name: string }; // bảng tin: dòng "X đã đăng lại"
+  itemTime?: number; // thời điểm xuất hiện trong danh sách (lúc đăng, hoặc lúc được đăng lại)
 }
 
 // Khách: bài lưu trong máy. Tài khoản: bài nằm trên server (bảng posts), máy giữ bản sao riêng cho từng tài khoản

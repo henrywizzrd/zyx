@@ -6,6 +6,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { useT } from '../i18n';
 import { useProfile } from '../data/profile';
 import { useLibrary, LibraryEntry } from '../data/library';
+import { currentAccount } from '../data/auth';
 import { getLikedTracks, getPlaylists, getPlaylistTracks } from '../data/db';
 import { Attachment, createPost, POST_MAX } from '../data/social';
 import { musicSupported, toTrack, ytmusic } from '../music/lazy';
@@ -19,7 +20,7 @@ import { AttachmentCard, AttachThumb } from './PostCard';
 
 const entryToAttach = (e: LibraryEntry, likedTitle: string): Attachment => {
   if (e.kind === 'liked') return { kind: 'playlist', id: 'liked', title: likedTitle, subtitle: e.subtitle, source: 'liked' };
-  if (e.kind === 'local') return { kind: 'playlist', id: e.id, title: e.title, subtitle: e.subtitle, thumb: e.thumb, source: 'local' };
+  if (e.kind === 'local') return { kind: 'playlist', id: e.id, title: e.title, subtitle: e.subtitle, thumb: e.thumb, source: 'local', ownerId: currentAccount()?.id };
   return { kind: e.kind, id: e.id, title: e.title, subtitle: e.subtitle, thumb: e.thumb, source: 'yt' };
 };
 const trackToAttach = (tr: Track): Attachment => ({ kind: 'song', id: tr.id, title: tr.title, subtitle: tr.artist, thumb: tr.thumb, source: 'yt', track: tr });
@@ -39,7 +40,21 @@ function myTracks(): Track[] {
   return out;
 }
 
-export function PostComposer({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+// Mở màn soạn bài từ bất cứ đâu (vd. nút "Đăng lên hồ sơ" trong tuỳ chọn bài hát / playlist / album / nghệ sĩ),
+// có thể kèm sẵn thứ đính kèm. ComposerHost (đặt một lần trong App) nhận lệnh và hiện màn soạn bài
+const composerListeners = new Set<(a?: Attachment) => void>();
+export const openComposer = (a?: Attachment) => composerListeners.forEach((fn) => fn(a));
+export function ComposerHost() {
+  const [state, setState] = useState<{ open: boolean; attach?: Attachment }>({ open: false });
+  useEffect(() => {
+    const fn = (a?: Attachment) => setState({ open: true, attach: a });
+    composerListeners.add(fn);
+    return () => void composerListeners.delete(fn);
+  }, []);
+  return <PostComposer visible={state.open} initial={state.attach} onClose={() => setState({ open: false })} />;
+}
+
+export function PostComposer({ visible, onClose, initial }: { visible: boolean; onClose: () => void; initial?: Attachment }) {
   const { theme } = useTheme();
   const t = useT();
   const insets = useSafeAreaInsets();
@@ -53,7 +68,7 @@ export function PostComposer({ visible, onClose }: { visible: boolean; onClose: 
   useEffect(() => {
     if (visible) {
       setBody('');
-      setAttach(undefined);
+      setAttach(initial);
       setPicking(false);
     }
   }, [visible]);

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, PixelRatio, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, PixelRatio, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
@@ -16,6 +16,8 @@ import { isSaved, PlayContext, setSaved, useDbVersion } from '../data/db';
 import { useScreenSize } from '../components/ScreenSize';
 import Animated from 'react-native-reanimated';
 import { StretchyBg, useStretchScroll } from '../components/Stretchy';
+import { useActionSheet } from '../components/ActionSheet';
+import { openComposer } from '../components/PostComposer';
 
 const PAD = 16;
 const HERO_H = 340;
@@ -32,6 +34,22 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
   const pad = useContentInsets();
   const { width } = useScreenSize();
   const { push, pop } = useNav();
+  const sheet = useActionSheet();
+  const openMore = () =>
+    sheet.openActions({ title: page.name, subtitle: t('kind.artist'), thumb: page.thumb, round: true }, [
+      {
+        label: t('sheet.postToProfile'),
+        icon: 'create-outline',
+        run: () => {
+          setTimeout(() => openComposer({ kind: 'artist', id: page.id, title: page.name, subtitle: '', thumb: page.thumb, source: 'yt' }), 250);
+        },
+      },
+      {
+        label: t('sheet.share'),
+        icon: 'share-outline',
+        run: () => void Share.share({ message: `${page.name}\nhttps://music.youtube.com/channel/${page.id}` }).catch(() => {}),
+      },
+    ]);
   const goBack = useAnimatedBack() ?? pop;
   // Trượt vào xong mới dựng các kệ album / video (nhiều ảnh) để hiệu ứng mở trang không bị khựng
   const entered = useEntered();
@@ -110,6 +128,10 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
           </StretchyBg>
           <Pressable onPress={goBack} hitSlop={10} style={[styles.back, { top: pad.top + 8, left: PAD }]}>
             <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          </Pressable>
+          {/* Tuỳ chọn nghệ sĩ: đăng lên hồ sơ, chia sẻ link */}
+          <Pressable onPress={openMore} hitSlop={10} style={[styles.back, { top: pad.top + 8, right: PAD }]}>
+            <Ionicons name="ellipsis-horizontal" size={20} color="#FFFFFF" />
           </Pressable>
           <Text numberOfLines={2} style={[styles.name, { color: text }]}>{name}</Text>
         </View>

@@ -5,9 +5,10 @@ import { BackHandler } from 'react-native';
 //  - source 'yt': playlist hoặc album trên YouTube Music
 //  - source 'local': playlist tự tạo trong máy
 //  - source 'liked': Liked Songs
+//  - source 'shared': playlist công khai của một người dùng (trên server ZYX), id = id trên server
 export type CollectionPage = {
   type: 'collection';
-  source: 'yt' | 'local' | 'liked';
+  source: 'yt' | 'local' | 'liked' | 'shared';
   kind: 'playlist' | 'album';
   id: string;
   title: string;

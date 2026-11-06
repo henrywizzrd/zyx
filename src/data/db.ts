@@ -14,7 +14,7 @@ import type { Track } from './mock';
 // ---------------------------------------------------------------------------
 
 // Đang phát từ đâu: dùng cho mục Recent ("vừa nghe playlist X")
-export type ContextKind = 'playlist' | 'album' | 'liked' | 'local' | 'chart' | 'mix' | 'search' | 'artist';
+export type ContextKind = 'playlist' | 'album' | 'liked' | 'local' | 'chart' | 'mix' | 'search' | 'artist' | 'shared'; // shared: playlist công khai của người dùng ZYX
 export interface PlayContext {
   kind: ContextKind;
   id: string; // id playlist/album trên YouTube, id playlist trong máy, hoặc id bài gốc của mix

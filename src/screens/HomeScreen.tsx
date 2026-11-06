@@ -105,6 +105,9 @@ async function loadTrending(range: TrendingRange): Promise<{ title: string; play
 // ---------------------------------------------------------------------------
 // Bảng tin: bài đăng mới nhất của mọi người (cả người mình theo dõi lẫn chưa theo dõi), mới nhất trước.
 // Thích / bình luận ngay trong bảng tin, bấm tên / avatar để mở hồ sơ người đó
+// Một bài có thể xuất hiện nhiều lần trên bảng tin (bài gốc + mỗi lượt đăng lại)
+const feedKey = (p: Post) => `${p.id}:${p.repostedBy?.id ?? ''}`;
+
 function Feed() {
   const { theme } = useTheme();
   const t = useT();
@@ -116,10 +119,11 @@ function Feed() {
     if (busy) return;
     setBusy(true);
     setFailed(false);
-    const before = older && posts?.length ? posts[posts.length - 1].createdAt : undefined;
+    const last = older && posts?.length ? posts[posts.length - 1] : undefined;
+    const before = last ? last.itemTime ?? last.createdAt : undefined;
     fetchPosts(null, before)
       .then((l) => {
-        setPosts((cur) => (older && cur ? [...cur, ...l.filter((p) => !cur.some((c) => c.id === p.id))] : l));
+        setPosts((cur) => (older && cur ? [...cur, ...l.filter((p) => !cur.some((c) => feedKey(c) === feedKey(p)))] : l));
         setMore(l.length >= 30);
       })
       .catch((e) => setFailed(String(e?.message ?? e)))
@@ -153,7 +157,7 @@ function Feed() {
       ) : (
         <>
           {posts.map((p, i) => (
-            <PostCard key={p.id} post={p} showDivider={i < posts.length - 1} />
+            <PostCard key={feedKey(p)} post={p} showDivider={i < posts.length - 1} />
           ))}
           {more && (
             <Pressable onPress={() => load(true)} style={{ alignSelf: 'center', paddingVertical: 10 }}>
@@ -304,6 +308,7 @@ function useOpenContext() {
     if (r.kind === 'search' && r.track) return playTrack(r.track);
     if (r.kind === 'liked') return push({ type: 'collection', source: 'liked', kind: 'playlist', id: 'liked', title: t('home.liked') });
     if (r.kind === 'local') return push({ type: 'collection', source: 'local', kind: 'playlist', id: r.id, title: r.title, thumb: r.thumb });
+    if (r.kind === 'shared') return push({ type: 'collection', source: 'shared', kind: 'playlist', id: r.id, title: r.title, thumb: r.thumb });
     if (r.kind === 'album') return push({ type: 'collection', source: 'yt', kind: 'album', id: r.id, title: r.title, thumb: r.thumb });
     if (r.kind === 'playlist' || r.kind === 'chart') return push({ type: 'collection', source: 'yt', kind: 'playlist', id: r.id, title: r.title, thumb: r.thumb });
     if (r.kind === 'artist') return push({ type: 'artist', id: r.id, name: r.title, thumb: r.thumb });
@@ -323,7 +328,7 @@ function Recent({ list }: { list?: boolean }) {
     return <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>{t('home.recentEmpty')}</Text>;
   }
   const label: Record<string, string> = {
-    search: t('kind.song'), liked: t('kind.playlist'), local: t('kind.playlist'), playlist: t('kind.playlist'),
+    search: t('kind.song'), liked: t('kind.playlist'), local: t('kind.playlist'), shared: t('kind.playlist'), playlist: t('kind.playlist'),
     album: t('kind.album'), chart: t('kind.chart'), mix: t('kind.mix'), artist: t('kind.artist'),
   };
   // Màn hình ngang: ảnh bìa to, 2 cột, trải dọc xuống (giống lưới trong Thư viện)

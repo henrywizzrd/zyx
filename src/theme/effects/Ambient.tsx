@@ -17,9 +17,11 @@ import { useScreenSize } from '../../components/ScreenSize';
 // Không chạy (không tốn pin) khi: bộ màu khác, đã tắt, đang mở Player (paused), hoặc app đang ở nền.
 export function AmbientEffect({ paused }: { paused?: boolean }) {
   const { theme } = useTheme();
-  const [active, setActive] = useState(AppState.currentState === 'active');
+  // Chỉ dừng khi app thật sự chạy nền. Kéo thanh thông báo / Trung tâm điều khiển chỉ làm app "tạm mất tập trung"
+  // (inactive): trước đây cũng tắt hẳn hiệu ứng nên hạt biến mất rồi hiện lại từ đầu → giờ vẫn chạy tiếp
+  const [active, setActive] = useState(AppState.currentState !== 'background');
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (s) => setActive(s === 'active'));
+    const sub = AppState.addEventListener('change', (s) => setActive(s !== 'background'));
     return () => sub.remove();
   }, []);
   if (paused || !active) return null;

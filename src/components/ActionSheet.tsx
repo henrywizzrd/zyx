@@ -19,6 +19,7 @@ import { addToPlaylist, createPlaylist, getPlaylists, playlistHas, useDbVersion 
 import { download, removeDownload, useDownloads } from '../data/downloads';
 import { musicSupported, ytmusic } from '../music/lazy';
 import { useScreenSize } from './ScreenSize';
+import { openComposer } from './PostComposer';
 
 // Bảng thao tác của app (thay cho action sheet / hộp thoại của iOS):
 //  - nút ... của bài hát: chia sẻ, thêm vào Thư viện, thêm vào playlist, phát tiếp, thêm vào hàng chờ, tải về, xem nghệ sĩ
@@ -175,6 +176,14 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
         icon: 'share-outline',
         run: () => {
           Share.share({ message: `${track.title} - ${track.artist}\nhttps://music.youtube.com/watch?v=${track.id}` }).catch(() => {});
+        },
+      },
+      {
+        // Mở màn soạn bài, bài hát đã được đính kèm sẵn
+        label: t('sheet.postToProfile'),
+        icon: 'create-outline',
+        run: () => {
+          setTimeout(() => openComposer({ kind: 'song', id: track.id, title: track.title, subtitle: track.artist, thumb: track.thumb, source: 'yt', track }), 250);
         },
       },
       {
