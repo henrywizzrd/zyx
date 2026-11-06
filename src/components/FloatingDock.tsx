@@ -11,7 +11,7 @@ import { usePlayerPick, ViewRef } from '../player/PlayerProvider';
 import { TabId } from '../theme/types';
 import { useDraggable } from './useDraggable';
 import {
-  computeLayout, DOCK_GAP, DOCK_PADDING, DOCK_THICKNESS, dockCell,
+  computeLayout, DOCK_GAP, DOCK_PADDING, DOCK_THICKNESS, DOCK_BUBBLE, dockCell,
   isVertical, MP_THICKNESS, STACK_GAP,
 } from './layout';
 
@@ -36,7 +36,18 @@ export const LABELS = { home: 'tab.home', search: 'tab.search', library: 'tab.li
 // endPadding dùng để màn hình cuộn kéo được mục cuối lên khỏi các khối nổi ở đáy.
 export function useContentInsets() {
   const insets = useSafeAreaInsets();
-  const { theme } = useTheme();
+  const { theme, landscape } = useTheme();
+  // Màn hình ngang (dock dạng thanh): dock đứng dọc ở cạnh phải → chừa bên phải đúng bề dày dock, cuối danh sách chỉ cần chừa ít
+  if (landscape) {
+    return {
+      top: insets.top,
+      bottom: insets.bottom,
+      // vùng nội dung đã chừa sẵn tai thỏ và dock (ContentArea trong App.tsx), các màn hình không phải chừa thêm
+      left: 0,
+      right: 0,
+      endPadding: theme.dock.mode === 'bar' ? MP_THICKNESS + 16 : DOCK_BUBBLE + theme.dock.style.margin * 2 + insets.bottom,
+    };
+  }
   return {
     top: insets.top,
     bottom: insets.bottom,

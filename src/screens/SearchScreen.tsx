@@ -1,3 +1,4 @@
+import { SplitPane } from '../components/SplitPane';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -93,7 +94,7 @@ function warmUp() {
 }
 
 export function SearchScreen() {
-  const { theme } = useTheme();
+  const { theme, landscape } = useTheme();
   useEffect(() => {
     const id = setTimeout(warmUp, 250); // để màn hình Tìm kiếm hiện ra trước rồi mới làm
     return () => clearTimeout(id);
@@ -215,7 +216,8 @@ export function SearchScreen() {
   };
 
   const { text, textSecondary, accent } = theme.colors;
-  const innerW = width - H_PAD * 2;
+  // Màn hình ngang: thể loại nằm ở cột phải (khoảng 58% bề rộng)
+  const innerW = (landscape ? width * 0.58 : width) - H_PAD * 2;
   const cols = Math.max(2, Math.floor(innerW / 180));
   const tileW = (innerW - GAP * (cols - 1)) / cols;
 
@@ -250,15 +252,32 @@ export function SearchScreen() {
     playlist: tr('kind.playlist'),
   };
 
-  return (
-    <ScrollView
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="on-drag"
-      contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}
-    >
-      <View style={{ width: '100%', paddingHorizontal: H_PAD }}>
-        <Text style={{ color: text, fontSize: 26, fontWeight: '700', marginTop: pad.top + 16 }}>{tr('search.title')}</Text>
+  // Kết quả hàng đầu: thẻ lớn
+  const renderTop = (top: Card, playable: Track[]) => (
+                    <Pressable
+                      onPress={() => (top.song ? playTrack(toTrack(top.song), [toTrack(top.song), ...playable]) : openCard(top))}
+                      onLongPress={top.song ? () => songMenu(toTrack(top.song!)) : undefined}
+                      style={[styles.topCard, { backgroundColor: theme.colors.surface }]}
+                    >
+                      {top.thumb ? (
+                        <Image source={{ uri: top.thumb }} style={{ width: 84, height: 84, borderRadius: top.kind === 'artist' ? 42 : 6 }} />
+                      ) : (
+                        <View style={{ width: 84, height: 84, borderRadius: 6, backgroundColor: theme.colors.skeleton }} />
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text numberOfLines={2} style={{ color: top.song?.id === track.id ? accent : text, fontSize: 20, fontWeight: '800' }}>{top.title}</Text>
+                        <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 4 }}>{top.subtitle}</Text>
+                      </View>
+                      {top.song && (
+                        <View style={[styles.topPlay, { backgroundColor: accent }]}>
+                          <Ionicons name="play" size={20} color={theme.colors.onAccent} style={{ marginLeft: 2 }} />
+                        </View>
+                      )}
+                    </Pressable>
+                  );
 
+  const searchBox = (
+    <>
         {/* Ô tìm kiếm kiểu Spotify */}
         <View style={[styles.searchBox, { backgroundColor: text }]}>
           <Ionicons name="search" size={20} color={theme.background.color} />
@@ -281,7 +300,10 @@ export function SearchScreen() {
           )}
         </View>
 
-        {!searching ? (
+    </>
+  );
+  const browse = (
+    <>
           <>
             {/* Thể loại & tâm trạng của YouTube Music: bấm vào mở trang thể loại (các playlist đúng thể loại đó) */}
             {genreList.groups ? (
@@ -324,7 +346,9 @@ export function SearchScreen() {
               </>
             )}
           </>
-        ) : !showResults ? (
+    </>
+  );
+  const suggestions = (
           // ---------- Đang gõ: gợi ý ----------
           <View style={{ marginTop: 12 }}>
             {!musicSupported && <Text style={{ color: textSecondary }}>{tr('search.phoneOnly')}</Text>}
@@ -371,9 +395,8 @@ export function SearchScreen() {
               </Pressable>
             ))}
           </View>
-        ) : (
-          // ---------- Đã bấm Search: kết quả đầy đủ, lọc theo loại ----------
-          <View style={{ marginTop: 14, gap: 4 }}>
+  );
+  const chipRow = (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 10 }}>
               {KINDS.map((k) => (
                 <Pressable
@@ -385,6 +408,11 @@ export function SearchScreen() {
                 </Pressable>
               ))}
             </ScrollView>
+  );
+  const resultsBody = (
+    <>
+          // ---------- Đã bấm Search: kết quả đầy đủ, lọc theo loại ----------
+          <View style={{ marginTop: 14, gap: 4 }}>
             {error && <Text style={{ color: textSecondary }}>{tr('search.error', { msg: error })}</Text>}
             {!resultsReady && !error &&
               // Khung chờ: giữ chỗ đúng hình dạng kết quả để màn hình không bị trống
@@ -455,29 +483,7 @@ export function SearchScreen() {
               );
               return (
                 <>
-                  {/* Kết quả hàng đầu: thẻ lớn */}
-                  {top && (
-                    <Pressable
-                      onPress={() => (top.song ? playTrack(toTrack(top.song), [toTrack(top.song), ...playable]) : openCard(top))}
-                      onLongPress={top.song ? () => songMenu(toTrack(top.song!)) : undefined}
-                      style={[styles.topCard, { backgroundColor: theme.colors.surface }]}
-                    >
-                      {top.thumb ? (
-                        <Image source={{ uri: top.thumb }} style={{ width: 84, height: 84, borderRadius: top.kind === 'artist' ? 42 : 6 }} />
-                      ) : (
-                        <View style={{ width: 84, height: 84, borderRadius: 6, backgroundColor: theme.colors.skeleton }} />
-                      )}
-                      <View style={{ flex: 1 }}>
-                        <Text numberOfLines={2} style={{ color: top.song?.id === track.id ? accent : text, fontSize: 20, fontWeight: '800' }}>{top.title}</Text>
-                        <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 4 }}>{top.subtitle}</Text>
-                      </View>
-                      {top.song && (
-                        <View style={[styles.topPlay, { backgroundColor: accent }]}>
-                          <Ionicons name="play" size={20} color={theme.colors.onAccent} style={{ marginLeft: 2 }} />
-                        </View>
-                      )}
-                    </Pressable>
-                  )}
+                  {!landscape && top && renderTop(top, playable)}
                   {artists.length > 0 && head(tr('search.filter.artist'))}
                   {artists.map(cardRow)}
                   {songs.length > 0 && head(tr('search.filter.song'))}
@@ -507,6 +513,51 @@ export function SearchScreen() {
                 </>
               );
             })()}
+          </View>
+    </>
+  );
+
+  // Màn hình ngang: trái = tiêu đề + ô tìm kiếm (+ các mục lọc Tất cả / Bài hát... và kết quả hàng đầu khi đã tìm),
+  // phải = phần còn lại (thể loại, gợi ý khi đang gõ, danh sách kết quả). Mỗi bên cuộn riêng
+  if (landscape) {
+    const topCard = showResults && resultsReady && results && kind === 'all' && results.top
+      ? renderTop(results.top, [...results.songs, ...results.videos].map(toTrack))
+      : null;
+    return (
+      <SplitPane
+        ratio={0.42}
+        topExtra={16}
+        left={
+          <>
+        <Text style={{ color: text, fontSize: 26, fontWeight: '700', marginTop: 0 }}>{tr('search.title')}</Text>
+            {searchBox}
+            {showResults && <View style={{ marginTop: 14 }}>{chipRow}</View>}
+            {topCard && <View style={{ marginTop: 6 }}>{topCard}</View>}
+          </>
+        }
+        right={
+          !searching ? <View style={{ marginTop: -28 }}>{browse}</View> : !showResults ? <View style={{ marginTop: -12 }}>{suggestions}</View> : <View style={{ gap: 4 }}>{resultsBody}</View>
+        }
+      />
+    );
+  }
+
+  return (
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}
+    >
+      <View style={{ width: '100%', paddingHorizontal: H_PAD }}>
+        <Text style={{ color: text, fontSize: 26, fontWeight: '700', marginTop: pad.top + 16 }}>{tr('search.title')}</Text>
+
+        {searchBox}
+
+        {!searching ? browse : !showResults ? suggestions : (
+          <View style={{ marginTop: 14, gap: 4 }}>
+            {chipRow}
+            {resultsBody}
           </View>
         )}
       </View>

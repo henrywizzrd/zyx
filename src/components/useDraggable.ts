@@ -33,7 +33,9 @@ export interface LiveAnchor {
 }
 
 export function useDraggable(kind: 'dock' | 'player', live?: LiveAnchor) {
-  const { theme, setDockPosition, setMiniPlayerAnchor, setMerged } = useTheme();
+  const { theme, landscape, setDockPosition, setMiniPlayerAnchor, setMerged } = useTheme();
+  const landRef = useRef(landscape);
+  landRef.current = landscape;
   const { dockRef, playerRef } = usePlayerPick('dockRef', 'playerRef');
   const { drag, setDrag } = useDrag();
   const { width, height, left } = useFrame();
@@ -183,7 +185,8 @@ export function useDraggable(kind: 'dock' | 'player', live?: LiveAnchor) {
 
   // Gọi khi giữ đủ lâu: đo vị trí của mình và của khối kia, rồi bật hiệu ứng nổi lên
   const arm = () => {
-    if (armed.current) return;
+    // Màn hình ngang: dock và mini player nằm cố định (cạnh phải / góc dưới phải), không kéo đổi chỗ
+    if (armed.current || landRef.current) return;
     armed.current = true;
     target.current = null;
     lastKey.current = null;

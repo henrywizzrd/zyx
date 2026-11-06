@@ -1,3 +1,4 @@
+import { SplitPane } from '../components/SplitPane';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, PixelRatio, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -245,7 +246,8 @@ function useOpenContext() {
   return { open, startMix };
 }
 
-function Recent() {
+// list: màn hình ngang — xếp dọc thành các ô giống "Playlist của tôi" thay vì hàng trượt ngang
+function Recent({ list }: { list?: boolean }) {
   const { theme } = useTheme();
   const t = useT();
   const dbv = useDbVersion();
@@ -258,6 +260,29 @@ function Recent() {
     search: t('kind.song'), liked: t('kind.playlist'), local: t('kind.playlist'), playlist: t('kind.playlist'),
     album: t('kind.album'), chart: t('kind.chart'), mix: t('kind.mix'), artist: t('kind.artist'),
   };
+  if (list) {
+    return (
+      <View style={styles.grid}>
+        {items.map((r) => (
+          <Pressable key={`${r.kind}:${r.id}`} onPress={() => open(r)} style={[styles.chip, { backgroundColor: theme.colors.surface }]}>
+            {r.kind !== 'liked' && r.thumb ? (
+              <Image source={{ uri: r.thumb }} style={[styles.chipCover, r.kind === 'artist' && { borderRadius: 28 }]} />
+            ) : (
+              <View style={[styles.chipCover, { backgroundColor: r.kind === 'liked' ? '#5B3CC4' : theme.colors.skeleton, alignItems: 'center', justifyContent: 'center' }]}>
+                <Ionicons name={r.kind === 'liked' ? 'heart' : 'musical-notes'} size={22} color={r.kind === 'liked' ? '#FFFFFF' : theme.colors.textSecondary} />
+              </View>
+            )}
+            <View style={{ flex: 1, marginHorizontal: 10 }}>
+              <Text numberOfLines={1} style={{ color: theme.colors.text, fontSize: 13, fontWeight: '700' }}>{r.kind === 'liked' ? t('home.liked') : r.title}</Text>
+              <Text numberOfLines={1} style={{ color: theme.colors.textSecondary, fontSize: 12, marginTop: 2 }}>
+                {r.kind === 'search' ? r.track?.artist ?? label[r.kind] : label[r.kind]}
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+      </View>
+    );
+  }
   return (
     <HRow>
       {items.map((r) => (
@@ -476,7 +501,7 @@ function greetingKey() {
 }
 
 export function HomeScreen() {
-  const { theme } = useTheme();
+  const { theme, landscape } = useTheme();
   const t = useT();
   const pad = useContentInsets();
   const [editing, setEditing] = useState(false);
@@ -490,7 +515,7 @@ export function HomeScreen() {
         return (
           <>
             <SectionTitle title={t('home.section.recent')} />
-            <Recent />
+            <Recent list={landscape} />
           </>
         );
       case 'trending':
@@ -512,8 +537,47 @@ export function HomeScreen() {
     }
   };
 
+  const header = (
+    <>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+        <Text style={[styles.greeting, { color: theme.colors.text }]}>{t(greetingKey())}</Text>
+        <Pressable onPress={() => setEditing((v) => !v)} hitSlop={10} style={[styles.editBtn, { backgroundColor: theme.colors.surface }]}>
+          <Ionicons name="options-outline" size={20} color={theme.colors.text} />
+        </Pressable>
+      </View>
+      {editing && <EditHome onClose={() => setEditing(false)} />}
+    </>
+  );
+  const blocks = (list: HomeSection[]) =>
+    list.map((s, i) => (
+      <View key={s} style={{ marginTop: i === 0 ? 0 : 30 }}>
+        {render(s)}
+      </View>
+    ));
+
+  // Màn hình ngang: trái = lời chào + Playlist của tôi + Nghe gần đây (xếp dọc), phải = các mục còn lại. Mỗi bên cuộn riêng
+  if (landscape) {
+    const LEFT: HomeSection[] = ['myPlaylists', 'recent'];
+    const leftList = visible.filter((s) => LEFT.includes(s));
+    const rightList = visible.filter((s) => !LEFT.includes(s));
+    return (
+      <SplitPane
+        ratio={0.46}
+        left={
+          <>
+            {header}
+            {blocks(leftList)}
+            {visible.length === 0 && <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>{t('home.allHidden')}</Text>}
+          </>
+        }
+        right={<View style={{ paddingTop: 4 }}>{blocks(rightList)}</View>}
+      />
+    );
+  }
+
   return (
     <ScrollView
+      showsVerticalScrollIndicator={false}
       contentContainerStyle={{
         paddingTop: pad.top + 16,
         paddingBottom: pad.bottom + pad.endPadding,

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Image, PixelRatio, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, PixelRatio, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
@@ -69,7 +70,7 @@ function CoverBox({ item, size, radius }: { item: LibraryEntry; size: number; ra
 }
 
 export function LibraryScreen() {
-  const { theme, setLibraryLayout, setLibraryOrder } = useTheme();
+  const { theme, landscape, setLibraryLayout, setLibraryOrder } = useTheme();
   const t = useT();
   const profile = useProfile();
   // Cuối dải ảnh bìa: nền màu thì hoà vào màu nền, nền ảnh/video thì mờ hẳn để lộ nền chung
@@ -92,7 +93,7 @@ export function LibraryScreen() {
     ]);
   };
   const pad = useContentInsets();
-  const { width } = useFrame();
+  const { width, height } = useFrame();
   const scrollY = useSharedValue(0); // để ảnh bìa giãn ra khi kéo quá đầu trang
 
   const [filter, setFilter] = useState<Filter>('all');
@@ -103,7 +104,7 @@ export function LibraryScreen() {
   const [query, setQuery] = useState('');
 
   const layout = theme.library.layout;
-  const innerW = width - H_PAD * 2; 
+  const innerW = (landscape ? width * 0.6 : width) - H_PAD * 2; // ngang: danh sách nằm ở cột phải 
   const { text, textSecondary, accent, surface } = theme.colors;
 
   // Màu chữ trên ảnh bìa: tự đổi theo độ sáng của ảnh (ảnh tối → chữ trắng, ảnh sáng → chữ đậm).
@@ -267,6 +268,166 @@ export function LibraryScreen() {
     );
   };
 
+  const listControls = (
+    <>
+        {/* Tìm kiếm, sắp xếp, đổi kiểu hiển thị */}
+        <View style={{ paddingHorizontal: H_PAD, marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          {searchOpen ? (
+            <View style={[styles.searchBox, { backgroundColor: surface }]}>
+              <Ionicons name="search" size={16} color={textSecondary} />
+              <TextInput
+                autoFocus
+                value={query}
+                onChangeText={setQuery}
+                placeholder={t('lib.searchPlaceholder')}
+                placeholderTextColor={textSecondary}
+                style={{ color: text, flex: 1, paddingVertical: 8, marginLeft: 8 }}
+              />
+              <Pressable
+                onPress={() => {
+                  setQuery('');
+                  setSearchOpen(false);
+                }}
+              >
+                <Ionicons name="close" size={18} color={textSecondary} />
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              <Pressable onPress={() => setSearchOpen(true)} hitSlop={8}>
+                <Ionicons name="search" size={20} color={text} />
+              </Pressable>
+              <View style={{ flex: 1 }} />
+            </>
+          )}
+          <Pressable onPress={() => setSort((s) => (s === 'recents' ? 'alpha' : 'recents'))}>
+            <Text style={{ color: textSecondary, fontSize: 13, fontWeight: '600' }}>
+              {t(sort === 'recents' ? 'lib.customOrder' : 'lib.az')}
+            </Text>
+          </Pressable>
+          {/* Tạo playlist mới */}
+          <Pressable onPress={newPlaylist} hitSlop={8} accessibilityLabel={t('lib.create')}>
+            <Ionicons name="add" size={24} color={text} />
+          </Pressable>
+          <Pressable onPress={cycleLayout} hitSlop={8}>
+            <Ionicons name={LAYOUT_ICON[layout]} size={20} color={text} />
+          </Pressable>
+        </View>
+
+    </>
+  );
+  const overlays = (
+    <>
+      {cropImg && (
+        <CoverCropper
+          uri={cropImg.uri}
+          imageWidth={cropImg.width}
+          imageHeight={cropImg.height}
+          aspect={Math.min(width, height) / COVER_H}
+          onCancel={() => setCropImg(null)}
+          onDone={async (rect) => {
+            const r = await saveCroppedCover(cropImg, rect);
+            setCropImg(null);
+            if (r === 'failed') Alert.alert(t('profile.cover'), t('profile.failed'));
+          }}
+        />
+      )}
+      <ProfileEditSheet
+        visible={editOpen}
+        name={profile.name}
+        tag={profile.tag}
+        onClose={() => setEditOpen(false)}
+        onSave={(name, tag) => {
+          updateProfile({ name, tag });
+          setEditOpen(false);
+        }}
+      />
+    </>
+  );
+
+  // ================= Màn hình ngang =================
+  // Trái: thẻ hồ sơ (ảnh bìa làm nền, phủ kính mờ) với avatar, tên, #tag, người theo dõi; bên dưới là các mục
+  // (Hồ sơ, Playlist, Album, Nghệ sĩ) xếp dọc. Phải: nội dung của mục đang chọn. Mỗi bên cuộn riêng
+  if (landscape) {
+    const leftW = Math.round(width * 0.4);
+    const menu: { id: Exclude<Filter, 'all'>; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
+      { id: 'profile', label: t('lib.profile'), icon: 'person-circle-outline' },
+      { id: 'playlist', label: t('lib.playlists'), icon: 'list-outline' },
+      { id: 'album', label: t('lib.albums'), icon: 'disc-outline' },
+      { id: 'artist', label: t('lib.artists'), icon: 'mic-outline' },
+    ];
+    const lightText = '#FFFFFF'; // thẻ luôn có lớp tối phủ lên nên chữ trắng
+    return (
+      <View style={{ flex: 1, flexDirection: 'row' }}>
+        <ScrollView style={{ width: leftW, flexGrow: 0 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: pad.top + 12, paddingBottom: pad.bottom + pad.endPadding, paddingHorizontal: H_PAD }}>
+          <View style={[styles.landCard, { backgroundColor: profile.wallColor }]}>
+            {profile.cover ? (
+              <>
+                <Image source={{ uri: profile.cover }} resizeMode="cover" style={StyleSheet.absoluteFill} />
+                {Platform.OS !== 'web' && <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} />}
+              </>
+            ) : null}
+            <LinearGradient colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.45)']} style={StyleSheet.absoluteFill} />
+            <Pressable onPress={() => editImage('cover')} hitSlop={8} style={[styles.coverBtn, { top: 10, right: 10 }]}>
+              <Ionicons name="camera-outline" size={18} color="#FFFFFF" />
+            </Pressable>
+            <Pressable onPress={() => editImage('avatar')} style={[styles.avatar, { width: 84, height: 84, backgroundColor: profile.avatarColor }]}>
+              {profile.avatar ? (
+                <Image source={{ uri: profile.avatar }} resizeMode="cover" style={StyleSheet.absoluteFill} />
+              ) : (
+                <Ionicons name="person" size={40} color="rgba(255,255,255,0.85)" />
+              )}
+            </Pressable>
+            <Text numberOfLines={1} style={{ color: lightText, fontSize: 24, fontWeight: '800', marginTop: 12 }}>
+              {profile.name}
+              <Text style={{ color: 'rgba(255,255,255,0.75)', fontWeight: '600' }}> #{profile.tag}</Text>
+            </Text>
+            <View style={styles.followersRow}>
+              <View style={{ flexDirection: 'row' }}>
+                {followers.map((f, i) => (
+                  <View key={f.id} style={[styles.follower, { backgroundColor: f.color, borderColor: 'rgba(0,0,0,0.3)', marginLeft: i === 0 ? 0 : -8 }]}>
+                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{f.initial}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={{ flex: 1 }} />
+              <Pressable onPress={() => setEditOpen(true)} hitSlop={8} style={styles.penBtn}>
+                <Ionicons name="pencil-outline" size={18} color="#FFFFFF" />
+              </Pressable>
+            </View>
+          </View>
+          <View style={{ marginTop: 14, gap: 4 }}>
+            {menu.map((m) => {
+              const on = filter === m.id;
+              return (
+                <Pressable key={m.id} onPress={() => toggleFilter(m.id)} style={[styles.menuRow, { backgroundColor: on ? theme.colors.accent : 'transparent' }]}>
+                  <Ionicons name={m.icon} size={22} color={on ? theme.colors.onAccent : text} />
+                  <Text style={{ flex: 1, color: on ? theme.colors.onAccent : text, fontSize: 16, fontWeight: '700' }}>{m.label}</Text>
+                  <Ionicons name="chevron-forward" size={18} color={on ? theme.colors.onAccent : textSecondary} />
+                </Pressable>
+              );
+            })}
+          </View>
+        </ScrollView>
+        <View style={{ flex: 1 }}>
+          <ReorderableScrollView bounces contentContainerStyle={{ paddingTop: pad.top + 4, paddingBottom: pad.bottom + pad.endPadding }}>
+            {filter === 'profile' ? (
+              <View style={{ paddingHorizontal: H_PAD, marginTop: 8 }}>
+                <ProfileFeed />
+              </View>
+            ) : (
+              <>
+                {listControls}
+                <View style={{ paddingHorizontal: H_PAD, marginTop: 16 }}>{renderItems()}</View>
+              </>
+            )}
+          </ReorderableScrollView>
+        </View>
+        {overlays}
+      </View>
+    );
+  }
+
   return (
     <ReorderableScrollView bounces scrollYOut={scrollY} contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}>
       <View style={{ width: '100%' }}>
@@ -366,50 +527,7 @@ export function LibraryScreen() {
           </View>
         ) : (
         <>
-        {/* Tìm kiếm, sắp xếp, đổi kiểu hiển thị */}
-        <View style={{ paddingHorizontal: H_PAD, marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          {searchOpen ? (
-            <View style={[styles.searchBox, { backgroundColor: surface }]}>
-              <Ionicons name="search" size={16} color={textSecondary} />
-              <TextInput
-                autoFocus
-                value={query}
-                onChangeText={setQuery}
-                placeholder={t('lib.searchPlaceholder')}
-                placeholderTextColor={textSecondary}
-                style={{ color: text, flex: 1, paddingVertical: 8, marginLeft: 8 }}
-              />
-              <Pressable
-                onPress={() => {
-                  setQuery('');
-                  setSearchOpen(false);
-                }}
-              >
-                <Ionicons name="close" size={18} color={textSecondary} />
-              </Pressable>
-            </View>
-          ) : (
-            <>
-              <Pressable onPress={() => setSearchOpen(true)} hitSlop={8}>
-                <Ionicons name="search" size={20} color={text} />
-              </Pressable>
-              <View style={{ flex: 1 }} />
-            </>
-          )}
-          <Pressable onPress={() => setSort((s) => (s === 'recents' ? 'alpha' : 'recents'))}>
-            <Text style={{ color: textSecondary, fontSize: 13, fontWeight: '600' }}>
-              {t(sort === 'recents' ? 'lib.customOrder' : 'lib.az')}
-            </Text>
-          </Pressable>
-          {/* Tạo playlist mới */}
-          <Pressable onPress={newPlaylist} hitSlop={8} accessibilityLabel={t('lib.create')}>
-            <Ionicons name="add" size={24} color={text} />
-          </Pressable>
-          <Pressable onPress={cycleLayout} hitSlop={8}>
-            <Ionicons name={LAYOUT_ICON[layout]} size={20} color={text} />
-          </Pressable>
-        </View>
-
+        {listControls}
         {/* Danh sách */}
         <View style={{ paddingHorizontal: H_PAD, marginTop: 16 }}>
           {renderItems()}
@@ -417,30 +535,7 @@ export function LibraryScreen() {
         </>
         )}
       </View>
-      {cropImg && (
-        <CoverCropper
-          uri={cropImg.uri}
-          imageWidth={cropImg.width}
-          imageHeight={cropImg.height}
-          aspect={width / COVER_H}
-          onCancel={() => setCropImg(null)}
-          onDone={async (rect) => {
-            const r = await saveCroppedCover(cropImg, rect);
-            setCropImg(null);
-            if (r === 'failed') Alert.alert(t('profile.cover'), t('profile.failed'));
-          }}
-        />
-      )}
-      <ProfileEditSheet
-        visible={editOpen}
-        name={profile.name}
-        tag={profile.tag}
-        onClose={() => setEditOpen(false)}
-        onSave={(name, tag) => {
-          updateProfile({ name, tag });
-          setEditOpen(false);
-        }}
-      />
+      {overlays}
     </ReorderableScrollView>
   );
 }
@@ -460,6 +555,8 @@ const styles = StyleSheet.create({
     position: 'absolute', zIndex: 2, width: 34, height: 34, borderRadius: 17,
     backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center',
   },
+  landCard: { borderRadius: 22, overflow: 'hidden', padding: 16, paddingTop: 22 },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13, borderRadius: 14 },
   followersRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
   plusBtn: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   follower: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },

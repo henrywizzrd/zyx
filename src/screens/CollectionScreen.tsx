@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, PixelRatio, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, PixelRatio, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
@@ -38,7 +38,7 @@ const fmtTotal = (sec: number, t: Translate) => {
 //  - cuối trang: số bài • tổng thời lượng
 // Dùng cho: playlist / album trên YouTube Music, Liked Songs, playlist tự tạo
 export function CollectionScreen({ page }: { page: CollectionPage }) {
-  const { theme } = useTheme();
+  const { theme, landscape } = useTheme();
   const t = useT();
   const pad = useContentInsets();
   const { width } = useScreenSize();
@@ -197,6 +197,69 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
   const imgSize = Math.round(width * PixelRatio.get());
   const meta = [info.subtitle].filter(Boolean).join(' • ');
 
+  const infoBlock = (
+    <>
+      {/* Tên, nghệ sĩ, loại • năm: nằm đè lên phần ảnh đã tan vào nền */}
+      <View style={{ alignItems: 'center', marginTop: landscape ? 14 : -96, paddingHorizontal: 8 }}>
+        <Text numberOfLines={2} style={[styles.title, { color: text }]}>{info.title}</Text>
+        {!!info.owner && (
+          <Pressable onPress={openOwner} disabled={!info.owner.id} style={styles.owner}>
+            {!!info.owner.thumb && <Image source={{ uri: info.owner.thumb }} style={styles.ownerThumb} />}
+            <Text numberOfLines={1} style={{ color: text, fontSize: 17, fontWeight: '600', opacity: 0.9 }}>{info.owner.name}</Text>
+          </Pressable>
+        )}
+        {!!meta && <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 14, marginTop: 6 }}>{meta}</Text>}
+        {/* Mô tả của playlist tự tạo (bấm để sửa) */}
+        {local && !!info.description && (
+          <Pressable onPress={editDescription} style={{ marginTop: 8, paddingHorizontal: 12 }}>
+            <Text numberOfLines={3} style={{ color: textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 20 }}>{info.description}</Text>
+          </Pressable>
+        )}
+      </View>
+
+    </>
+  );
+  const actionsBlock = (
+    <>
+      {/* Trộn bài | Phát | Lưu */}
+      <View style={styles.actions}>
+        <Pressable onPress={() => playAll(true)} disabled={!rows.length} style={[styles.roundBtn, { backgroundColor: border }]}>
+          <Ionicons name="shuffle" size={24} color={shuffle ? accent : text} />
+        </Pressable>
+        <Pressable onPress={() => playAll(false)} disabled={!rows.length} style={[styles.playBtn, { backgroundColor: text, opacity: rows.length ? 1 : 0.4 }]}>
+          <Ionicons name="play" size={22} color={bg} />
+          <Text style={{ color: bg, fontSize: 18, fontWeight: '800' }}>{t('col.play')}</Text>
+        </Pressable>
+        {yt ? (
+          <Pressable onPress={toggleSaved} style={[styles.roundBtn, { backgroundColor: border }]}>
+            <Ionicons name={saved ? 'checkmark' : 'add'} size={28} color={saved ? accent : text} />
+          </Pressable>
+        ) : local ? (
+          <Pressable onPress={rename} style={[styles.roundBtn, { backgroundColor: border }]}>
+            <Ionicons name="pencil" size={20} color={text} />
+          </Pressable>
+        ) : (
+          <View style={styles.roundBtn} />
+        )}
+      </View>
+
+    </>
+  );
+  const statusBlock = (
+    <>
+      {status === 'loading' && <ActivityIndicator color={accent} style={{ marginTop: 24 }} />}
+      {status === 'error' && (
+        <Pressable onPress={() => setRetry((r) => r + 1)} style={{ marginTop: 24, alignItems: 'center' }}>
+          <Text style={{ color: textSecondary }}>{t('common.loadFailed')}</Text>
+        </Pressable>
+      )}
+      {status === 'done' && rows.length === 0 && (
+        <Text style={{ color: textSecondary, marginTop: 24, textAlign: 'center' }}>
+          {t(local ? 'col.emptyLocal' : page.source === 'liked' ? 'col.emptyLiked' : 'col.empty')}
+        </Text>
+      )}
+    </>
+  );
   const Header = (
     <View>
       <View style={{ height: heroH, marginHorizontal: -(pad.left + 16) }}>
@@ -225,57 +288,9 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
         </View>
       </View>
 
-      {/* Tên, nghệ sĩ, loại • năm: nằm đè lên phần ảnh đã tan vào nền */}
-      <View style={{ alignItems: 'center', marginTop: -96, paddingHorizontal: 8 }}>
-        <Text numberOfLines={2} style={[styles.title, { color: text }]}>{info.title}</Text>
-        {!!info.owner && (
-          <Pressable onPress={openOwner} disabled={!info.owner.id} style={styles.owner}>
-            {!!info.owner.thumb && <Image source={{ uri: info.owner.thumb }} style={styles.ownerThumb} />}
-            <Text numberOfLines={1} style={{ color: text, fontSize: 17, fontWeight: '600', opacity: 0.9 }}>{info.owner.name}</Text>
-          </Pressable>
-        )}
-        {!!meta && <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 14, marginTop: 6 }}>{meta}</Text>}
-        {/* Mô tả của playlist tự tạo (bấm để sửa) */}
-        {local && !!info.description && (
-          <Pressable onPress={editDescription} style={{ marginTop: 8, paddingHorizontal: 12 }}>
-            <Text numberOfLines={3} style={{ color: textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 20 }}>{info.description}</Text>
-          </Pressable>
-        )}
-      </View>
-
-      {/* Trộn bài | Phát | Lưu */}
-      <View style={styles.actions}>
-        <Pressable onPress={() => playAll(true)} disabled={!rows.length} style={[styles.roundBtn, { backgroundColor: border }]}>
-          <Ionicons name="shuffle" size={24} color={shuffle ? accent : text} />
-        </Pressable>
-        <Pressable onPress={() => playAll(false)} disabled={!rows.length} style={[styles.playBtn, { backgroundColor: text, opacity: rows.length ? 1 : 0.4 }]}>
-          <Ionicons name="play" size={22} color={bg} />
-          <Text style={{ color: bg, fontSize: 18, fontWeight: '800' }}>{t('col.play')}</Text>
-        </Pressable>
-        {yt ? (
-          <Pressable onPress={toggleSaved} style={[styles.roundBtn, { backgroundColor: border }]}>
-            <Ionicons name={saved ? 'checkmark' : 'add'} size={28} color={saved ? accent : text} />
-          </Pressable>
-        ) : local ? (
-          <Pressable onPress={rename} style={[styles.roundBtn, { backgroundColor: border }]}>
-            <Ionicons name="pencil" size={20} color={text} />
-          </Pressable>
-        ) : (
-          <View style={styles.roundBtn} />
-        )}
-      </View>
-
-      {status === 'loading' && <ActivityIndicator color={accent} style={{ marginTop: 24 }} />}
-      {status === 'error' && (
-        <Pressable onPress={() => setRetry((r) => r + 1)} style={{ marginTop: 24, alignItems: 'center' }}>
-          <Text style={{ color: textSecondary }}>{t('common.loadFailed')}</Text>
-        </Pressable>
-      )}
-      {status === 'done' && rows.length === 0 && (
-        <Text style={{ color: textSecondary, marginTop: 24, textAlign: 'center' }}>
-          {t(local ? 'col.emptyLocal' : page.source === 'liked' ? 'col.emptyLiked' : 'col.empty')}
-        </Text>
-      )}
+      {infoBlock}
+      {actionsBlock}
+      {statusBlock}
     </View>
   );
 
@@ -307,6 +322,55 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
     ),
     [track.id, liked, isAlbum, theme.colors]
   );
+
+  // ================= Màn hình ngang =================
+  // Trái: ảnh bìa vuông + tên + nút Phát / Trộn / Lưu (cuộn riêng nếu dài). Phải: danh sách bài cuộn riêng
+  if (landscape) {
+    const leftW = Math.round(width * 0.4);
+    const art = Math.min(leftW - 64, 260);
+    return (
+      <View style={[StyleSheet.absoluteFill, { flexDirection: 'row' }]}>
+        <ScrollView style={{ width: leftW, flexGrow: 0 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: pad.top + 10, paddingBottom: pad.bottom + pad.endPadding, paddingHorizontal: 16 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Pressable onPress={goBack} hitSlop={10} style={[styles.glassBtn, { backgroundColor: surface }]}>
+              <Ionicons name="chevron-back" size={24} color={text} />
+            </Pressable>
+            <Pressable onPress={openMore} hitSlop={10} style={[styles.glassBtn, { backgroundColor: surface }]}>
+              <Ionicons name="ellipsis-horizontal" size={22} color={text} />
+            </Pressable>
+          </View>
+          <View style={{ alignSelf: 'center', width: art, height: art, borderRadius: 12, overflow: 'hidden', marginTop: -8, backgroundColor: surface }}>
+            {info.thumb ? (
+              <SmartImage url={info.thumb} size={Math.round(art * PixelRatio.get())} style={StyleSheet.absoluteFill} />
+            ) : page.source === 'liked' ? (
+              <LinearGradient colors={['#5B3CC4', '#8E6CF0']} style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+                <Ionicons name="heart" size={80} color="rgba(255,255,255,0.9)" />
+              </LinearGradient>
+            ) : (
+              <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+                <Ionicons name="musical-notes" size={64} color={textSecondary} />
+              </View>
+            )}
+          </View>
+          {infoBlock}
+          {actionsBlock}
+          {statusBlock}
+        </ScrollView>
+        <Animated.FlatList
+          style={{ flex: 1 }}
+          data={entered ? rows : rows.slice(0, 6)}
+          keyExtractor={(r, i) => `${r.id}:${r.position ?? i}`}
+          ListFooterComponent={Footer}
+          initialNumToRender={14}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingTop: pad.top + 8, paddingHorizontal: 16, paddingBottom: pad.bottom + pad.endPadding }}
+          ItemSeparatorComponent={() => <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: border }} />}
+          extraData={rowExtra}
+          renderItem={renderRow}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={StyleSheet.absoluteFill}>

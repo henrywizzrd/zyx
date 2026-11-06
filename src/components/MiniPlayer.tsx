@@ -13,7 +13,7 @@ import { MP_THICKNESS, resolveMini, useFrame } from './layout';
 const USE_NATIVE = Platform.OS !== 'web';
 
 export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => void }) {
-  const { theme, setMiniPlayerAnchor, setMiniPlayerCollapsed } = useTheme();
+  const { theme, landscape, setMiniPlayerAnchor, setMiniPlayerCollapsed } = useTheme();
   const frame = useFrame();
   const { track, playerRef, emergeFrom, setEmergeFrom } = usePlayerPick('track', 'playerRef', 'emergeFrom', 'setEmergeFrom');
   const insets = useSafeAreaInsets();
@@ -68,7 +68,8 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
 
   // Dock đang ở dạng bubble (một góc dưới): mini player luôn nằm ở góc dưới đối diện
   const bubbleDock = theme.dock.mode === 'bubble';
-  const anchor: MiniAnchor = bubbleDock ? { edge: 'bottom', t: theme.dock.bubbleSide === 'right' ? 0 : 1 } : live.anchor;
+  // Màn hình ngang (dock dạng thanh): góc dưới phải, ngay dưới dock dọc
+  const anchor: MiniAnchor = bubbleDock ? { edge: 'bottom', t: theme.dock.bubbleSide === 'right' ? 0 : 1 } : landscape ? { edge: 'bottom', t: 1 } : live.anchor;
 
   // ---- Hình học (tính trước mọi hook dùng tới nó): luôn ở dạng bong bóng
   const rect = resolveMini(theme, insets, frame.width, frame.height, anchor, true);
@@ -78,7 +79,8 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
 
   // Vị trí thật của bong bóng trên màn hình (tính từ hình học, không đo): player nở ra từ đây và thu về đúng đây
   useLayoutEffect(() => {
-    if (hidden || theme.miniPlayer.merged) return;
+    // Vẫn cập nhật khi đang ẩn (player đang mở): xoay màn hình thì player biết chỗ mới để thu về
+    if (theme.miniPlayer.merged) return;
     playerOrigin.current = { x: geom.x, y: geom.y, w: S, h: S, r: bubbleRadius };
   }, [geom.x, geom.y, S, bubbleRadius, hidden, theme.miniPlayer.merged]); // eslint-disable-line react-hooks/exhaustive-deps
 

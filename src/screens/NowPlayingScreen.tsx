@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ScreenOrientation from 'expo-screen-orientation';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useT } from '../i18n';
@@ -98,7 +97,6 @@ let lyricsOpen = false;
 const layoutMemo = { blockH: 52, slotW: 0, infoH: 0, headerH: 0 };
 const posMemo = { ax: 0, ay: 0, lx: 0, ly: 0, ok: false };
 
-const lock = (o: ScreenOrientation.OrientationLock) => ScreenOrientation.lockAsync(o).catch(() => {});
 
 export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const { theme, setLyricLook } = useTheme();
@@ -138,26 +136,11 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     setShowLyricsState((p) => (lyricsOpen = typeof v === 'function' ? v(p) : v));
   const [queueOpen, setQueueOpen] = useState(false);
 
-  // Màn hình ngang: bấm nút điện thoại để xoay. Rời player thì luôn quay về dọc.
+  // Màn hình ngang: app tự xoay theo điện thoại (không còn nút xoay). Đóng player bằng cách vuốt xuống
   const win = useScreenSize();
   const landscape = win.width > win.height;
   const insets = useSafeAreaInsets();
   const [landLyrics, setLandLyrics] = useState(true); // ở chế độ ngang, lời hiện mặc định
-  const toggleLandscape = () => lock(landscape ? ScreenOrientation.OrientationLock.PORTRAIT_UP : ScreenOrientation.OrientationLock.LANDSCAPE);
-  useEffect(() => () => void lock(ScreenOrientation.OrientationLock.PORTRAIT_UP), []);
-  // Đang ngang mà đóng player: xoay về dọc trước, xoay xong mới chạy hiệu ứng thu về mini player
-  const closeAfterRotate = useRef(false);
-  const close = () => {
-    if (!landscape) return onClose();
-    closeAfterRotate.current = true;
-    lock(ScreenOrientation.OrientationLock.PORTRAIT_UP);
-  };
-  useEffect(() => {
-    if (landscape || !closeAfterRotate.current) return;
-    closeAfterRotate.current = false;
-    const id = setTimeout(onClose, 60);
-    return () => clearTimeout(id);
-  }, [landscape, onClose]);
 
   const lyr = useLyrics(track, landscape ? landLyrics : showLyrics, duration);
 
@@ -407,9 +390,13 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         <Pressable onPress={() => setQueueOpen(true)} hitSlop={10}>
           <Ionicons name="list" size={26} color={SOFT} />
         </Pressable>
-        <Pressable onPress={toggleLandscape} hitSlop={10}>
-          <Ionicons name="phone-portrait-outline" size={24} color="#FFFFFF" />
-        </Pressable>
+      </View>
+    );
+    // Vuốt xuống để thoát khi nằm ngang: thanh ngang ở mép trên (cả dải trên cùng đều vuốt được),
+    // và mọi chỗ trống không phải lời / thanh trượt (trang trái, cột nút bên phải)
+    const GrabBar = (
+      <View {...swipe.panHandlers} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: padT + 14, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 4 }}>
+        <View style={{ width: 44, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.45)' }} />
       </View>
     );
     const rowStyle = {
@@ -429,16 +416,13 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
           {Background}
           <StatusBar barStyle="light-content" />
           <View style={rowStyle}>
-            <View style={{ justifyContent: 'center' }}>
+            <View style={{ justifyContent: 'center' }} {...swipe.panHandlers}>
               <Cover track={track} size={900} style={{ width: art, height: art, borderRadius: 12 }}>
                 <Ionicons name="musical-notes" size={48} color="rgba(255,255,255,0.8)" />
               </Cover>
             </View>
             <View style={{ flex: 1, justifyContent: 'center' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                <Pressable onPress={close} hitSlop={10} style={styles.roundBtn}>
-                  <Ionicons name="chevron-down" size={20} color="#FFFFFF" />
-                </Pressable>
                 <View style={{ flex: 1 }} />
                 {LikeButton}
                 {MoreButton}
@@ -450,8 +434,9 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
               </View>
               <View style={{ marginTop: 14 }}>{Progress}</View>
             </View>
-            {SideButtons}
+            <View {...swipe.panHandlers}>{SideButtons}</View>
           </View>
+          {GrabBar}
           <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} />
         </View>
       );
@@ -460,23 +445,25 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     // Hiệu ứng QUYỂN SÁCH: trang trái (ảnh bìa + điều khiển) và trang phải (lời) nghiêng vào giữa như cuốn sách đang mở,
     // gáy sách ở giữa được che bằng một dải kính mờ mềm nối hai trang
     const leftW = Math.min(340, win.width * 0.34);
-    const art = Math.max(0, Math.min(leftW, usableH - 170));
+    const art = Math.max(0, Math.min(leftW, usableH - 150));
     const spineX = insets.left + 20 + leftW + 14; // vị trí gáy sách (giữa hai trang)
+    // Mỗi trang xoay quanh MÉP TRONG (phía gáy): mép trong đứng yên, mép ngoài nghiêng về phía người xem.
+    // (Trước đây xoay quanh giữa trang: nửa trong lùi ra sau mặt phẳng màn hình nên bị nền che mất → trang bị cắt cụt)
     const SEAM = 140;
     return (
       <View style={{ flex: 1 }}>
         {Background}
         <StatusBar barStyle="light-content" />
         <View style={rowStyle}>
-          <View style={{ width: leftW, justifyContent: 'center', transform: [{ perspective: 1100 }, { rotateY: '16deg' }] }}>
+          <View
+            {...swipe.panHandlers}
+            style={{ width: leftW, justifyContent: 'center', transformOrigin: 'right center', transform: [{ perspective: 1400 }, { rotateY: '12deg' }] }}
+          >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Pressable onPress={close} hitSlop={10} style={styles.roundBtn}>
-                <Ionicons name="chevron-down" size={20} color="#FFFFFF" />
-              </Pressable>
               <View style={{ flex: 1 }} />
               {LikeButton}
             </View>
-            <View style={{ alignItems: 'center', marginTop: 8 }}>
+            <View style={{ alignItems: 'center', marginTop: 4 }}>
               <Cover track={track} size={600} style={{ width: art, height: art, borderRadius: 10 }}>
                 <Ionicons name="musical-notes" size={40} color="rgba(255,255,255,0.8)" />
               </Cover>
@@ -488,10 +475,10 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
               {controls(false)}
             </View>
           </View>
-          <View style={{ flex: 1, transform: [{ perspective: 1100 }, { rotateY: '-14deg' }] }}>
+          <View style={{ flex: 1, transformOrigin: 'left center', transform: [{ perspective: 1400 }, { rotateY: '-10deg' }] }}>
             <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} look={look} />
           </View>
-          {SideButtons}
+          <View {...swipe.panHandlers}>{SideButtons}</View>
         </View>
         {/* Gáy sách: dải kính mờ phủ lên mép trong của hai trang, mờ dần ra hai bên → ảnh và lời nối liền nhau */}
         <View pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, left: spineX - SEAM / 2, width: SEAM }}>
@@ -505,6 +492,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
             <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.25)' }]} />
           </MaskedView>
         </View>
+        {GrabBar}
         <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} />
       </View>
     );
@@ -530,10 +518,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         <Pressable onPress={() => setQueueOpen(true)} hitSlop={10} style={styles.skipSlot}>
           <Ionicons name="list" size={ICON} color={SOFT} />
         </Pressable>
-        {/* Xoay ngang: ảnh bìa + lời mở ra như một cuốn sách */}
-        <Pressable onPress={toggleLandscape} hitSlop={10} style={styles.sideBtn}>
-          <Ionicons name="phone-landscape-outline" size={22} color={SOFT} />
-        </Pressable>
+        <View style={styles.sideBtn} />
       </View>
     </>
   );
@@ -602,7 +587,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
             }}
             style={{ paddingTop: pad.top + 4, paddingLeft: side, paddingRight: pad.right + 24 }}
           >
-            <Pressable onPress={close} hitSlop={14} style={styles.grabberWrap}>
+            <Pressable onPress={onClose} hitSlop={14} style={styles.grabberWrap}>
               <View style={styles.grabber} />
             </Pressable>
             <View

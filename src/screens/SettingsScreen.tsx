@@ -1,5 +1,7 @@
+import { SplitPane } from '../components/SplitPane';
+import { useProfile } from '../data/profile';
 import React from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { useContentInsets } from '../components/FloatingDock';
 import { MiniPlayerVariant } from '../theme/types';
@@ -34,22 +36,16 @@ function Chips<T extends string>({ options, value, onSelect, labels }: { options
 }
 
 export function SettingsScreen() {
-  const { theme, resetTheme, setMiniPlayerVariant, setMerged, setLanguage, setDockLabels, setDockMode, setDockBubbleSide } = useTheme();
+  const { theme, landscape, resetTheme, setMiniPlayerVariant, setMerged, setLanguage, setDockLabels, setDockMode, setDockBubbleSide } = useTheme();
   const t = useT();
   const { push } = useNav();
   const pad = useContentInsets();
   const label = { color: theme.colors.textSecondary, marginTop: 24, marginBottom: 12 };
   const session = useSession();
+  const profile = useProfile();
 
-  return (
-    <ScrollView
-      contentContainerStyle={{
-        paddingTop: pad.top + 16,
-        paddingBottom: pad.bottom + pad.endPadding,
-        paddingLeft: pad.left + 16,
-        paddingRight: pad.right + 16,
-      }}
-    >
+  const settingsPart = (
+    <>
       <Text style={[styles.title, { color: theme.colors.text }]}>{t('settings.title')}</Text>
       <Text style={{ color: theme.colors.textSecondary, marginTop: 8 }}>{t('settings.hint')}</Text>
 
@@ -120,6 +116,10 @@ export function SettingsScreen() {
         labels={{ on: t('common.on'), off: t('common.off') }}
       />
 
+    </>
+  );
+  const accountPart = (
+    <>
       {/* Tài khoản: đang đăng nhập tên gì (hoặc Khách) + Đăng xuất (quay về màn đăng nhập) */}
       <Text style={label}>{t('settings.account')}</Text>
       <View style={[styles.row, { marginTop: 0, backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
@@ -134,6 +134,10 @@ export function SettingsScreen() {
         </Pressable>
       </View>
 
+    </>
+  );
+  const extraPart = (
+    <>
       <Pressable
         onPress={resetTheme}
         style={[styles.chip, { backgroundColor: theme.colors.surface, alignSelf: 'flex-start', marginTop: 32 }]}
@@ -141,6 +145,57 @@ export function SettingsScreen() {
         <Text style={{ color: theme.colors.text, fontWeight: '600' }}>{t('settings.reset')}</Text>
       </Pressable>
       {PlaybackLab && <PlaybackLab />}
+    </>
+  );
+
+  // Màn hình ngang: trái = các cài đặt, phải = tài khoản (thẻ hồ sơ + đăng xuất) và phần còn lại. Mỗi bên cuộn riêng
+  if (landscape) {
+    return (
+      <SplitPane
+        ratio={0.55}
+        left={settingsPart}
+        right={
+          <>
+            <Text style={[styles.title, { color: theme.colors.text }]}>{t('settings.account')}</Text>
+            <View style={[styles.profileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+              {profile.avatar ? (
+                <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: profile.avatarColor, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 26, fontWeight: '800' }}>{(profile.name || '?').slice(0, 1).toUpperCase()}</Text>
+                </View>
+              )}
+              <View style={{ flex: 1 }}>
+                <Text numberOfLines={1} style={{ color: theme.colors.text, fontSize: 18, fontWeight: '800' }}>{profile.name}</Text>
+                <Text numberOfLines={1} style={{ color: theme.colors.textSecondary, fontSize: 13, marginTop: 2 }}>
+                  {session?.mode === 'account' ? `@${session.username}` : t('settings.guestMode')}
+                </Text>
+                {session?.mode === 'account' && !!session.email && (
+                  <Text numberOfLines={1} style={{ color: theme.colors.textSecondary, fontSize: 13, marginTop: 2 }}>{session.email}</Text>
+                )}
+              </View>
+            </View>
+            {accountPart}
+            {extraPart}
+          </>
+        }
+      />
+    );
+  }
+
+  return (
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{
+        paddingTop: pad.top + 16,
+        paddingBottom: pad.bottom + pad.endPadding,
+        paddingLeft: pad.left + 16,
+        paddingRight: pad.right + 16,
+      }}
+    >
+      {settingsPart}
+      {accountPart}
+      {extraPart}
     </ScrollView>
   );
 }
@@ -150,5 +205,7 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 20, padding: 12, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
+  profileCard: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 16, padding: 14, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
+  avatar: { width: 60, height: 60, borderRadius: 30 },
   rowIcon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 });

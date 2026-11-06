@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { Appearance, useColorScheme, View } from 'react-native';
+import { useScreenSize } from '../components/ScreenSize';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { defaultTheme } from './defaultTheme';
 import { AmbientPresetId, PRESETS, ThemePresetId } from './presets';
@@ -121,6 +122,7 @@ function sanitize(t: Theme): Theme {
 
 interface ThemeContextValue {
   theme: Theme;
+  landscape: boolean; // màn hình đang nằm ngang
   setTheme: (t: Theme) => void;
   resetTheme: () => void;
   setDockPosition: (p: Position) => void;
@@ -144,7 +146,21 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
+// Màn hình ngang: dock luôn đứng dọc sát cạnh phải (không nằm trên / dưới vì màn ngang thấp),
+// mini player tách khỏi dock, thu thành bong bóng ở góc dưới phải. Chỉ đổi lúc hiển thị, KHÔNG ghi vào cài đặt:
+// xoay dọc lại thì mọi thứ về đúng như người dùng đã chỉnh
+function orient(t: Theme, landscape: boolean): Theme {
+  if (!landscape) return t;
+  return {
+    ...t,
+    dock: t.dock.mode === 'bar' ? { ...t.dock, position: 'right' } : t.dock,
+    miniPlayer: { ...t.miniPlayer, merged: false, collapsed: true },
+  };
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const screen = useScreenSize();
+  const landscape = screen.width > screen.height;
   // Người dùng mới (theo hệ thống): mở app lên đã đúng sáng/tối của điện thoại
   const [theme, setThemeState] = useState<Theme>(() => derive({ ...defaultTheme, preset: systemPreset(Appearance.getColorScheme()) }));
   const [ready, setReady] = useState(false);
@@ -187,7 +203,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setThemeState((t) => ({ ...t, miniPlayer: { ...t.miniPlayer, ...patch } }));
 
     return {
-      theme,
+      theme: orient(theme, landscape),
+      landscape,
       setTheme: setThemeState,
       resetTheme: () => setThemeState((t) => ({ ...defaultTheme, language: t.language })), // giữ ngôn ngữ đang chọn
       setDockPosition: (position) =>
@@ -214,7 +231,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setAmbient: (preset, on) =>
         setThemeState((t) => ({ ...t, effects: { ...t.effects, ambient: { ...t.effects.ambient, [preset]: on } } })),
     };
-  }, [theme]);
+  }, [theme, landscape]);
 
   // Chờ đọc xong để không bị nháy từ giao diện mặc định sang giao diện đã lưu
   if (!ready) {

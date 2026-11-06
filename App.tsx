@@ -3,6 +3,8 @@ import { ActivityIndicator, Animated, StatusBar, StyleSheet, Text, View } from '
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ScreenSizeProvider } from './src/components/ScreenSize';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { DOCK_THICKNESS } from './src/components/layout';
 import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
 import { PlayerProvider } from './src/player/PlayerProvider';
 import { FloatingDock, useContentInsets } from './src/components/FloatingDock';
@@ -42,7 +44,8 @@ const SearchTab = React.memo(SearchScreen);
 const LibraryTab = React.memo(LibraryScreen);
 const SettingsTab = React.memo(SettingsScreen);
 
-ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+// Xoay theo điện thoại: dọc, ngang trái, ngang phải (không lộn ngược)
+ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.DEFAULT).catch(() => {});
 
 function Placeholder({ name }: { name: string }) {
   const { theme } = useTheme();
@@ -214,6 +217,7 @@ function Root() {
       {/* Hiệu ứng nền (tuyết, lá, cá, hạt cà phê): chạy liên tục sau mọi trang, chỉ dừng khi mở Player */}
       <AmbientEffect paused={ambientOff} />
       <View style={{ flex: 1 }}>
+        <ContentArea>
         {/* Tab hiện tại. Có trang mở chồng thì tab mờ dần đi theo vị trí trang (vuốt quay lại thì hiện lại dần),
             để trang trong suốt phía trên chỉ thấy nền chung, không thấy chữ của tab chồng lên */}
         <FadeLayer value={tabFade} pointerEvents={page ? 'none' : 'auto'} style={{ flex: 1 }}>
@@ -245,6 +249,7 @@ function Root() {
             </FadeLayer>
           );
         })}
+        </ContentArea>
         <DropPreview />
         {/* Bong bóng ẩn từ lúc bấm mở player tới khi player thu hẳn về (playerUp), để không thấy hai ảnh cùng lúc */}
         {/* Bấm mở player: nền phía sau (tab + hiệu ứng) mờ dần theo độ mở; đóng thì từ mờ trở lại rõ dần */}
@@ -262,6 +267,22 @@ function Root() {
       </View>
     </View>
     </ActionSheetProvider>
+  );
+}
+
+// Vùng nội dung (tab + các trang mở chồng). Màn hình ngang: chừa tai thỏ bên trái và chỗ của dock dọc bên phải,
+// rồi đo lại kích thước vùng còn lại (ScreenSizeProvider lồng bên trong) → mọi màn hình bên trong tự xếp theo đúng bề rộng
+// còn lại, nội dung nằm giữa, không bị dock che
+function ContentArea({ children }: { children: React.ReactNode }) {
+  const { theme, landscape } = useTheme();
+  const insets = useSafeAreaInsets();
+  const side = landscape && theme.dock.mode === 'bar';
+  const padL = landscape ? insets.left : 0;
+  const padR = landscape ? insets.right + (side ? DOCK_THICKNESS + theme.dock.style.margin * 2 : 0) : 0;
+  return (
+    <View style={{ flex: 1, paddingLeft: padL, paddingRight: padR }}>
+      <ScreenSizeProvider>{children}</ScreenSizeProvider>
+    </View>
   );
 }
 

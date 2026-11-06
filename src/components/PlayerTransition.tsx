@@ -75,6 +75,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
   }
   const ox = useSharedValue(0), oy = useSharedValue(0), ow = useSharedValue(1), oh = useSharedValue(1), or = useSharedValue(0);
 
+  const openSize = useRef({ W, H }); // kích thước màn hình lúc mở player
   const hRef = useRef(H);
   hRef.current = H;
   const onCloseRef = useRef(onClose);
@@ -103,6 +104,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
         const o = playerOrigin.current ?? { x: W / 2 - 24, y: H - 120, w: 48, h: 48, r: 24 };
         ox.value = o.x; oy.value = o.y; ow.value = o.w; oh.value = o.h; or.value = o.r;
         p.value = 0;
+        openSize.current = { W, H };
         setMounted(true);
       }
       setMoving(true);
@@ -115,6 +117,13 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
       return () => clearTimeout(id);
     } else if (mountedRef.current) {
       setMoving(true);
+      // Đã xoay màn hình trong lúc mở player (dọc ↔ ngang): chỗ cũ của bong bóng không còn đúng,
+      // thu về chỗ mới của bong bóng (tính theo hình học, không đo nên không bị sai)
+      const os = openSize.current;
+      const o = playerOrigin.current;
+      if (o && (Math.abs(os.W - W) > 1 || Math.abs(os.H - H) > 1)) {
+        ox.value = o.x; oy.value = o.y; ow.value = o.w; oh.value = o.h; or.value = o.r;
+      }
       // Thu nhỏ ngay lập tức (không đợi đo vị trí mini player): luồng JS có bận thì hiệu ứng vẫn chạy trên UI thread
       // Đường cong đi tới đích dứt khoát (không bò chậm ở cuối): trước đây đoạn cuối kéo dài, ảnh album còn to hơn
       // bong bóng một chút rồi mới "bụp" thành bong bóng
