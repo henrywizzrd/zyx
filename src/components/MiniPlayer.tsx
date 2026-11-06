@@ -66,8 +66,12 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
   const round = theme.miniPlayer.variant === 'pill';
   const bubbleRadius = round ? S / 2 : 16;
 
+  // Dock đang ở dạng bubble (một góc dưới): mini player luôn nằm ở góc dưới đối diện
+  const bubbleDock = theme.dock.mode === 'bubble';
+  const anchor: MiniAnchor = bubbleDock ? { edge: 'bottom', t: theme.dock.bubbleSide === 'right' ? 0 : 1 } : live.anchor;
+
   // ---- Hình học (tính trước mọi hook dùng tới nó): luôn ở dạng bong bóng
-  const rect = resolveMini(theme, insets, frame.width, frame.height, live.anchor, true);
+  const rect = resolveMini(theme, insets, frame.width, frame.height, anchor, true);
   const half = S / 2;
   const geom = { x: rect.x + frame.left, y: rect.y };
   const geomRef = useRef(geom);
@@ -89,7 +93,7 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
   );
 
   const d = useDraggable('player', {
-    anchor: live.anchor,
+    anchor,
     origin: () => {
       const g = geomRef.current;
       return { cx: g.x + half, cy: g.y + half };
@@ -109,7 +113,7 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
     d.pan.stopAnimation();
     d.pan.setValue({ x: ox, y: oy });
     Animated.timing(d.pan, { toValue: { x: 0, y: 0 }, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE }).start();
-  }, [geom.x, geom.y, live.anchor]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [geom.x, geom.y, anchor.edge, anchor.t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Bong bóng lún nhẹ khi ngón tay chạm vào
   const press = useRef(new Animated.Value(1)).current;

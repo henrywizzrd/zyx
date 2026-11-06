@@ -2,9 +2,12 @@ import { Platform } from 'react-native';
 import { useMemo } from 'react';
 import { kvGet, kvSet, useDbVersion } from './db';
 import { profile as mockProfile } from './mock';
+import { currentAccount } from './auth';
 
-// Profile của người dùng trên máy này. Sau này có tài khoản thì đồng bộ lên server,
-// và người khác vào xem profile sẽ thấy avatar / ảnh bìa này.
+// Hồ sơ RIÊNG của từng tài khoản (trước đây cả máy dùng chung một hồ sơ → 3 tài khoản cùng tên, cùng ảnh):
+//  - Khách: lưu trong máy như cũ
+//  - tài khoản ZYX / Google: lưu trên server (bảng profiles + kho ảnh "profiles"), máy chỉ giữ một bản sao để mở là hiện ngay.
+//    Đăng nhập tài khoản đó ở máy khác cũng thấy đúng tên, #tag, avatar, ảnh bìa
 export interface Profile {
   name: string;
   tag: string;
@@ -13,18 +16,127 @@ export interface Profile {
   coverTone?: CoverTone; // ảnh bìa tối hay sáng (đo khi lưu ảnh), để chọn màu chữ trên ảnh bìa
   avatarColor: string; // màu khi chưa có ảnh
   wallColor: string;
+  avatarRemote?: string; // link ảnh trên server (tài khoản), để biết ảnh trong máy đã khớp với server chưa
+  coverRemote?: string;
 }
 
 export type CoverTone = 'dark' | 'light';
 export type ImageSlot = 'avatar' | 'cover';
-const KEY = 'profile';
+const key = () => {
+  const acc = currentAccount();
+  return acc ? `profile:${acc.id}` : 'profile';
+};
 
 export function getProfile(): Profile {
-  return { ...mockProfile, ...(kvGet<Partial<Profile>>(KEY) ?? {}) };
+  const acc = currentAccount();
+  // Tài khoản mới chưa đặt tên: dùng username làm tên và #tag
+  const base = acc ? { ...mockProfile, name: acc.username, tag: acc.username } : mockProfile;
+  return { ...base, ...(kvGet<Partial<Profile>>(key()) ?? {}) };
 }
 
+function writeLocal(patch: Partial<Profile>) {
+  const k = key();
+  kvSet(k, { ...(kvGet<Partial<Profile>>(k) ?? {}), ...patch });
+}
+
+// Sửa hồ sơ: lưu trong máy ngay, tài khoản thì gửi tiếp lên server (mất mạng thì lần mở app sau gửi lại)
 export function updateProfile(patch: Partial<Profile>) {
-  kvSet(KEY, { ...(kvGet<Partial<Profile>>(KEY) ?? {}), ...patch });
+  writeLocal(patch);
+  if (currentAccount()) pushProfile(patch);
+}
+
+const sb = () => (require('../backend/supabase') as typeof import('../backend/supabase')).supabase;
+const BUCKET = 'profiles';
+const PENDING = () => `profile:pending:${currentAccount()?.id}`; // các trường chưa gửi lên được
+
+// Trường trong máy → cột trên server
+function toRow(patch: Partial<Profile>) {
+  const row: Record<string, string | null> = {};
+  if ('name' in patch) row.display_name = patch.name ?? null;
+  if ('tag' in patch) row.tag = patch.tag ?? null;
+  if ('coverTone' in patch) row.cover_tone = patch.coverTone ?? null;
+  if ('avatarColor' in patch) row.avatar_color = patch.avatarColor ?? null;
+  if ('wallColor' in patch) row.wall_color = patch.wallColor ?? null;
+  if ('avatarRemote' in patch) row.avatar_url = patch.avatarRemote ?? null;
+  if ('coverRemote' in patch) row.cover_url = patch.coverRemote ?? null;
+  return row;
+}
+
+async function pushProfile(patch: Partial<Profile>) {
+  const acc = currentAccount();
+  if (!acc) return;
+  const pending = { ...(kvGet<Record<string, string | null>>(PENDING()) ?? {}), ...toRow(patch) };
+  if (!Object.keys(pending).length) return;
+  try {
+    const { error } = await sb().from('profiles').update(pending).eq('id', acc.id);
+    if (error) throw error;
+    kvSet(PENDING(), null);
+  } catch (e) {
+    kvSet(PENDING(), pending);
+    console.warn('[profile] push', e);
+  }
+}
+
+// Mở app / vừa đăng nhập: gửi nốt phần chưa gửi, rồi lấy hồ sơ từ server về (đăng nhập máy mới thì có ngay tên, ảnh)
+export async function syncProfile() {
+  const acc = currentAccount();
+  if (!acc) return;
+  try {
+    await pushProfile({});
+    const { data, error } = await sb()
+      .from('profiles')
+      .select('display_name, tag, avatar_url, cover_url, cover_tone, avatar_color, wall_color')
+      .eq('id', acc.id)
+      .maybeSingle();
+    if (error || !data || currentAccount()?.id !== acc.id) return;
+    const cur = getProfile();
+    const patch: Partial<Profile> = {};
+    if (data.display_name) patch.name = data.display_name;
+    if (data.tag) patch.tag = data.tag;
+    if (data.avatar_color) patch.avatarColor = data.avatar_color;
+    if (data.wall_color) patch.wallColor = data.wall_color;
+    // Ảnh: server đổi (đổi ở máy khác) thì dùng ảnh trên server; giống nhau thì giữ file trong máy cho nhanh
+    if ((data.avatar_url ?? undefined) !== cur.avatarRemote) {
+      patch.avatarRemote = data.avatar_url ?? undefined;
+      patch.avatar = data.avatar_url ?? undefined;
+    }
+    if ((data.cover_url ?? undefined) !== cur.coverRemote) {
+      patch.coverRemote = data.cover_url ?? undefined;
+      patch.cover = data.cover_url ?? undefined;
+      patch.coverTone = (data.cover_tone as CoverTone | null) ?? undefined;
+    }
+    if (Object.keys(patch).length) writeLocal(patch);
+  } catch (e) {
+    console.warn('[profile] sync', e);
+  }
+}
+
+// Tải ảnh avatar / ảnh bìa lên kho ảnh của server (thư mục riêng của tài khoản), xoá ảnh cũ trên server
+async function uploadImage(slot: ImageSlot, localUri: string) {
+  const acc = currentAccount();
+  if (!acc || Platform.OS === 'web') return;
+  try {
+    const { File } = require('expo-file-system') as typeof import('expo-file-system');
+    const ext = (localUri.split('?')[0].split('.').pop() || 'jpg').toLowerCase();
+    const path = `${acc.id}/${slot}-${Date.now()}.${ext}`;
+    const body = await new File(localUri).arrayBuffer();
+    const { error } = await sb().storage.from(BUCKET).upload(path, body, { contentType: ext === 'png' ? 'image/png' : 'image/jpeg', upsert: true });
+    if (error) throw error;
+    const url = sb().storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+    const old = getProfile()[slot === 'avatar' ? 'avatarRemote' : 'coverRemote'];
+    // Chỉ ghi link mới nếu trong lúc tải người dùng chưa đổi sang ảnh khác
+    if (getProfile()[slot] !== localUri) return;
+    updateProfile(slot === 'avatar' ? { avatarRemote: url } : { coverRemote: url });
+    removeRemote(old);
+  } catch (e) {
+    console.warn('[profile] upload', e);
+  }
+}
+
+function removeRemote(url?: string) {
+  const marker = `/object/public/${BUCKET}/`;
+  if (!url || !url.includes(marker)) return;
+  sb().storage.from(BUCKET).remove([url.split(marker)[1]]).catch(() => {});
 }
 
 export function useProfile(): Profile {
@@ -68,6 +180,7 @@ export async function pickProfileImage(
     }
     const uri = await saveImage(slot, a.uri);
     updateProfile(slot === 'avatar' ? { avatar: uri } : { cover: uri });
+    uploadImage(slot, uri);
     return 'ok';
   } catch (e) {
     console.warn('[profile] pick', e);
@@ -90,6 +203,7 @@ export async function saveCroppedCover(img: PickedImage, rect: CropRect): Promis
     const saved = await saveImage('cover', uri);
     const coverTone = await measureCoverTone(saved);
     updateProfile({ cover: saved, coverTone });
+    uploadImage('cover', saved);
     return 'ok';
   } catch (e) {
     console.warn('[profile] crop', e);
@@ -98,9 +212,11 @@ export async function saveCroppedCover(img: PickedImage, rect: CropRect): Promis
 }
 
 export function removeProfileImage(slot: ImageSlot) {
-  const old = getProfile()[slot];
-  updateProfile(slot === 'avatar' ? { avatar: undefined } : { cover: undefined, coverTone: undefined });
+  const p = getProfile();
+  const old = p[slot];
+  updateProfile(slot === 'avatar' ? { avatar: undefined, avatarRemote: undefined } : { cover: undefined, coverTone: undefined, coverRemote: undefined });
   if (old) deleteFile(old);
+  removeRemote(slot === 'avatar' ? p.avatarRemote : p.coverRemote);
 }
 
 async function saveImage(slot: ImageSlot, src: string): Promise<string> {
@@ -118,7 +234,7 @@ async function saveImage(slot: ImageSlot, src: string): Promise<string> {
 }
 
 function deleteFile(uri: string) {
-  if (Platform.OS === 'web') return;
+  if (Platform.OS === 'web' || !uri.startsWith('file:')) return;
   try {
     const { File } = require('expo-file-system') as typeof import('expo-file-system');
     const f = new File(uri);

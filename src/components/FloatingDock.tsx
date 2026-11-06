@@ -22,7 +22,7 @@ const withAlpha = (hex: string, a: number) => hex.slice(0, 7) + Math.round(a * 2
 type Origin = { cx: number; cy: number };
 
 // Icon đặc cho mọi tab (kiểu Apple Music): tab đang mở tô màu nhấn, các tab khác màu chữ chính của theme
-const ICONS: Record<Exclude<TabId, 'player'>, keyof typeof Ionicons.glyphMap> = {
+export const ICONS: Record<Exclude<TabId, 'player'>, keyof typeof Ionicons.glyphMap> = {
   home: 'home',
   search: 'search',
   library: 'library',
@@ -30,7 +30,7 @@ const ICONS: Record<Exclude<TabId, 'player'>, keyof typeof Ionicons.glyphMap> = 
 };
 
 // Nhãn dưới icon lấy từ bộ chữ theo ngôn ngữ
-const LABELS = { home: 'tab.home', search: 'tab.search', library: 'tab.library', settings: 'tab.settings' } as const;
+export const LABELS = { home: 'tab.home', search: 'tab.search', library: 'tab.library', settings: 'tab.settings' } as const;
 
 // Dock và mini player nổi trên nội dung, nên chỉ trả về safe area.
 // endPadding dùng để màn hình cuộn kéo được mục cuối lên khỏi các khối nổi ở đáy.
@@ -162,7 +162,7 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
   const step = cell.main + DOCK_GAP;
   const hiMove = hi.interpolate({ inputRange: [0, 10], outputRange: [0, step * 10] });
   const radius = (cell.cross + DOCK_PADDING * 2) / 2; // dạng viên thuốc bo tròn hẳn hai đầu
-  const hiColor = withAlpha(theme.colors.text, theme.colors.glassTint === 'dark' ? 0.12 : 0.08);
+  const hiColor = withAlpha(theme.colors.text, theme.colors.glassTint === 'dark' ? 0.16 : 0.1);
 
   const detachPlayer = (origin: Origin | null) => {
     setEmergeFrom(origin);
@@ -173,7 +173,7 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
   // Bóng đổ nhẹ để dock tách khỏi nội dung phía sau; đang kéo thì nổi cao hơn
   const glow = lit
     ? { shadowColor: '#000', shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 14 }
-    : { shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 8 };
+    : { shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 22, shadowOffset: { width: 0, height: 10 }, elevation: 10 };
 
   return (
     <View pointerEvents={hidden ? 'none' : 'box-none'} style={[styles.layer, dockStyle, { zIndex: d.zIndex }]}>
@@ -194,8 +194,8 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
             ...glow,
           }}
         >
-          {/* Nền kính mờ theo theme, đậm hơn các chỗ khác để dock luôn rõ */}
-          <GlassFill radius={radius} solid={0.72} />
+          {/* Tấm kính nổi kiểu Apple Music: mờ phần phía sau + vệt sáng + cạnh kính */}
+          <GlassFill radius={radius} solid={0.5} slab />
           {/* Giữ lâu vào khoảng trống giữa các nút cũng kéo được dock */}
           <Pressable
             {...d.pressProps}
@@ -238,8 +238,8 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
                   onPress={() => onChange(id)}
                   style={{ width: cellW, height: cellH, alignItems: 'center', justifyContent: 'center' }}
                 >
-                  <Ionicons name={ICONS[id]} size={labels ? 23 : 25} color={color} />
-                  {labels && <Text numberOfLines={1} style={{ color, fontSize: 10, fontWeight: '600', marginTop: 3 }}>{t(LABELS[id])}</Text>}
+                  <Ionicons name={ICONS[id]} size={labels ? 25 : 27} color={color} />
+                  {labels && <Text numberOfLines={1} style={{ color, fontSize: 11, fontWeight: '600', marginTop: 3 }}>{t(LABELS[id])}</Text>}
                 </Pressable>
               );
             })}

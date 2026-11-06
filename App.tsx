@@ -7,6 +7,7 @@ import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
 import { PlayerProvider } from './src/player/PlayerProvider';
 import { FloatingDock, useContentInsets } from './src/components/FloatingDock';
 import { MiniPlayer } from './src/components/MiniPlayer';
+import { DockBubble } from './src/components/DockBubble';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { NowPlayingScreen } from './src/screens/NowPlayingScreen';
@@ -19,6 +20,7 @@ import { LibraryScreen } from './src/screens/LibraryScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { PlayerTransition } from './src/components/PlayerTransition';
+import { BackdropBlur } from './src/components/BackdropBlur';
 import { NavProvider, Page, useNav, useNavStack } from './src/nav/Nav';
 import { CollectionScreen } from './src/screens/CollectionScreen';
 import { ArtistScreen } from './src/screens/ArtistScreen';
@@ -154,7 +156,10 @@ function Root() {
   const [playerUp, setPlayerUp] = useState(false);
   useEffect(() => {
     if (tab === 'player') setPlayerUp(true);
+    else setAmbientOff(false); // bắt đầu đóng player: hiệu ứng nền chạy lại ngay, trong lúc nền rõ dần
   }, [tab]);
+  // Hiệu ứng nền chỉ dừng khi player đã phóng to xong hẳn (đang phóng to vẫn chạy, chỉ bị mờ đi)
+  const [ambientOff, setAmbientOff] = useState(false);
   const navActions = useNav();
   const stack = useNavStack();
   const nav = { ...navActions, stack };
@@ -207,7 +212,7 @@ function Root() {
       {/* Nền chung: màu của bộ màu, ảnh/GIF hoặc video người dùng chọn */}
       <AppBackground />
       {/* Hiệu ứng nền (tuyết, lá, cá, hạt cà phê): chạy liên tục sau mọi trang, chỉ dừng khi mở Player */}
-      <AmbientEffect paused={tab === 'player'} />
+      <AmbientEffect paused={ambientOff} />
       <View style={{ flex: 1 }}>
         {/* Tab hiện tại. Có trang mở chồng thì tab mờ dần đi theo vị trí trang (vuốt quay lại thì hiện lại dần),
             để trang trong suốt phía trên chỉ thấy nền chung, không thấy chữ của tab chồng lên */}
@@ -242,9 +247,16 @@ function Root() {
         })}
         <DropPreview />
         {/* Bong bóng ẩn từ lúc bấm mở player tới khi player thu hẳn về (playerUp), để không thấy hai ảnh cùng lúc */}
+        {/* Bấm mở player: nền phía sau (tab + hiệu ứng) mờ dần theo độ mở; đóng thì từ mờ trở lại rõ dần */}
+        {(tab === 'player' || playerUp) && <BackdropBlur />}
         <MiniPlayer hidden={tab === 'player' || playerUp} onOpen={() => setTab('player')} />
-          <FloatingDock active={tab} onChange={go} hidden={tab === 'player'} />
-          <PlayerTransition open={tab === 'player'} onClose={() => setTab(lastTab)} onClosed={() => setPlayerUp(false)}>
+          {/* Dock: dạng thanh (kéo đổi chỗ được) hoặc dạng bubble ở góc dưới (Cài đặt → Kiểu dock) */}
+          {theme.dock.mode === 'bubble' ? (
+            <DockBubble active={tab} onChange={go} hidden={tab === 'player'} />
+          ) : (
+            <FloatingDock active={tab} onChange={go} hidden={tab === 'player'} />
+          )}
+          <PlayerTransition open={tab === 'player'} onClose={() => setTab(lastTab)} onClosed={() => setPlayerUp(false)} onOpened={() => setAmbientOff(true)}>
           <NowPlayingScreen onClose={() => setTab(lastTab)} />
         </PlayerTransition>
       </View>

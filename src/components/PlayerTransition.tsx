@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, PanResponder, PanResponderInstance, StyleSheet, View } from 'react-native';
-import Animated, { Easing, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, interpolate, makeMutable, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { usePlayerPick } from '../player/PlayerProvider';
 import { SmartImage } from './Cover';
 import { useScreenSize } from './ScreenSize';
@@ -14,6 +14,9 @@ export const playerOrigin: {
   // Mini player đăng ký hàm này để lúc đóng đo lại vị trí ảnh album ở chỗ hiện tại của nó
   measureLive?: (cb: (r: Rect | null) => void) => void;
 } = { current: null };
+
+// Độ mở của player (0 = mini player, 1 = đầy đủ), dùng chung cho lớp làm mờ nền phía sau (BackdropBlur trong App)
+export const playerProgress = makeMutable(0);
 
 type Ctx = {
   reportCover: (r: Rect) => void; // không còn dùng, giữ lại để các file cũ không lỗi
@@ -32,7 +35,7 @@ const SPRING = { damping: 24, stiffness: 210, mass: 1 };
 // Mở player như mở app trên iPhone: một ô bo góc từ ảnh album phóng to dần ra tràn màn hình.
 // Cả màn player được thu nhỏ đồng đều bên trong ô đó (không bị méo), ô chỉ cắt phần thừa ở dưới.
 // Lúc đầu ô hiện ảnh album, ảnh mờ dần để lộ màn player; đóng thì chạy ngược lại.
-export function PlayerTransition({ open, onClose, onClosed, children }: { open: boolean; onClose: () => void; onClosed?: () => void; children: React.ReactNode }) {
+export function PlayerTransition({ open, onClose, onClosed, onOpened, children }: { open: boolean; onClose: () => void; onClosed?: () => void; onOpened?: () => void; children: React.ReactNode }) {
   const { width: W, height: H } = useScreenSize();
   const { track } = usePlayerPick('track');
   const [mounted, setMountedState] = useState(open);
@@ -64,7 +67,12 @@ export function PlayerTransition({ open, onClose, onClosed, children }: { open: 
     if (unmountTimer.current) clearTimeout(unmountTimer.current);
   }, []);
 
-  const p = useSharedValue(open ? 1 : 0); // 0 = mini player, 1 = player đầy đủ
+  const p = playerProgress; // 0 = mini player, 1 = player đầy đủ
+  const first = useRef(true);
+  if (first.current) {
+    first.current = false;
+    p.value = open ? 1 : 0;
+  }
   const ox = useSharedValue(0), oy = useSharedValue(0), ow = useSharedValue(1), oh = useSharedValue(1), or = useSharedValue(0);
 
   const hRef = useRef(H);
@@ -77,7 +85,12 @@ export function PlayerTransition({ open, onClose, onClosed, children }: { open: 
   // Không làm vậy thì mỗi khung hình máy phải vẽ lại toàn bộ: ảnh bìa có mép mờ (mask), chữ phát sáng, nền mờ...
   // bên trong một khung bo góc đang đổi kích thước → tụt khung hình
   const [moving, setMoving] = useState(open);
-  const stopMoving = useCallback(() => setMoving(false), []);
+  const onOpenedRef = useRef(onOpened);
+  onOpenedRef.current = onOpened;
+  const stopMoving = useCallback(() => {
+    setMoving(false);
+    if (openRef.current) onOpenedRef.current?.(); // đã phóng to xong hẳn
+  }, []);
 
   useEffect(() => {
     if (open) {

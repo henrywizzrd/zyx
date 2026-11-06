@@ -13,6 +13,11 @@ export type HomeSection = 'myPlaylists' | 'recent' | 'trending' | 'recommended' 
 export type TrendingRange = 'week' | 'month' | 'year';
 export type MiniPlayerVariant = 'pill' | 'rect';
 export type LibraryLayout = 'list' | 'columns' | 'covers2' | 'covers3';
+// Dock dạng thanh (kiểu Apple Music) hoặc dạng bubble ở góc dưới (bấm/giữ mở 1/4 vòng tab)
+export type DockMode = 'bar' | 'bubble';
+export type Side = 'left' | 'right';
+// Kiểu hiện lời bài hát: phát sáng (Apple Music), karaoke (tô dần theo nhạc), nảy chữ
+export type LyricLook = 'glow' | 'karaoke' | 'bounce';
 
 import type { Language } from '../i18n/strings';
 import type { AmbientPresetId, Palette, ThemePresetId } from './presets';
@@ -36,6 +41,8 @@ export interface Theme {
     position: Position;
     items: TabId[];
     labels: boolean; // hiện chữ dưới icon (Trang chủ, Tìm kiếm...)
+    mode: DockMode;
+    bubbleSide: Side; // bubble ở góc dưới bên trái hay phải (mini player sang góc đối diện)
     style: { background: string; radius: number; margin: number };
   };
   miniPlayer: {
@@ -46,5 +53,6 @@ export interface Theme {
     style: { background: string; rectRadius: number };
   };
   library: { layout: LibraryLayout; order: string[] };
+  player: { lyricLook: LyricLook };
   home: { sections: HomeSection[]; hidden: HomeSection[]; trendingRange: TrendingRange };
 }

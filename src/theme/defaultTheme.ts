@@ -15,6 +15,8 @@ export const defaultTheme: Theme = {
     position: 'bottom',
     items: ['home', 'search', 'library', 'settings'],
     labels: true,
+    mode: 'bar',
+    bubbleSide: 'right',
     style: { background: '#242424F2', radius: 28, margin: 12 },
   },
   miniPlayer: {
@@ -24,6 +26,7 @@ export const defaultTheme: Theme = {
     merged: false,
     style: { background: '#242424F2', rectRadius: 18 },
   },
+  player: { lyricLook: 'glow' },
   library: { layout: 'list', order: [] },
   home: {
     sections: ['myPlaylists', 'recent', 'trending', 'recommended', 'playlistPicks'],

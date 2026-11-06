@@ -12,7 +12,8 @@ import { kvGet, kvSet, useDbVersion } from './db';
 // Phiên đăng nhập được Supabase nhớ trong máy: lần sau mở app vào thẳng. Đăng xuất trong Cài đặt.
 // ---------------------------------------------------------------------------
 
-export type Session = { mode: 'guest' } | { mode: 'account'; username: string; email: string };
+export type Session = { mode: 'guest' } | { mode: 'account'; id?: string; username: string; email: string };
+type Current = { id?: string; username: string; email: string };
 
 const GUEST = 'auth:guest';
 const CURRENT = 'auth:current'; // thông tin tài khoản đang đăng nhập (để mở app hiện ngay, không chờ mạng)
@@ -28,7 +29,7 @@ const sb = () => (require('../backend/supabase') as typeof import('../backend/su
 export function useSession(): Session | null {
   const v = useDbVersion();
   return useMemo(() => {
-    const cur = kvGet<{ username: string; email: string }>(CURRENT);
+    const cur = kvGet<Current>(CURRENT);
     if (cur) return { mode: 'account', ...cur };
     return kvGet<boolean>(GUEST) ? { mode: 'guest' } : null;
   }, [v]);
@@ -38,8 +39,17 @@ export function useSession(): Session | null {
 export async function syncSession() {
   try {
     const { data } = await sb().auth.getSession();
-    if (!data.session && kvGet(CURRENT)) kvSet(CURRENT, null);
+    const cur = kvGet<Current>(CURRENT);
+    if (!data.session && cur) kvSet(CURRENT, null);
+    // Bản cũ chưa lưu id tài khoản: bổ sung (hồ sơ / bài đăng giờ lưu riêng theo từng tài khoản)
+    else if (data.session && cur && cur.id !== data.session.user.id) kvSet(CURRENT, { ...cur, id: data.session.user.id });
   } catch {}
+}
+
+// id tài khoản đang đăng nhập (null = Khách / chưa đăng nhập)
+export function currentAccount(): Current | null {
+  const cur = kvGet<Current>(CURRENT);
+  return cur?.id ? cur : null;
 }
 
 export function continueAsGuest() {
@@ -79,7 +89,7 @@ export async function signUp(username: string, email: string, password: string):
     // Gmail đã thuộc tài khoản khác: Supabase không báo lỗi (để người lạ không dò được), nhưng trả về tài khoản rỗng
     if (data.user && (data.user.identities?.length ?? 0) === 0) return 'emailTaken';
     if (!data.session) return 'verify'; // bật "Confirm email": chờ nhập mã gửi về Gmail
-    kvSet(CURRENT, { username, email: email.trim() });
+    kvSet(CURRENT, { id: data.user?.id, username, email: email.trim() });
     return 'ok';
   } catch {
     return 'network';
@@ -100,7 +110,7 @@ export async function signIn(username: string, password: string): Promise<'ok' |
       }
       return isNetwork(r.error) ? 'network' : 'wrong';
     }
-    kvSet(CURRENT, { username, email });
+    kvSet(CURRENT, { id: r.data.user?.id, username, email });
     return 'ok';
   } catch {
     return 'network';
@@ -114,7 +124,7 @@ export async function verifyCode(username: string, email: string, code: string):
   try {
     const { data, error } = await sb().auth.verifyOtp({ email, token: code, type: 'signup' });
     if (error || !data.session) return error && isNetwork(error) ? 'network' : 'wrong';
-    kvSet(CURRENT, { username, email });
+    kvSet(CURRENT, { id: data.session.user.id, username, email });
     return 'ok';
   } catch {
     return 'network';
@@ -164,7 +174,7 @@ async function finishOAuth(): Promise<'ok' | 'pickUsername' | AuthError> {
   const { data: prof, error } = await sb().from('profiles').select('username').eq('id', user.id).maybeSingle();
   if (error) return isNetwork(error) ? 'network' : 'unknown';
   if (prof?.username) {
-    kvSet(CURRENT, { username: prof.username, email: user.email ?? '' });
+    kvSet(CURRENT, { id: user.id, username: prof.username, email: user.email ?? '' });
     return 'ok';
   }
   return 'pickUsername';

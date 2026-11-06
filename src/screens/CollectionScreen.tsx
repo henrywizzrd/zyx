@@ -16,14 +16,15 @@ import type { Collection } from '../music/ytmusic';
 import { musicSupported, toTrack, ytmusic } from '../music/lazy';
 import {
   deletePlaylist, getLikedTracks, getPlaylist, getPlaylistTracks, isSaved, PlayContext, removeFromPlaylist,
-  renamePlaylist, setPlaylistPublic, setSaved, useDbVersion,
+  renamePlaylist, setPlaylistCover, setPlaylistDescription, setPlaylistPublic, setSaved, useDbVersion,
 } from '../data/db';
 import { useScreenSize } from '../components/ScreenSize';
 import Animated from 'react-native-reanimated';
 import { StretchyBg, useStretchScroll } from '../components/Stretchy';
+import { deleteAppFile, pickSquareImage } from '../data/images';
 
 type Row = Track & { position?: number };
-type Info = { title: string; subtitle: string; thumb?: string; owner?: Collection['owner'] };
+type Info = { title: string; subtitle: string; thumb?: string; owner?: Collection['owner']; description?: string; cover?: string };
 
 const fmtTotal = (sec: number, t: Translate) => {
   const m = Math.round(sec / 60);
@@ -91,7 +92,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
       const p = getPlaylist(page.id);
       if (!p) return pop(); // playlist đã bị xoá
       setRows(getPlaylistTracks(page.id));
-      setInfo({ title: p.title, subtitle: t(p.isPublic ? 'col.public' : 'col.private'), thumb: p.thumb });
+      setInfo({ title: p.title, subtitle: t(p.isPublic ? 'col.public' : 'col.private'), thumb: p.thumb, description: p.description, cover: p.cover });
       setIsPublic(p.isPublic);
       setStatus('done');
     }
@@ -135,6 +136,21 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
       { label: t('col.deleteAction'), icon: 'trash-outline', destructive: true, run: () => { deletePlaylist(page.id); pop(); } },
     ]);
 
+  // Playlist tự tạo: đổi ảnh bìa (chọn ảnh vuông từ thư viện ảnh), bỏ ảnh bìa, sửa mô tả
+  const changeCover = async () => {
+    const r = await pickSquareImage('playlists');
+    if (r === 'canceled') return;
+    if (r === 'denied' || r === 'failed') return sheet.toast(t('col.coverFailed'));
+    deleteAppFile(info.cover);
+    setPlaylistCover(page.id, r);
+  };
+  const removeCover = () => {
+    deleteAppFile(info.cover);
+    setPlaylistCover(page.id, null);
+  };
+  const editDescription = () =>
+    sheet.openInput({ title: t('col.descTitle'), initial: info.description ?? '', submit: t('sheet.save'), onSubmit: (v) => setPlaylistDescription(page.id, v) });
+
   // Nút ... góc trên phải: các việc với cả album / playlist
   const openMore = () => {
     const actions: SheetAction[] = [];
@@ -158,6 +174,9 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
     }
     if (local) {
       actions.push({ label: t('col.rename'), icon: 'pencil-outline', keepOpen: true, run: rename });
+      actions.push({ label: t('col.changeCover'), icon: 'image-outline', run: changeCover });
+      if (info.cover) actions.push({ label: t('col.removeCover'), icon: 'close-circle-outline', run: removeCover });
+      actions.push({ label: t(info.description ? 'col.editDesc' : 'col.addDesc'), icon: 'document-text-outline', keepOpen: true, run: editDescription });
       actions.push({
         label: t(isPublic ? 'col.makePrivate' : 'col.makePublic'),
         icon: isPublic ? 'lock-closed-outline' : 'globe-outline',
@@ -216,6 +235,12 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
           </Pressable>
         )}
         {!!meta && <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 14, marginTop: 6 }}>{meta}</Text>}
+        {/* Mô tả của playlist tự tạo (bấm để sửa) */}
+        {local && !!info.description && (
+          <Pressable onPress={editDescription} style={{ marginTop: 8, paddingHorizontal: 12 }}>
+            <Text numberOfLines={3} style={{ color: textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 20 }}>{info.description}</Text>
+          </Pressable>
+        )}
       </View>
 
       {/* Trộn bài | Phát | Lưu */}

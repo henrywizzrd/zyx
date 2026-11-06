@@ -16,10 +16,13 @@ export const DOCK_GAP = 2;
 export function dockCell(position: Position, labels: boolean) {
   const vertical = position !== 'top' && position !== 'bottom';
   if (vertical) return labels ? { main: 56, cross: 68 } : { main: 52, cross: 56 };
-  return labels ? { main: 76, cross: 56 } : { main: 68, cross: 50 };
+  // Nằm ngang: to ngang dock dọc, ô rộng như tab bar của Apple Music
+  return labels ? { main: 80, cross: 62 } : { main: 72, cross: 58 };
 }
 // Bề dày lớn nhất của dock (dùng để chừa chỗ cuối danh sách cuộn)
-export const DOCK_THICKNESS = 56 + DOCK_PADDING * 2;
+export const DOCK_THICKNESS = 68 + DOCK_PADDING * 2;
+// Dock dạng bubble: hình tròn ở góc dưới
+export const DOCK_BUBBLE = 62;
 
 export const MP_ALBUM = 44;
 export const MP_BUTTON = 40;
@@ -83,6 +86,11 @@ export function miniSize(edge: Edge, collapsed: boolean) {
 export function dockRect(theme: Theme, insets: EdgeInsets, W: number, H: number): Rect {
   const { dock, miniPlayer } = theme;
   const m = dock.style.margin;
+  if (dock.mode === 'bubble') {
+    const S = DOCK_BUBBLE;
+    const y = H - insets.bottom - m - S;
+    return { x: dock.bubbleSide === 'left' ? insets.left + m : W - insets.right - m - S, y, w: S, h: S };
+  }
   const count = dock.items.length + (miniPlayer.merged ? 1 : 0);
   const { width: w, height: h } = dockSize(count, dock.position, dock.labels);
   const L = insets.left + m, R = W - insets.right - m, T = insets.top + m, B = H - insets.bottom - m;

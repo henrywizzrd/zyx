@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { Track } from './mock';
 import { kvGet, kvSet, useDbVersion } from './db';
+import { currentAccount } from './auth';
 
 // ---------------------------------------------------------------------------
 // Phần mạng xã hội của trang Profile (kiểu Threads). Chưa có backend nên:
@@ -38,12 +39,59 @@ export interface Post {
   likes: number;
   liked: boolean;
   author?: Author; // bỏ trống = chính mình
+  pending?: boolean; // tài khoản: bài đăng lúc mất mạng, chưa gửi lên server
 }
 
-const KEY = 'social:posts';
+// Khách: bài lưu trong máy. Tài khoản: bài nằm trên server (bảng posts), máy giữ bản sao riêng cho từng tài khoản
+const key = () => {
+  const acc = currentAccount();
+  return acc ? `social:posts:${acc.id}` : 'social:posts';
+};
 
 function readPosts(): Post[] {
-  return kvGet<Post[]>(KEY) ?? [];
+  return kvGet<Post[]>(key()) ?? [];
+}
+const writePosts = (list: Post[]) => kvSet(key(), list);
+const sb = () => (require('../backend/supabase') as typeof import('../backend/supabase')).supabase;
+const isServerId = (id: string) => /^[0-9a-f-]{36}$/.test(id);
+
+// Gửi một bài lên server; được thì thay id tạm bằng id trên server
+async function uploadPost(post: Post) {
+  const acc = currentAccount();
+  if (!acc) return;
+  try {
+    const { data, error } = await sb()
+      .from('posts')
+      .insert({ body: post.text, attach: post.attach ?? null, created_at: new Date(post.createdAt).toISOString() })
+      .select('id')
+      .single();
+    if (error || !data) throw error;
+    if (currentAccount()?.id !== acc.id) return;
+    writePosts(readPosts().map((p) => (p.id === post.id ? { ...p, id: data.id as string, pending: undefined } : p)));
+  } catch (e) {
+    if (currentAccount()?.id === acc.id) writePosts(readPosts().map((p) => (p.id === post.id ? { ...p, pending: true } : p)));
+    console.warn('[social] upload', e);
+  }
+}
+
+// Mở app / vừa đăng nhập: gửi các bài đăng lúc mất mạng, rồi lấy bài của tài khoản từ server về
+export async function syncPosts() {
+  const acc = currentAccount();
+  if (!acc) return;
+  for (const p of readPosts().filter((x) => x.pending || !isServerId(x.id))) await uploadPost(p);
+  try {
+    const { data, error } = await sb().from('posts').select('id, body, attach, created_at').eq('user_id', acc.id).order('created_at', { ascending: false }).limit(200);
+    if (error || !data || currentAccount()?.id !== acc.id) return;
+    const local = new Map(readPosts().map((p) => [p.id, p]));
+    const fromServer: Post[] = data.map((r) => {
+      const old = local.get(r.id as string);
+      return { id: r.id as string, text: (r.body as string) ?? '', attach: (r.attach as Attachment | null) ?? undefined, createdAt: Date.parse(r.created_at as string), likes: old?.likes ?? 0, liked: old?.liked ?? false };
+    });
+    const unsent = readPosts().filter((p) => p.pending);
+    writePosts([...unsent, ...fromServer]);
+  } catch (e) {
+    console.warn('[social] sync', e);
+  }
 }
 
 // Bài của mình, mới nhất lên đầu (tự cập nhật khi đăng / xoá / thích)
@@ -56,16 +104,20 @@ export function createPost(text: string, attach?: Attachment) {
   const body = text.trim().slice(0, POST_MAX);
   if (!body && !attach) return;
   const post: Post = { id: `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, text: body, attach, createdAt: Date.now(), likes: 0, liked: false };
-  kvSet(KEY, [post, ...readPosts()]);
+  writePosts([post, ...readPosts()]);
+  if (currentAccount()) uploadPost(post);
 }
 
 export function deletePost(id: string) {
-  kvSet(KEY, readPosts().filter((p) => p.id !== id));
+  writePosts(readPosts().filter((p) => p.id !== id));
+  if (currentAccount() && isServerId(id)) {
+    Promise.resolve(sb().from('posts').delete().eq('id', id)).catch((e) => console.warn('[social] delete', e));
+  }
 }
 
+// Lượt thích hiện chỉ lưu trong máy (chưa có bảng lượt thích trên server)
 export function toggleLikePost(id: string) {
-  kvSet(
-    KEY,
+  writePosts(
     readPosts().map((p) => (p.id === id ? { ...p, liked: !p.liked, likes: Math.max(0, p.likes + (p.liked ? -1 : 1)) } : p))
   );
 }

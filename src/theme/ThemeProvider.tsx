@@ -93,6 +93,8 @@ function sanitize(t: Theme): Theme {
       ...t.dock,
       position: POSITIONS.includes(t.dock.position) ? t.dock.position : d.dock.position,
       items: items.length ? items : d.dock.items,
+      mode: t.dock.mode === 'bubble' ? 'bubble' : 'bar',
+      bubbleSide: t.dock.bubbleSide === 'left' ? 'left' : 'right',
     },
     miniPlayer: {
       ...t.miniPlayer,
@@ -102,6 +104,7 @@ function sanitize(t: Theme): Theme {
       },
       variant: VARIANTS.includes(t.miniPlayer.variant) ? t.miniPlayer.variant : d.miniPlayer.variant,
     },
+    player: { lyricLook: (['glow', 'karaoke', 'bounce'] as const).includes(t.player.lyricLook) ? t.player.lyricLook : 'glow' },
     library: {
       ...t.library,
       layout: LIBRARY_LAYOUTS.includes(t.library.layout) ? t.library.layout : d.library.layout,
@@ -122,6 +125,9 @@ interface ThemeContextValue {
   resetTheme: () => void;
   setDockPosition: (p: Position) => void;
   setDockLabels: (on: boolean) => void;
+  setDockMode: (m: Theme['dock']['mode']) => void;
+  setLyricLook: (l: Theme['player']['lyricLook']) => void;
+  setDockBubbleSide: (s: Theme['dock']['bubbleSide']) => void;
   setMiniPlayerAnchor: (a: MiniAnchor) => void;
   setMiniPlayerCollapsed: (c: boolean) => void;
   setMiniPlayerVariant: (v: MiniPlayerVariant) => void;
@@ -187,6 +193,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setDockPosition: (position) =>
         setThemeState((t) => ({ ...t, dock: { ...t.dock, position } })),
       setDockLabels: (labels) => setThemeState((t) => ({ ...t, dock: { ...t.dock, labels } })),
+      // Đổi sang bubble: mini player tách khỏi dock (nếu đang gộp) để nằm ở góc đối diện
+      setDockMode: (mode) => setThemeState((t) => ({ ...t, dock: { ...t.dock, mode }, miniPlayer: mode === 'bubble' ? { ...t.miniPlayer, merged: false } : t.miniPlayer })),
+      setLyricLook: (lyricLook) => setThemeState((t) => ({ ...t, player: { ...t.player, lyricLook } })),
+      setDockBubbleSide: (bubbleSide) => setThemeState((t) => ({ ...t, dock: { ...t.dock, bubbleSide } })),
       setMiniPlayerAnchor: (anchor) => patchMini({ anchor }),
       setMiniPlayerCollapsed: (collapsed) => patchMini({ collapsed }),
       setMiniPlayerVariant: (variant) => patchMini({ variant }),

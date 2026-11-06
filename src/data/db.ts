@@ -27,8 +27,10 @@ export interface LocalPlaylist {
   title: string;
   isPublic: boolean;
   count: number;
-  thumb?: string; // ảnh bìa: ảnh bài đầu tiên
+  thumb?: string; // ảnh bìa: ảnh tự chọn, không có thì ảnh bài đầu tiên
   updatedAt: number;
+  cover?: string; // ảnh bìa tự chọn
+  description?: string;
 }
 
 export interface RecentItem extends PlayContext {
@@ -73,6 +75,12 @@ function open(): DB | null {
       thumb TEXT, saved_at INTEGER NOT NULL, PRIMARY KEY (kind, id)
     );
   `);
+  // Cột thêm sau (bản cũ chưa có): ảnh bìa tự chọn và mô tả của playlist. Đã có rồi thì bỏ qua lỗi
+  for (const col of ['cover TEXT', 'description TEXT']) {
+    try {
+      db.execSync(`ALTER TABLE playlists ADD COLUMN ${col}`);
+    } catch {}
+  }
   return db;
 }
 
@@ -219,14 +227,18 @@ const newId = () => `pl_${Date.now().toString(36)}${Math.random().toString(36).s
 export function getPlaylists(): LocalPlaylist[] {
   return safe([], (d) =>
     d
-      .getAllSync<{ id: string; title: string; is_public: number; updated_at: number; count: number; thumb: string | null }>(
-        `SELECT p.id, p.title, p.is_public, p.updated_at,
+      .getAllSync<{ id: string; title: string; is_public: number; updated_at: number; count: number; thumb: string | null; cover: string | null; description: string | null }>(
+        `SELECT p.id, p.title, p.is_public, p.updated_at, p.cover, p.description,
                 (SELECT COUNT(*) FROM playlist_tracks pt WHERE pt.playlist_id = p.id) AS count,
                 (SELECT t.thumb FROM playlist_tracks pt JOIN tracks t ON t.id = pt.track_id
                  WHERE pt.playlist_id = p.id ORDER BY pt.position LIMIT 1) AS thumb
          FROM playlists p ORDER BY p.updated_at DESC`
       )
-      .map((r) => ({ id: r.id, title: r.title, isPublic: !!r.is_public, count: r.count, thumb: r.thumb ?? undefined, updatedAt: r.updated_at }))
+      // Ảnh bìa: ảnh tự chọn nếu có, không thì ảnh bài đầu tiên
+      .map((r) => ({
+        id: r.id, title: r.title, isPublic: !!r.is_public, count: r.count, thumb: r.cover ?? r.thumb ?? undefined, updatedAt: r.updated_at,
+        cover: r.cover ?? undefined, description: r.description ?? undefined,
+      }))
   );
 }
 
@@ -244,6 +256,17 @@ export function createPlaylist(title: string): string {
 
 export function renamePlaylist(id: string, title: string) {
   safe(undefined, (d) => d.runSync('UPDATE playlists SET title = ?, updated_at = ? WHERE id = ?', [title.trim() || 'Playlist mới', Date.now(), id]));
+  changed();
+}
+
+// Ảnh bìa tự chọn (đường dẫn file trong máy; null = bỏ, quay lại dùng ảnh bài đầu tiên)
+export function setPlaylistCover(id: string, uri: string | null) {
+  safe(undefined, (d) => d.runSync('UPDATE playlists SET cover = ?, updated_at = ? WHERE id = ?', [uri, Date.now(), id]));
+  changed();
+}
+
+export function setPlaylistDescription(id: string, text: string) {
+  safe(undefined, (d) => d.runSync('UPDATE playlists SET description = ?, updated_at = ? WHERE id = ?', [text.trim() || null, Date.now(), id]));
   changed();
 }
 
