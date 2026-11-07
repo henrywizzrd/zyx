@@ -19,6 +19,7 @@ import { addToPlaylist, createPlaylist, getPlaylists, playlistHas, useDbVersion 
 import { download, removeDownload, useDownloads } from '../data/downloads';
 import { musicSupported, ytmusic } from '../music/lazy';
 import { useScreenSize } from './ScreenSize';
+import { useGlass } from './Glass';
 import { playerProgress } from './PlayerTransition';
 const ORIENTATIONS = ['portrait', 'landscape-left', 'landscape-right'] as const;
 import { openComposer } from './PostComposer';
@@ -85,6 +86,7 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
   useDbVersion(); // playlist đổi thì vẽ lại (dấu tích, số bài)
   // Mở từ trong player: kính mờ tối giống bảng hàng chờ (chữ trắng), thay vì màu theo theme
   const [dark, setDark] = useState(false);
+  const glass = useGlass();
   const colors = useMemo(
     () =>
       dark
@@ -395,8 +397,9 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
                 )
               ) : (
                 <>
-                  {Platform.OS === 'ios' && <BlurView intensity={50} tint={glassTint} style={StyleSheet.absoluteFill} />}
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: Platform.OS === 'ios' ? `rgba(${glassRgb},0.72)` : surface }]} />
+                  {/* Kính theo thanh "Độ trong của kính"; bảng chứa chữ nên luôn giữ một lớp màu đủ đọc */}
+                  {Platform.OS === 'ios' && glass.intensity > 0 && <BlurView intensity={Math.max(20, glass.intensity)} tint={glassTint} style={StyleSheet.absoluteFill} />}
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: Platform.OS === 'ios' ? `rgba(${glassRgb},${glass.alpha(0.55, 0.8).toFixed(2)})` : surface }]} />
                 </>
               )}
               <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.edge, { borderColor: border }]} />

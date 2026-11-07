@@ -430,6 +430,7 @@ interface FxSource {
   id: string;
   playing: boolean;
   pos(): number; // vị trí đang phát trong bài (giây)
+  ended(): boolean; // đã phát tới cuối file (nguồn đọc dần hết file thì không tua / phát lại được nữa, phải mở lại)
   play(at: number): void; // phát từ vị trí at
   pause(): void;
   close(): void;
@@ -451,6 +452,7 @@ function streamSource(c: Ctx, id: string, uri: string): FxSource | null {
     id,
     playing: false,
     pos: () => (typeof node.currentTime === 'number' ? node.currentTime : -1),
+    ended: () => typeof node.duration === 'number' && node.duration > 0 && node.currentTime >= node.duration - 0.3,
     play(at) {
       try {
         node.seekToTime(Math.max(0, at));
@@ -502,6 +504,7 @@ async function bufferSource(c: Ctx, id: string, uri: string): Promise<FxSource> 
     id,
     playing: false,
     pos: () => (node ? offset + (c.currentTime - start) : -1),
+    ended: () => !!node && offset + (c.currentTime - start) >= buffer.duration - 0.3,
     play(at) {
       stopNode();
       if (!input || at >= buffer.duration - 0.05) return;
@@ -601,6 +604,16 @@ function applyMode(instant = false) {
   sync(true);
 }
 
+// Mở lại nguồn của bài đang phát (tiếng tạm về trình phát chính trong lúc mở)
+function reopen() {
+  if (wantMix !== 0) {
+    wantMix = 0;
+    setMix(0, 0.15);
+  }
+  dropSource();
+  if (curId) loadTrack(curId);
+}
+
 // Đồng bộ với trình phát chính. force: chạy lại ngay cả khi không lệch
 function sync(force = false) {
   if (mode === 'off') return;
@@ -610,6 +623,7 @@ function sync(force = false) {
   if (!src) {
     // Bài mới chưa sẵn: tiếng trả về trình phát chính, nguồn cũ tắt
     if (source?.playing) source.pause();
+    stuck = { p: -1, at: Date.now() };
     if (wantMix !== 0) {
       wantMix = 0;
       setMix(0, 0.15);
@@ -620,6 +634,7 @@ function sync(force = false) {
     // Dừng: chỉ dừng nguồn, KHÔNG tắt bộ âm thanh (tắt rồi bật lại khi app đang chạy nền có thể không lên tiếng nữa)
     if (src.playing) src.pause();
     deadSince = 0;
+    stuck = { p: -1, at: Date.now() };
     return;
   }
   // Bộ âm thanh không chạy (bị hệ thống dừng khi chạy nền, có cuộc gọi...): thử bật lại; quá 1,5 giây vẫn không chạy
@@ -635,10 +650,19 @@ function sync(force = false) {
       wantMix = 0;
       setMix(0, 0.2);
     }
+    stuck = { p: -1, at: Date.now() };
     return;
   }
   deadSince = 0;
   const want = expected();
+  const now = Date.now();
+  // Nguồn đã phát hết file mà trình phát chính quay lại đầu bài (lặp lại bài, tua lùi sau khi hết...): nguồn đọc dần
+  // không tua lại được nữa → mở lại nguồn từ file (đã có sẵn trong máy, rất nhanh). Lúc mở lại tiếng tạm về trình phát chính
+  if (src.ended() && want < src.pos() - 1) {
+    flog(`nguồn đã hết file (pos=${src.pos().toFixed(1)}) mà nhạc ở ${want.toFixed(1)}s → mở lại nguồn`);
+    reopen();
+    return;
+  }
   const drift = Math.abs(src.pos() - want);
   // Lệch xa (tua, lặp lại bài) thì theo ngay; lệch ít thì phải lệch 2 lần liền mới theo (tránh giật vì số báo về bị trễ).
   // Lúc app chạy nền số báo về thưa và trễ hơn → chỉ theo khi lệch hẳn (tua từ màn hình khoá), tránh tua tới tua lui làm mất tiếng
@@ -648,21 +672,15 @@ function sync(force = false) {
     if (src.playing) flog(`tua lại: lệch ${drift.toFixed(2)}s`);
     driftCount = 0;
     src.play(want);
-    stuck = { p: src.pos(), at: Date.now() };
   }
-  // Nguồn hiệu ứng đứng im (không nhích) hơn 2 giây trong khi nhạc vẫn chạy → coi như hỏng tiếng: trả tiếng về trình phát
-  // chính ngay, rồi thử phát lại nguồn hiệu ứng; chạy lại được thì lần báo sau tự chuyển về hiệu ứng
+  // Nguồn không nhích suốt 2,5 giây trong khi nhạc vẫn chạy (kể cả sau khi đã bảo nó phát / tua) → hỏng: mở lại nguồn.
+  // (Bản trước mỗi lần tua lại là đặt lại mốc, nên nguồn kẹt cứng mà không bao giờ bị phát hiện)
   const p = src.pos();
-  const now = Date.now();
   if (Math.abs(p - stuck.p) > 0.05) stuck = { p, at: now };
-  else if (now - stuck.at > 2000) {
-    flog(`nguồn đứng im ở ${p.toFixed(1)}s → trả tiếng về trình phát chính, phát lại`);
+  else if (now - stuck.at > 2500) {
+    flog(`nguồn đứng im ở ${p.toFixed(1)}s → mở lại nguồn`);
     stuck = { p, at: now };
-    if (wantMix !== 0) {
-      wantMix = 0;
-      setMix(0, 0.2);
-    }
-    src.play(want);
+    reopen();
     return;
   }
   if (now - lastLog > 2000) {

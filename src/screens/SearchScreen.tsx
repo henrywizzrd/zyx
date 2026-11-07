@@ -2,6 +2,7 @@ import { SplitPane } from '../components/SplitPane';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BlurView } from 'expo-blur';
+import { useGlass } from '../components/Glass';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { usePlayerPick } from '../player/PlayerProvider';
@@ -266,6 +267,7 @@ export function SearchScreen() {
   };
 
   const { text, textSecondary, accent } = theme.colors;
+  const glass = useGlass();
   // Màn hình ngang: thể loại nằm ở cột phải (khoảng 58% bề rộng)
   // Màn hình ngang: thể loại nằm ở cột phải của SplitPane (58% phần còn lại sau khe 8px), trừ lề 2 bên.
   // Tính đúng từng điểm ảnh (trước đây tính dư vài điểm nên ô thứ hai bị đẩy xuống dòng → chỉ còn 1 cột)
@@ -334,8 +336,8 @@ export function SearchScreen() {
   const searchBox = (
     <>
         {/* Ô tìm kiếm: kính mờ, viền màu nhấn của theme, chữ theo màu theme (hợp với mọi nền: trời sao, hoa rơi, ảnh...) */}
-        <View style={[styles.searchBox, { borderColor: focused ? accent : accent.slice(0, 7) + '99', backgroundColor: Platform.OS === 'ios' ? `rgba(${theme.colors.glassRgb},0.28)` : `rgba(${theme.colors.glassRgb},0.82)` }]}>
-          {Platform.OS === 'ios' && <BlurView intensity={30} tint={theme.colors.glassTint} style={StyleSheet.absoluteFill} />}
+        <View style={[styles.searchBox, { borderColor: focused ? accent : accent.slice(0, 7) + '99', backgroundColor: `rgba(${theme.colors.glassRgb},${glass.alpha(Platform.OS === 'ios' ? 0.08 : 0.35, Platform.OS === 'ios' ? 0.5 : 0.86).toFixed(2)})` }]}>
+          {Platform.OS === 'ios' && glass.intensity > 0 && <BlurView intensity={glass.intensity} tint={theme.colors.glassTint} style={StyleSheet.absoluteFill} />}
           <Ionicons name="search" size={20} color={text} />
           <TextInput
             value={query}
@@ -373,14 +375,14 @@ export function SearchScreen() {
                   </Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
                     {grp.items.map((g) => (
-                      <Pressable
+                      <GenreTile
                         key={g.params}
+                        title={g.title}
+                        color={g.color}
+                        width={tileW}
+                        height={tileH}
                         onPress={() => push({ type: 'genre', title: g.title, params: g.params, color: g.color })}
-                        style={({ pressed }) => [styles.tile, { width: tileW, height: tileH, backgroundColor: g.color, opacity: pressed ? 0.8 : 1 }]}
-                      >
-                        <Text numberOfLines={2} style={styles.tileTitle}>{g.title}</Text>
-                        <View style={styles.tileDeco} />
-                      </Pressable>
+                      />
                     ))}
                   </View>
                 </View>
@@ -391,10 +393,7 @@ export function SearchScreen() {
                 <Text style={{ color: text, fontSize: 18, fontWeight: '700', marginTop: 28, marginBottom: 14 }}>{tr('search.browseAll')}</Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
                   {genres.map((g) => (
-                    <Pressable key={g.id} onPress={() => runSearch(g.title)} style={[styles.tile, { width: tileW, height: tileH, backgroundColor: g.color }]}>
-                      <Text style={styles.tileTitle}>{g.title}</Text>
-                      <View style={styles.tileDeco} />
-                    </Pressable>
+                    <GenreTile key={g.id} title={g.title} color={g.color} width={tileW} height={tileH} onPress={() => runSearch(g.title)} />
                   ))}
                 </View>
               </>
@@ -692,6 +691,57 @@ export function SearchScreen() {
   );
 }
 
+// Biểu tượng cho ô thể loại theo tên (tiếng Anh / Việt); không khớp thì dùng nốt nhạc
+const GENRE_ICONS: [RegExp, React.ComponentProps<typeof Ionicons>['name']][] = [
+  [/sleep|ngủ/i, 'bed'],
+  [/chill|relax|thư giãn/i, 'moon'],
+  [/commute|đi lại|đường/i, 'bus'],
+  [/energ|năng lượng/i, 'flash'],
+  [/feel good|vui|happy/i, 'happy'],
+  [/focus|tập trung|study|học/i, 'locate'],
+  [/gaming|game|chơi/i, 'game-controller'],
+  [/party|tiệc/i, 'sparkles'],
+  [/romance|love|lãng mạn|tình/i, 'heart'],
+  [/sad|buồn/i, 'rainy'],
+  [/workout|fitness|tập luyện|thể dục/i, 'barbell'],
+  [/rock|metal/i, 'flame'],
+  [/jazz|blues|soul/i, 'musical-note'],
+  [/classical|cổ điển/i, 'library'],
+  [/hip.?hop|rap/i, 'mic'],
+  [/dance|electronic|edm/i, 'pulse'],
+  [/country|folk|dân ca/i, 'leaf'],
+  [/kids|family|trẻ em/i, 'balloon'],
+  [/k-?pop|j-?pop|pop/i, 'star'],
+];
+const iconFor = (title: string) => GENRE_ICONS.find(([re]) => re.test(title))?.[1] ?? 'musical-notes';
+const rgbOf = (hex: string) => {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h.slice(0, 6), 16);
+  return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+};
+
+// Ô thể loại kiểu "kính màu": kính pha màu thể loại (độ trong theo thanh "Độ mờ kính", vẫn giữ đủ màu để nhận ra),
+// viền sáng cùng màu, biểu tượng phát sáng ở góc
+function GenreTile({ title, color, width, height, onPress }: { title: string; color: string; width: number; height: number; onPress: () => void }) {
+  const { theme } = useTheme();
+  const glass = useGlass();
+  const rgb = rgbOf(color);
+  const dark = theme.colors.glassTint === 'dark';
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.tile, { width, height, borderWidth: 1.2, borderColor: `rgba(${rgb},0.8)`, opacity: pressed ? 0.75 : 1 }]}>
+      {Platform.OS === 'ios' && glass.intensity > 0 && <BlurView intensity={glass.intensity} tint={theme.colors.glassTint} style={StyleSheet.absoluteFill} />}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(${rgb},${glass.alpha(dark ? 0.3 : 0.4, dark ? 0.55 : 0.7).toFixed(2)})` }]} />
+      <Text numberOfLines={2} style={[styles.tileTitle, { color: dark ? '#FFFFFF' : theme.colors.text }]}>{title}</Text>
+      <Ionicons
+        name={iconFor(title)}
+        size={34}
+        color={dark ? `rgb(${rgb})` : '#FFFFFF'}
+        style={{ position: 'absolute', right: 12, bottom: 10, textShadowColor: `rgba(${rgb},0.9)`, textShadowRadius: 12 }}
+      />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   searchBox: {
     flexDirection: 'row',
@@ -705,7 +755,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   input: { flex: 1, fontSize: 15, fontWeight: '500', paddingVertical: 0 },
-  tile: { height: 96, borderRadius: 8, padding: 12, overflow: 'hidden' },
+  tile: { height: 96, borderRadius: 12, padding: 12, overflow: 'hidden' },
   tileTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
   tileDeco: {
     position: 'absolute',
