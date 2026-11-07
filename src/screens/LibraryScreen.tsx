@@ -76,7 +76,6 @@ export function LibraryScreen() {
   const t = useT();
   const profile = useProfile();
   // Cuối dải ảnh bìa: nền màu thì hoà vào màu nền, nền ảnh/video thì mờ hẳn để lộ nền chung
-  const fadeTo = theme.background.type === 'preset' ? theme.background.color : theme.background.color + '00';
   const [cropImg, setCropImg] = useState<PickedImage | null>(null); // ảnh bìa đang chờ cắt
   const [editOpen, setEditOpen] = useState(false); // popup sửa tên / hashtag
   const cropping = useRef(false);
@@ -456,26 +455,30 @@ export function LibraryScreen() {
         {profile.cover ? (
           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: COVER_H }}>
             <StretchyBg scrollY={scrollY} height={COVER_H}>
-            <Image source={{ uri: profile.cover }} resizeMode="cover" style={StyleSheet.absoluteFill} />
-            <LinearGradient
-              // Phần trên: phủ nhẹ màu tối/sáng của theme (ngược với màu chữ) cho chữ nổi.
-              // Phần dưới: mờ dần vào màu nền qua một đoạn dài, ảnh "tan" vào theme chứ không cắt ngang
-              colors={[
-                withAlpha(underCover, 0.12),
-                withAlpha(underCover, 0.3),
-                theme.background.type === 'preset' ? withAlpha(fadeTo, 0.7) : fadeTo,
-                fadeTo,
-              ]}
-              locations={[0, 0.4, 0.75, 1]}
+            {/* Ảnh bìa: rõ ở trên, nhoè dần xuống dưới, rồi TAN hẳn (mặt nạ làm trong suốt dần) vào nền phía sau.
+                Trước đây phủ một dải màu nền lên đáy ảnh: nền có hoạ tiết (trời sao, ảnh, video) thì lộ thành một đường viền */}
+            <MaskedView
               style={StyleSheet.absoluteFill}
-            />
+              maskElement={<LinearGradient colors={['#000', '#000', 'transparent']} locations={[0, 0.55, 1]} style={{ flex: 1 }} />}
+            >
+              <Image source={{ uri: profile.cover }} resizeMode="cover" style={StyleSheet.absoluteFill} />
+              <MaskedView style={StyleSheet.absoluteFill} maskElement={<LinearGradient colors={['transparent', '#000']} locations={[0.3, 0.75]} style={{ flex: 1 }} />}>
+                <Image source={{ uri: profile.cover }} resizeMode="cover" blurRadius={22} style={StyleSheet.absoluteFill} />
+              </MaskedView>
+              <LinearGradient
+                // Phủ nhẹ màu tối/sáng của theme (ngược với màu chữ) cho chữ nổi
+                colors={[withAlpha(underCover, 0.12), withAlpha(underCover, 0.3), withAlpha(underCover, 0.35)]}
+                locations={[0, 0.4, 1]}
+                style={StyleSheet.absoluteFill}
+              />
+            </MaskedView>
             </StretchyBg>
           </View>
         ) : (
           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 320 }}>
             <StretchyBg scrollY={scrollY} height={320}>
               <LinearGradient
-                colors={[theme.colors.glassTint === 'dark' ? profile.wallColor : profile.wallColor + '55', fadeTo]}
+                colors={[theme.colors.glassTint === 'dark' ? profile.wallColor : profile.wallColor + '55', withAlpha(profile.wallColor, 0)]}
                 style={StyleSheet.absoluteFill}
               />
             </StretchyBg>

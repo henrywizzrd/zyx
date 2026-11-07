@@ -86,7 +86,10 @@ export function UserScreen({ page }: { page: UserPage }) {
 
   // Ảnh bìa: rõ ở phía trên, mờ dần xuống dưới, rồi hoà vào nền
   const cover = (h: number | '100%') => (
-    <View style={{ height: h as any, width: '100%', backgroundColor: c?.wall ?? surface, overflow: 'hidden' }}>
+    <View style={{ height: h as any, width: '100%', overflow: 'hidden' }}>
+      {/* Cả khối tan dần (trong suốt) ở đáy, không phủ dải màu nền → nền có hoạ tiết (trời sao...) không lộ đường viền */}
+      <MaskedView style={StyleSheet.absoluteFill} maskElement={<LinearGradient colors={['#000', '#000', 'transparent']} locations={[0, 0.5, 1]} style={{ flex: 1 }} />}>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: c?.wall ?? surface }]} />
       {c?.cover ? (
         <>
           <Image source={{ uri: c.cover }} resizeMode="cover" style={StyleSheet.absoluteFill} />
@@ -98,8 +101,7 @@ export function UserScreen({ page }: { page: UserPage }) {
         </>
       ) : null}
       <LinearGradient colors={['rgba(0,0,0,0.25)', 'rgba(0,0,0,0)']} locations={[0, 0.4]} style={StyleSheet.absoluteFill} />
-      {/* Cuối ảnh bìa hoà dần vào nền (giống trang Hồ sơ của mình), không bị cắt ngang thành một đường */}
-      <LinearGradient colors={[bgHex + '00', fadeEnd]} locations={[0.45, 1]} style={StyleSheet.absoluteFill} />
+      </MaskedView>
     </View>
   );
 
