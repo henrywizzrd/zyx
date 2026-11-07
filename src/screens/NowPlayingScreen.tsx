@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Platform, Pressable, Share, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
@@ -15,7 +15,7 @@ import { audio, musicSupported } from '../music/lazy';
 import { QueueSheet } from '../components/QueueSheet';
 import { useSongMenu } from '../components/useSongMenu';
 import { useActionSheet, useSheetOpen } from '../components/ActionSheet';
-import { FxMode, setFxMode, useFxMode } from '../player/fxEngine';
+import { FxMode, fxLogText, setFxMode, useFxMode } from '../player/fxEngine';
 import { BlurView } from 'expo-blur';
 import RNMaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -115,7 +115,14 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     ];
     sheet.openActions(
       { title: t('fx.title'), subtitle: t('fx.hint'), icon: 'headset-outline' },
-      opts.map((o) => ({ label: o.label, icon: fxMode === o.id ? 'checkmark-circle' : o.icon, on: fxMode === o.id, run: () => setFxMode(o.id) }))
+      [
+        ...opts.map((o) => ({ label: o.label, icon: fxMode === o.id ? 'checkmark-circle' : o.icon, on: fxMode === o.id, run: () => setFxMode(o.id) })),
+        // Gửi nhật ký bộ hiệu ứng (dò lỗi mất tiếng khi chạy nền)
+        { label: t('fx.sendLog'), icon: 'bug-outline' as const, run: () => {
+            setTimeout(() => Share.share({ message: fxLogText() || '(trống)' }).catch(() => {}), 300);
+          },
+        },
+      ]
     );
   };
   const FxButton = (

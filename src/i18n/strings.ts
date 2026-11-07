@@ -386,6 +386,7 @@ export const vi = {
   'fx.hint': "Nên đeo tai nghe. Mỗi bài cần tải xong mới có hiệu ứng (vài giây đầu là tiếng thường)",
   'fx.needBuild': "Cần cài bản app mới (build mới trong Releases) để dùng chế độ âm thanh",
   'fx.trackFail': "Bài này chưa dùng được chế độ âm thanh, đang phát tiếng thường",
+  'fx.sendLog': "Gửi nhật ký âm thanh (dò lỗi)",
 };
 
 export type StringKey = keyof typeof vi;
@@ -755,4 +756,5 @@ export const en: Record<StringKey, string> = {
   'fx.hint': "Best with headphones. Each song needs to finish downloading first (the first few seconds play normally)",
   'fx.needBuild': "Install the new app build (from Releases) to use audio modes",
   'fx.trackFail': "Audio mode isn't available for this song, playing normally",
+  'fx.sendLog': "Send audio log (debug)",
 };

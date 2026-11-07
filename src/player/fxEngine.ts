@@ -86,6 +86,23 @@ export function useFxMode(): FxMode {
   );
 }
 
+// ---------- Nhật ký (để dò lỗi "đang nghe thì mất tiếng") ----------
+// Ghi lại trạng thái bộ hiệu ứng khoảng 2 giây một lần + các sự kiện; người dùng gửi từ bảng Chế độ âm thanh
+const LOG: string[] = [];
+export function flog(msg: string) {
+  const d = new Date();
+  const hh = `${d.getHours()}`.padStart(2, '0');
+  const mm = `${d.getMinutes()}`.padStart(2, '0');
+  const ss = `${d.getSeconds()}`.padStart(2, '0');
+  LOG.push(`${hh}:${mm}:${ss} [${AppState.currentState}] ${msg}`);
+  if (LOG.length > 400) LOG.shift();
+}
+export const fxLogText = () => LOG.join('\n');
+AppState.addEventListener('change', (st) => {
+  flog(`app → ${st}; mode=${mode} ctx=${ctx?.state ?? '-'}`);
+  if (st !== 'active' && mode !== 'off' && ctx && ctx.state !== 'running') ctx.resume().catch(() => {});
+});
+
 // ---------- Lấy file bài để giải mã ----------
 // Link phát của bài (giống trình phát chính đang dùng); PlayerProvider gắn vào lúc khởi động
 let resolver: ((id: string) => Promise<string>) | null = null;
@@ -515,7 +532,8 @@ let loadToken = 0;
 let failedId: string | null = null;
 let driftCount = 0;
 let stuck = { p: -1, at: 0 }; // vị trí nguồn hiệu ứng lần cuối còn nhích
-let deadSince = 0; // lúc bộ âm thanh bắt đầu không chạy (0 = đang chạy bình thường)
+let deadSince = 0;
+let lastLog = 0; // lúc bộ âm thanh bắt đầu không chạy (0 = đang chạy bình thường)
 let last = { playing: false, time: 0, at: 0 }; // lần báo gần nhất của trình phát chính
 
 const expected = () => (last.playing ? last.time + (Date.now() - last.at) / 1000 : last.time);
@@ -537,7 +555,9 @@ async function loadTrack(id: string) {
       s = streamSource(c, id, uri);
     } catch (e) {
       console.warn('[fx] stream', e);
+      flog(`stream lỗi: ${String(e)}`);
     }
+    flog(`mở bài ${id} bằng ${s ? 'stream' : 'buffer'}`);
     if (!s) s = await bufferSource(c, id, uri);
     if (token !== loadToken) {
       s.close();
@@ -549,6 +569,7 @@ async function loadTrack(id: string) {
   } catch (e) {
     if (token !== loadToken) return;
     console.warn('[fx] không dựng được bài', id, e);
+    flog(`không dựng được bài ${id}: ${String(e)}`);
     if (failedId !== id) showToast('fx.trackFail');
     failedId = id;
   }
@@ -604,9 +625,13 @@ function sync(force = false) {
   // Bộ âm thanh không chạy (bị hệ thống dừng khi chạy nền, có cuộc gọi...): thử bật lại; quá 1,5 giây vẫn không chạy
   // thì trả tiếng về trình phát chính cho khỏi im lặng, chạy lại được thì tự chuyển về hiệu ứng
   if (c.state !== 'running') {
-    c.resume().catch(() => {});
-    if (!deadSince) deadSince = Date.now();
+    c.resume().catch((e) => flog(`resume lỗi: ${String(e)}`));
+    if (!deadSince) {
+      deadSince = Date.now();
+      flog(`ctx không chạy: ${c.state}`);
+    }
     if (Date.now() - deadSince > 1500 && wantMix !== 0) {
+      flog('→ trả tiếng về trình phát chính (ctx không chạy)');
       wantMix = 0;
       setMix(0, 0.2);
     }
@@ -620,6 +645,7 @@ function sync(force = false) {
   const bg = AppState.currentState !== 'active';
   driftCount = drift > (bg ? 2.5 : 0.35) ? driftCount + 1 : 0;
   if (!src.playing || force || drift > (bg ? 4 : 1.5) || driftCount >= 2) {
+    if (src.playing) flog(`tua lại: lệch ${drift.toFixed(2)}s`);
     driftCount = 0;
     src.play(want);
     stuck = { p: src.pos(), at: Date.now() };
@@ -630,6 +656,7 @@ function sync(force = false) {
   const now = Date.now();
   if (Math.abs(p - stuck.p) > 0.05) stuck = { p, at: now };
   else if (now - stuck.at > 2000) {
+    flog(`nguồn đứng im ở ${p.toFixed(1)}s → trả tiếng về trình phát chính, phát lại`);
     stuck = { p, at: now };
     if (wantMix !== 0) {
       wantMix = 0;
@@ -638,7 +665,12 @@ function sync(force = false) {
     src.play(want);
     return;
   }
+  if (now - lastLog > 2000) {
+    lastLog = now;
+    flog(`ctx=${c.state} t=${c.currentTime.toFixed(1)} pos=${p.toFixed(1)} want=${want.toFixed(1)} mix=${mix.toFixed(2)} duck=${duck.toFixed(2)} vol=${audio().getUserVolume().toFixed(2)}`);
+  }
   if (wantMix !== 1) {
+    flog('→ chuyển sang bộ hiệu ứng');
     wantMix = 1;
     if (swellNext) {
       // Vừa bật chế độ: nhỏ xuống, chuyển sang bộ hiệu ứng, to dần lên

@@ -1,6 +1,7 @@
 import { SplitPane } from '../components/SplitPane';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { usePlayerPick } from '../player/PlayerProvider';
@@ -332,9 +333,10 @@ export function SearchScreen() {
 
   const searchBox = (
     <>
-        {/* Ô tìm kiếm kiểu Spotify */}
-        <View style={[styles.searchBox, { backgroundColor: text }]}>
-          <Ionicons name="search" size={20} color={theme.background.color} />
+        {/* Ô tìm kiếm: kính mờ, viền màu nhấn của theme, chữ theo màu theme (hợp với mọi nền: trời sao, hoa rơi, ảnh...) */}
+        <View style={[styles.searchBox, { borderColor: focused ? accent : accent.slice(0, 7) + '99', backgroundColor: Platform.OS === 'ios' ? `rgba(${theme.colors.glassRgb},0.28)` : `rgba(${theme.colors.glassRgb},0.82)` }]}>
+          {Platform.OS === 'ios' && <BlurView intensity={30} tint={theme.colors.glassTint} style={StyleSheet.absoluteFill} />}
+          <Ionicons name="search" size={20} color={text} />
           <TextInput
             value={query}
             onChangeText={onChangeText}
@@ -345,13 +347,14 @@ export function SearchScreen() {
             autoCorrect={false}
             autoCapitalize="none"
             placeholder={tr('search.placeholder')}
-            placeholderTextColor={theme.background.color + '99'}
-            style={[styles.input, { color: theme.background.color }]}
+            placeholderTextColor={textSecondary}
+            selectionColor={accent}
+            style={[styles.input, { color: text }]}
           />
-          {(suggestBusy || resultsBusy) && searching && <ActivityIndicator size="small" color={theme.background.color} />}
+          {(suggestBusy || resultsBusy) && searching && <ActivityIndicator size="small" color={text} />}
           {searching && (
             <Pressable onPress={clear} hitSlop={8}>
-              <Ionicons name="close" size={20} color={theme.background.color} />
+              <Ionicons name="close" size={20} color={text} />
             </Pressable>
           )}
         </View>
@@ -695,7 +698,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     height: 48,
-    borderRadius: 8,
+    borderRadius: 12,
+    borderWidth: 1.4,
+    overflow: 'hidden',
     paddingHorizontal: 14,
     marginTop: 16,
   },
