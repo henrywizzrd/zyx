@@ -8,7 +8,7 @@ import { drawLeaf, LEAF_COLORS, LEAF_SVGS, makeLeafPaths } from './leaves';
 import { BEAN_COLORS, BEAN_SVG } from './beans';
 import { drawBubble, drawFish, FISH_BODY, FISH_COLORS, FISH_FIN, FISH_TAIL } from './ocean';
 import { useScreenSize } from '../../components/ScreenSize';
-import { LOOSE_PETAL_PATH, meteorSkySvg, PETAL_PATH, sakuraSceneSvg } from './scenes';
+import { LOOSE_PETAL_PATH, meteorSkySvg, PETAL_PATH } from './scenes';
 
 // Hiệu ứng rơi nhẹ liên tục phía sau nội dung (bật/tắt trong trang Giao diện):
 //  - bộ Snow: bông tuyết
@@ -40,16 +40,16 @@ export function AmbientEffect({ paused }: { paused?: boolean }) {
   return null;
 }
 
-// Cảnh nền đứng yên của bộ Sakura / Mưa sao băng (vẽ một lần, không chạy liên tục nên luôn hiện, kể cả khi tắt hiệu ứng).
+// Cảnh nền đứng yên của bộ Mưa sao băng (trời sao) (vẽ một lần, không chạy liên tục nên luôn hiện, kể cả khi tắt hiệu ứng).
 // Người dùng đặt ảnh / video làm nền thì không vẽ cảnh (để thấy ảnh của họ)
 export function ThemeScene() {
   const { theme } = useTheme();
   const { width, height } = useScreenSize();
-  const kind = theme.background.type === 'preset' && (theme.preset === 'sakura' || theme.preset === 'meteor') ? theme.preset : null;
+  const kind = theme.background.type === 'preset' && theme.preset === 'meteor' ? theme.preset : null;
   const svg = useMemo(() => {
     if (!kind || width < 1 || height < 1) return null;
     try {
-      return Skia.SVG.MakeFromString(kind === 'sakura' ? sakuraSceneSvg(width, height) : meteorSkySvg(width, height));
+      return Skia.SVG.MakeFromString(meteorSkySvg(width, height));
     } catch (e) {
       console.warn('[theme] scene', e);
       return null;

@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GestureDetector, GestureStateManager, useNativeGesture, usePanGesture } from 'react-native-gesture-handler';
+import { GestureDetector, GestureHandlerRootView, GestureStateManager, useNativeGesture, usePanGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useTheme } from '../theme/ThemeProvider';
@@ -27,7 +27,9 @@ const SPRING = { damping: 32, stiffness: 210, mass: 1, overshootClamping: true }
 //  - Bấm một bài: phát bài đó. Nhấn giữ rồi kéo: đổi thứ tự. Nút ✕: bỏ khỏi hàng đợi. Bấm ra ngoài: đóng
 // Toàn bộ chuyển động chạy trên UI thread (Reanimated + Gesture Handler) nên ngón tay kéo tới đâu tấm theo tới đó, không khựng.
 // Tấm được dựng sẵn ngay từ đầu (nằm dưới đáy, ẩn) nên bấm mở là danh sách đã có, không bị hiện khung trống rồi mới hiện bài.
-export function QueueSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+// inModal: hiện trong cửa sổ riêng (Modal) luôn nằm trên cùng. Dùng ở player ngang: hai trang sách nghiêng 3D không đè lên
+// được nên khỏi phải duỗi phẳng chúng khi mở hàng chờ (ảnh bìa và lời đứng yên)
+export function QueueSheet({ visible, onClose, inModal }: { visible: boolean; onClose: () => void; inModal?: boolean }) {
   const { theme } = useTheme();
   const t = useT();
   const insets = useSafeAreaInsets();
@@ -185,9 +187,10 @@ export function QueueSheet({ visible, onClose }: { visible: boolean; onClose: ()
   );
 
   const current = queue[index] as QueueItem | undefined;
-  if (!armed) return <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={(e) => setBox(e.nativeEvent.layout)} />;
+  if (!armed && !inModal) return <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={(e) => setBox(e.nativeEvent.layout)} />;
+  if (inModal && !visible && !glass) return null;
 
-  return (
+  const body = (
     // zIndex cao: màn player ngang có hai "trang sách" nghiêng 3D chồm ra phía trước, không nâng lên thì chúng đè lên hàng chờ
     <View style={[StyleSheet.absoluteFill, { zIndex: 500, elevation: 50 }]} pointerEvents={visible ? 'auto' : 'none'} onLayout={(e) => setBox(e.nativeEvent.layout)}>
       {/* Phủ tối rất nhẹ phía sau, bấm vào để đóng */}
@@ -272,6 +275,12 @@ export function QueueSheet({ visible, onClose }: { visible: boolean; onClose: ()
       </Animated.View>
       </GestureDetector>
     </View>
+  );
+  if (!inModal) return body;
+  return (
+    <Modal visible transparent animationType="none" statusBarTranslucent supportedOrientations={['portrait', 'landscape-left', 'landscape-right']} onRequestClose={onClose}>
+      <GestureHandlerRootView style={{ flex: 1 }}>{body}</GestureHandlerRootView>
+    </Modal>
   );
 }
 

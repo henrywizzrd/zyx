@@ -46,8 +46,8 @@ function MiniScreen({ p, id, width, h }: { p: Palette; id: ThemePresetId; width:
           <View key={i} style={{ position: 'absolute', left: x * width, top: y * h, width: 7, height: 10, borderRadius: 5, backgroundColor: '#8A5A3B', opacity: 0.6, transform: [{ rotate: `${r}deg` }] }} />
         ))}
       {id === 'sakura' &&
-        [[0.7, 0.04, 16], [0.84, 0.1, 13], [0.62, 0.12, 10], [0.9, 0.0, 14]].map(([x, y, r], i) => (
-          <View key={`s${i}`} style={{ position: 'absolute', left: x * width, top: y * h, width: r, height: r, borderRadius: r, backgroundColor: '#F4B4C9', opacity: 0.9 }} />
+        [[0.12, 0.08, 20], [0.78, 0.2, -30], [0.42, 0.46, 60], [0.86, 0.6, 10], [0.2, 0.7, -50]].map(([x, y, r], i) => (
+          <View key={`s${i}`} style={{ position: 'absolute', left: x * width, top: y * h, width: 7, height: 9, borderTopLeftRadius: 5, borderTopRightRadius: 5, borderBottomLeftRadius: 4, borderBottomRightRadius: 1, backgroundColor: '#F4A6BF', transform: [{ rotate: `${r}deg` }] }} />
         ))}
       {id === 'meteor' && (
         <>

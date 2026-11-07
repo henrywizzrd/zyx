@@ -472,7 +472,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
             <View {...swipe.panHandlers} style={sideZone}>{SideButtons}</View>
           </View>
           {GrabBar}
-          <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} />
+          <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} inModal />
         </View>
       );
     }
@@ -486,7 +486,9 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     // Mỗi trang xoay quanh MÉP TRONG (phía gáy): mép trong đứng yên, mép ngoài nghiêng về phía người xem.
     // (Trước đây xoay quanh giữa trang: nửa trong lùi ra sau mặt phẳng màn hình nên bị nền che mất → trang bị cắt cụt)
     const SEAM = 140;
-    const flat = queueOpen || sheetOpen;
+    // Hàng chờ và các bảng thao tác giờ mở trong cửa sổ riêng (Modal) luôn nằm trên cùng, nên hai trang giữ nguyên độ nghiêng
+    // (trước đây phải duỗi phẳng ra cho bảng khỏi bị đè → ảnh bìa và lời xê dịch mỗi lần mở bảng)
+    const flat = false;
     return (
       <View style={{ flex: 1 }}>
         {Background}
@@ -535,7 +537,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
           </MaskedView>
         </View>
         {GrabBar}
-        <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} />
+        <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} inModal />
       </View>
     );
   }

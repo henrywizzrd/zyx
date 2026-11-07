@@ -22,23 +22,29 @@ function weekStart(d: Date): string {
   return x.toISOString().slice(0, 10);
 }
 
-async function fetchChart(yt: string | null) {
+async function fetchChart(yt: string | null, chartId = 'weekly:0:0') {
   const res = await fetch('https://charts.youtube.com/youtubei/v1/browse?alt=json&prettyPrint=false', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Origin: 'https://charts.youtube.com', Referer: 'https://charts.youtube.com/' },
     body: JSON.stringify({
       context: { client: { clientName: 'WEB_MUSIC_ANALYTICS', clientVersion: '2.0', hl: 'en', gl: 'US', theme: 'MUSIC' } },
       browseId: 'FEmusic_analytics_charts_home',
-      query: `chart_params_type=WEEK&perspective=CHART&flags=viral_video_chart&selected_chart=TRACKS&chart_params_id=weekly:0:0${yt ? `:${yt}` : ''}`,
+      query: `chart_params_type=WEEK&perspective=CHART&flags=viral_video_chart&selected_chart=TRACKS&chart_params_id=${chartId}${yt ? `:${yt}` : ''}`,
     }),
   });
   if (!res.ok) throw new Error(`YouTube Charts ${res.status}`);
   const data = await res.json();
   const content = data?.contents?.sectionListRenderer?.contents?.[0]?.musicAnalyticsSectionRenderer?.content;
   const items: any[] = content?.trackTypes?.[0]?.trackViews ?? [];
-  // Ngày kết thúc tuần nếu YouTube có ghi trong dữ liệu (dạng 20261030), không thì tính theo hôm nay
-  const m = JSON.stringify(content?.perspectiveMetadata ?? {}).match(/(20\d{2})(\d{2})(\d{2})/);
-  const week = m ? weekStart(new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00Z`)) : weekStart(new Date(Date.now() - 7 * 864e5));
+  // Tuần của bảng xếp hạng: lấy ngày MUỘN NHẤT YouTube ghi trong phần mô tả bảng (dạng 20261030 hoặc 2026-10-30),
+  // không thấy thì tính theo hôm nay lùi 1 tuần
+  const meta = JSON.stringify(content?.perspectiveMetadata ?? {});
+  const dates = [...meta.matchAll(/(20\d{2})-?(\d{2})-?(\d{2})/g)]
+    .map((x) => `${x[1]}-${x[2]}-${x[3]}`)
+    .filter((d) => !Number.isNaN(Date.parse(d)) && Date.parse(d) <= Date.now() + 864e5)
+    .sort();
+  const latest = dates[dates.length - 1];
+  const week = latest ? weekStart(new Date(`${latest}T00:00:00Z`)) : weekStart(new Date(Date.now() - 7 * 864e5));
   const rows = items
     .map((it, i) => {
       const id = it?.encryptedVideoId ?? it?.id;
@@ -56,30 +62,86 @@ async function fetchChart(yt: string | null) {
         : null;
     })
     .filter(Boolean) as any[];
-  return { week, rows, sampleKeys: items[0] ? Object.keys(items[0]) : [] };
+  return { week, rows, dates };
 }
 
-Deno.serve(async () => {
+// Lấy lại các tuần cũ (chạy tay 1 lần cho từng khu vực): ?backfill=52&region=VN
+// YouTube liệt kê sẵn các tuần có bảng xếp hạng (danh sách "dates"); thử vài kiểu mã tuần, kiểu nào trả về
+// bảng khác với tuần mới nhất (lượt xem khác) thì dùng kiểu đó cho các tuần còn lại
+const pad = (d: string) => d.replaceAll('-', '');
+const FORMATS: ((d: string) => string)[] = [
+  (d) => `weekly:${pad(d)}:0`,
+  (d) => `weekly:${d}:0`,
+  (d) => `weekly:${pad(d)}`,
+  (d) => `weekly:${d}`,
+];
+async function backfill(db: any, region: { code: string; yt: string | null }, weeks: number) {
+  const latest = await fetchChart(region.yt);
+  const latestViews = latest.rows[0]?.views;
+  // Gom ngày theo tuần, mỗi tuần lấy ngày muộn nhất (ngày kết thúc tuần)
+  const byWeek = new Map<string, string>();
+  for (const d of latest.dates) {
+    const w = weekStart(new Date(`${d}T00:00:00Z`));
+    if (!byWeek.has(w) || byWeek.get(w)! < d) byWeek.set(w, d);
+  }
+  const past = [...byWeek.entries()].filter(([w]) => w < latest.week).sort((x, y) => (x[0] < y[0] ? 1 : -1)).slice(0, weeks);
+  let fmt: ((d: string) => string) | null = null;
+  const tried: string[] = [];
+  let stored = 0;
+  for (const [w, end] of past) {
+    const candidates = fmt ? [fmt] : FORMATS;
+    for (const f of candidates) {
+      try {
+        const r = await fetchChart(region.yt, f(end));
+        if (!fmt) tried.push(`${f(end)} → ${r.rows.length} bài, top1 ${r.rows[0]?.title ?? '-'}`);
+        if (!r.rows.length || (!fmt && r.rows[0]?.views === latestViews)) continue; // không ra, hoặc vẫn là tuần mới nhất
+        fmt = f;
+        const { error } = await db
+          .from('trending_weekly')
+          .upsert(r.rows.map((x: any) => ({ ...x, region: region.code, week_start: w })), { onConflict: 'region,week_start,video_id' });
+        if (!error) stored++;
+        break;
+      } catch (e) {
+        if (!fmt) tried.push(`${f(end)} → lỗi ${String(e)}`);
+      }
+    }
+    if (!fmt) break; // không kiểu nào dùng được: dừng, báo lại các kiểu đã thử
+  }
+  return { latestWeek: latest.week, weeksAvailable: byWeek.size, stored, format: fmt ? fmt('YYYY-MM-DD') : null, tried };
+}
+
+Deno.serve(async (req) => {
+  const url = new URL(req.url);
+  const bf = Number(url.searchParams.get('backfill'));
+  if (bf > 0) {
+    const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const region = REGIONS.find((r) => r.code === (url.searchParams.get('region') ?? 'ZZ').toUpperCase()) ?? REGIONS[0];
+    const out = await backfill(db, region, Math.min(60, bf));
+    return new Response(JSON.stringify({ region: region.code, ...out }, null, 2), { headers: { 'Content-Type': 'application/json' } });
+  }
+
+  // ?force=1: bỏ qua giới hạn 6 giờ (để bấm Test thử lại)
+  const force = url.searchParams.get('force') === '1';
   const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
   const report: Record<string, unknown> = {};
   for (const r of REGIONS) {
     try {
       const { data: lastRow } = await db.from('trending_weekly').select('fetched_at').eq('region', r.code).order('fetched_at', { ascending: false }).limit(1);
       const last = lastRow?.[0]?.fetched_at ? new Date(lastRow[0].fetched_at).getTime() : 0;
-      if (Date.now() - last < MIN_HOURS_BETWEEN * 3600e3) {
+      if (!force && Date.now() - last < MIN_HOURS_BETWEEN * 3600e3) {
         report[r.code] = 'skip (vừa lấy gần đây)';
         continue;
       }
-      const { week, rows, sampleKeys } = await fetchChart(r.yt);
+      const { week, rows } = await fetchChart(r.yt);
       if (!rows.length) {
-        report[r.code] = { error: 'không đọc được bài nào', sampleKeys };
+        report[r.code] = { error: 'không đọc được bài nào' };
         continue;
       }
       const now = new Date().toISOString();
       const { error } = await db
         .from('trending_weekly')
         .upsert(rows.map((x) => ({ ...x, region: r.code, week_start: week, fetched_at: now })), { onConflict: 'region,week_start,video_id' });
-      report[r.code] = error ? { error: error.message } : { week, songs: rows.length, withViews: rows.filter((x) => x.views).length, sampleKeys };
+      report[r.code] = error ? { error: error.message } : { week, songs: rows.length, withViews: rows.filter((x) => x.views).length, top1: rows[0]?.title };
     } catch (e) {
       report[r.code] = { error: String(e) };
     }

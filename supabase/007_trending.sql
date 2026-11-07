@@ -29,6 +29,8 @@ drop policy if exists "trending: ai cũng xem được" on public.trending_weekl
 create policy "trending: ai cũng xem được" on public.trending_weekly for select using (true);
 revoke insert, update, delete on public.trending_weekly from anon, authenticated;
 grant select on public.trending_weekly to anon, authenticated;
+-- Edge Function ghi bằng service_role: project mới không tự cấp quyền cho bảng tạo bằng SQL
+grant select, insert, update, delete on public.trending_weekly to service_role;
 
 -- Top bài của một khu vực trong p_days ngày gần nhất.
 -- Điểm mỗi tuần: lượt xem nếu có, không thì theo hạng (hạng 1 = 100 điểm, hạng 100 = 1 điểm). Cộng dồn các tuần.

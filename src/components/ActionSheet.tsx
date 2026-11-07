@@ -1,12 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Animated as RNAnimated, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Share,
+  ActivityIndicator, Animated as RNAnimated, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Share,
   StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
+import { GestureDetector, GestureHandlerRootView, usePanGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, FadeIn, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useTheme } from '../theme/ThemeProvider';
@@ -20,6 +20,7 @@ import { download, removeDownload, useDownloads } from '../data/downloads';
 import { musicSupported, ytmusic } from '../music/lazy';
 import { useScreenSize } from './ScreenSize';
 import { playerProgress } from './PlayerTransition';
+const ORIENTATIONS = ['portrait', 'landscape-left', 'landscape-right'] as const;
 import { openComposer } from './PostComposer';
 
 // Bảng thao tác của app (thay cho action sheet / hộp thoại của iOS):
@@ -372,24 +373,7 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
     </View>
   );
 
-  return (
-    <SheetContext.Provider value={ctx}>
-      <SheetOpenContext.Provider value={!!content}>{children}</SheetOpenContext.Provider>
-
-      {/* Thông báo nhỏ ở đáy màn hình */}
-      {toastMsg && (
-        <RNAnimated.View
-          pointerEvents="none"
-          style={[
-            styles.toast,
-            { bottom: insets.bottom + 96, opacity: toastA, transform: [{ translateY: toastA.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] },
-          ]}
-        >
-          <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>{toastMsg}</Text>
-        </RNAnimated.View>
-      )}
-
-      {content && (
+  const sheetView = content ? (
         <View style={[StyleSheet.absoluteFill, { zIndex: 300 }]} pointerEvents={shown ? 'auto' : 'none'}>
           <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.45)' }, backdropStyle]}>
             <Pressable style={{ flex: 1 }} onPress={close} />
@@ -449,7 +433,35 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
             </Animated.View>
           </KeyboardAvoidingView>
         </View>
+  ) : null;
+
+  return (
+    <SheetContext.Provider value={ctx}>
+      <SheetOpenContext.Provider value={!!content}>{children}</SheetOpenContext.Provider>
+
+      {/* Thông báo nhỏ ở đáy màn hình */}
+      {toastMsg && (
+        <RNAnimated.View
+          pointerEvents="none"
+          style={[
+            styles.toast,
+            { bottom: insets.bottom + 96, opacity: toastA, transform: [{ translateY: toastA.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] },
+          ]}
+        >
+          <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>{toastMsg}</Text>
+        </RNAnimated.View>
       )}
+
+      {content &&
+        (dark ? (
+          // Mở trong player: bảng nằm trong cửa sổ riêng (Modal) luôn ở trên cùng. Nhờ vậy hai trang sách nghiêng 3D của
+          // player ngang không đè lên bảng, không phải duỗi phẳng chúng ra nữa (ảnh bìa và lời đứng yên khi mở bảng)
+          <Modal visible transparent animationType="none" statusBarTranslucent supportedOrientations={ORIENTATIONS} onRequestClose={close}>
+            <GestureHandlerRootView style={{ flex: 1 }}>{sheetView}</GestureHandlerRootView>
+          </Modal>
+        ) : (
+          sheetView
+        ))}
     </SheetContext.Provider>
   );
 }
