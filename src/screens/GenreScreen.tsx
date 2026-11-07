@@ -87,7 +87,6 @@ export function GenreScreen({ page }: { page: GenrePage }) {
     }
   };
 
-  const fadeTo = theme.background.type === 'preset' ? bg : bg + '00';
 
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -95,7 +94,7 @@ export function GenreScreen({ page }: { page: GenrePage }) {
         {/* Màu của ô thể loại tan dần vào nền, tên thể loại đè lên */}
         <View style={{ height: HERO_H + pad.top }}>
           <StretchyBg scrollY={scrollY} height={HERO_H + pad.top}>
-            <LinearGradient colors={[page.color, page.color + 'AA', fadeTo]} locations={[0, 0.5, 1]} style={StyleSheet.absoluteFill} />
+            <LinearGradient colors={[page.color, page.color + 'AA', page.color.slice(0, 7) + '00']} locations={[0, 0.5, 1]} style={StyleSheet.absoluteFill} />
           </StretchyBg>
           <Pressable onPress={goBack} hitSlop={10} style={[styles.back, { top: pad.top + 6, left: PAD }]}>
             <Ionicons name="chevron-back" size={24} color="#FFFFFF" />

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { FadeBottom } from '../components/FadeBottom';
 import { ActivityIndicator, PixelRatio, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -107,7 +108,6 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
   };
 
   // Cuối ảnh lớn mờ dần vào màu nền (nền ảnh/video thì mờ hẳn để lộ nền chung)
-  const fadeTo = theme.background.type === 'preset' ? theme.colors.bg : theme.colors.bg + '00';
   const imgSize = Math.round(Math.max(width, HERO_H) * PixelRatio.get());
 
   return (
@@ -117,6 +117,7 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
         <View style={{ height: HERO_H }}>
           {/* Ảnh + lớp mờ: giãn ra khi kéo quá đầu trang */}
           <StretchyBg scrollY={scrollY} height={HERO_H}>
+            <FadeBottom from={0.5}>
             {thumb ? (
               <SmartImage url={thumb} size={imgSize} style={StyleSheet.absoluteFill} />
             ) : (
@@ -124,7 +125,8 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
                 <Ionicons name="person" size={96} color={textSecondary} />
               </View>
             )}
-            <LinearGradient colors={['rgba(0,0,0,0.25)', 'rgba(0,0,0,0)', fadeTo]} locations={[0, 0.45, 1]} style={StyleSheet.absoluteFill} />
+            <LinearGradient colors={['rgba(0,0,0,0.25)', 'rgba(0,0,0,0)']} locations={[0, 0.45]} style={StyleSheet.absoluteFill} />
+            </FadeBottom>
           </StretchyBg>
           <Pressable onPress={goBack} hitSlop={10} style={[styles.back, { top: pad.top + 8, left: PAD }]}>
             <Ionicons name="chevron-back" size={24} color="#FFFFFF" />

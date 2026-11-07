@@ -8,7 +8,7 @@ import { BackHandler } from 'react-native';
 //  - source 'shared': playlist công khai của một người dùng (trên server ZYX), id = id trên server
 export type CollectionPage = {
   type: 'collection';
-  source: 'yt' | 'local' | 'liked' | 'shared';
+  source: 'yt' | 'local' | 'liked' | 'shared' | 'trending'; // trending: top Tháng / Năm cộng dồn (id dạng trending:VN:year)
   kind: 'playlist' | 'album';
   id: string;
   title: string;

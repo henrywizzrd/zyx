@@ -1,4 +1,5 @@
 import { SplitPane } from '../components/SplitPane';
+import { loadTrendingSummed, trendingId } from '../data/trending';
 import { PostCard } from '../components/PostCard';
 import { feedKey, useFeed } from '../components/FeedList';
 import RNMaskedView from '@react-native-masked-view/masked-view';
@@ -88,26 +89,28 @@ const RANGE_MATCH: Record<TrendingRange, RegExp> = {
   year: /year|năm|yearly|20\d\d/i,
 };
 type TrendingData = { title: string; playlistId?: string; songs: Track[]; gathering?: { have: number; need: number } };
-// Tháng / Năm: YouTube Music chỉ có bảng xếp hạng tuần → server ZYX (Supabase) lưu bảng xếp hạng tuần của YouTube Charts
-// mỗi ngày rồi cộng dồn: Tháng = các tuần trong 31 ngày gần nhất, Năm = 365 ngày. Mới chạy thì chưa đủ tuần (gathering)
-async function loadTrendingSummed(range: 'month' | 'year', region: TrendingRegion): Promise<TrendingData | null> {
-  const { supabase } = require('../backend/supabase') as typeof import('../backend/supabase');
-  const { data, error } = await supabase.rpc('trending_top', { p_region: region, p_days: range === 'month' ? 31 : 365, p_limit: 50 });
-  if (error) throw error;
-  const rows = (data ?? []) as { video_id: string; title: string; artist: string | null; thumb: string | null; total_weeks: number }[];
-  if (!rows.length) return null;
-  const songs: Track[] = rows.map((r) => ({ id: r.video_id, title: r.title, artist: r.artist ?? '', thumb: r.thumb ?? undefined, color: '#333333', duration: 0 }));
-  const need = range === 'month' ? 4 : 52;
-  const have = rows[0].total_weeks ?? 0;
-  return { title: '', songs, gathering: have < need ? { have, need } : undefined };
-}
-
 async function loadTrending(range: TrendingRange, region: TrendingRegion): Promise<TrendingData | null> {
-  if (range !== 'week') return loadTrendingSummed(range, region);
+  if (range !== 'week') {
+    const r = await loadTrendingSummed(range, region);
+    return r && { title: '', playlistId: trendingId(region, range), ...r };
+  }
+  // Tuần: ưu tiên bảng "Top songs" của YouTube Charts server đã lưu; chưa có thì lấy từ trang Charts của YouTube Music
+  try {
+    const r = await loadTrendingSummed('week', region);
+    if (r?.songs.length) return { title: '', playlistId: trendingId(region, 'week'), songs: r.songs };
+  } catch (e) {
+    console.warn('[trending] week', e);
+  }
   const shelves = await charts(region);
   const cards = shelves.flatMap((s) => s.cards.map((c) => ({ ...c, shelf: s.title })));
   const lists = cards.filter((c) => c.kind === 'playlist');
-  const pick = lists.find((c) => RANGE_MATCH[range].test(`${c.title} ${c.subtitle} ${c.shelf}`)) ?? (range === 'week' ? lists[0] : undefined);
+  // Chọn đúng bảng BÀI HÁT (trang Charts còn có Top video, Top live performances...): bài hát được cộng điểm, video / live bị trừ
+  const score = (c: (typeof lists)[number]) => {
+    const txt = `${c.title} ${c.subtitle} ${c.shelf}`;
+    return (/songs?|bài hát/i.test(txt) ? 3 : 0) + (RANGE_MATCH[range].test(txt) ? 1 : 0) - (/video|live|performance|shorts?|trending/i.test(txt) ? 5 : 0);
+  };
+  const best = [...lists].sort((a, b) => score(b) - score(a))[0];
+  const pick = best && score(best) > 0 ? best : lists.find((c) => !/video|live|performance/i.test(`${c.title} ${c.shelf}`));
   if (pick) {
     const col = await ytmusic().getCollection('playlist', pick.id);
     return { title: pick.title, playlistId: pick.id, songs: col.songs.slice(0, 50).map(toTrack) };
@@ -321,6 +324,8 @@ function useOpenContext() {
     if (r.kind === 'local') return push({ type: 'collection', source: 'local', kind: 'playlist', id: r.id, title: r.title, thumb: r.thumb });
     if (r.kind === 'shared') return push({ type: 'collection', source: 'shared', kind: 'playlist', id: r.id, title: r.title, thumb: r.thumb });
     if (r.kind === 'album') return push({ type: 'collection', source: 'yt', kind: 'album', id: r.id, title: r.title, thumb: r.thumb });
+    if (r.kind === 'chart' && r.id.startsWith('trending:')) return push({ type: 'collection', source: 'trending', kind: 'playlist', id: r.id, title: r.title });
+    if (r.kind === 'chart' && r.id === 'chart') return; // danh sách cũ không mở lại được
     if (r.kind === 'playlist' || r.kind === 'chart') return push({ type: 'collection', source: 'yt', kind: 'playlist', id: r.id, title: r.title, thumb: r.thumb });
     if (r.kind === 'artist') return push({ type: 'artist', id: r.id, name: r.title, thumb: r.thumb });
     if (r.kind === 'mix') return startMix({ id: r.id, title: r.title, artist: '', color: '#2A2A2A', duration: 0, thumb: r.thumb }, r.title);
@@ -486,7 +491,9 @@ function Trending() {
           ))}
           {data.playlistId && (
             <Pressable
-              onPress={() => push({ type: 'collection', source: 'yt', kind: 'playlist', id: data.playlistId!, title: chartTitle })}
+              onPress={() =>
+                push({ type: 'collection', source: data.playlistId!.startsWith('trending:') ? 'trending' : 'yt', kind: 'playlist', id: data.playlistId!, title: chartTitle })
+              }
               style={{ paddingVertical: 8 }}
             >
               <Text style={{ color: textSecondary, fontSize: 14, fontWeight: '700' }}>{t('home.seeAll')}</Text>

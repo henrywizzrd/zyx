@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { audio } from '../music/lazy';
 import { showToast } from '../components/toastBridge';
@@ -221,59 +221,68 @@ function buildChain(c: Ctx, m: FxMode) {
   if (m === '8d') {
     // Tiếng chạy vòng quanh đầu (khoảng 9 giây một vòng):
     //  - trái ↔ phải: StereoPanner lắc theo sóng sin
-    //  - lúc ở phía sau đầu: nhỏ hơn và đục hơn một chút (lọc bớt tiếng cao), theo sóng cos (lệch 1/4 vòng)
+    //  - lúc vòng ra sau đầu: chuyển dần sang một nhánh đã lọc bớt tiếng cao (đục, nhỏ hơn), theo sóng cos (lệch 1/4 vòng).
+    //    Bộ lọc đứng yên, chỉ đổi âm lượng giữa hai nhánh. (Bản trước kéo tần số bộ lọc liên tục → tiếng bị rè)
     //  - thêm chút vang phòng nhỏ cho có không gian
+    //  - tổng âm lượng luôn dưới mức tối đa một khoảng (không bị vỡ tiếng ở đoạn nhạc to)
     const RATE = 1 / 9;
     const pan = keep(c.createStereoPanner());
-    const lp = keep(c.createBiquadFilter());
-    lp.type = 'lowpass';
-    lp.frequency.value = 12000;
-    lp.Q.value = 0.5;
-    const dip = keep(c.createGain());
-    dip.gain.value = 0.9;
-
     const sin = c.createOscillator();
     sin.frequency.value = RATE;
     const panDepth = keep(c.createGain());
     // Lan dần ra hai bên tai: độ xoay tăng từ 0 lên hết trong ~2,5 giây
     panDepth.gain.setValueAtTime(0, c.currentTime);
-    panDepth.gain.linearRampToValueAtTime(0.92, c.currentTime + 2.5);
+    panDepth.gain.linearRampToValueAtTime(0.9, c.currentTime + 2.5);
     sin.connect(panDepth);
     panDepth.connect(pan.pan);
 
+    // Nhánh trước mặt (trong) và nhánh sau đầu (đục)
+    const front = keep(c.createGain());
+    const back = keep(c.createGain());
+    const lp = keep(c.createBiquadFilter());
+    lp.type = 'lowpass';
+    lp.frequency.value = 3800;
+    lp.Q.value = 0.6;
+    front.gain.value = 0.42; // 0.42 ± 0.4 → 0.82 (trước) .. 0.02 (sau)
+    back.gain.value = 0.32; // 0.32 ∓ 0.3 → 0.02 (trước) .. 0.62 (sau)
     const cos = c.createOscillator();
     cos.setPeriodicWave(c.createPeriodicWave(new Float32Array([0, 1]), new Float32Array([0, 0])));
     cos.frequency.value = RATE;
-    const lpDepth = keep(c.createGain());
-    lpDepth.gain.value = 6000; // 6 kHz (sau đầu) .. 18 kHz (trước mặt)
-    const dipDepth = keep(c.createGain());
-    dipDepth.gain.value = 0.1; // 0.8 (sau) .. 1.0 (trước)
-    cos.connect(lpDepth);
-    lpDepth.connect(lp.frequency);
-    cos.connect(dipDepth);
-    dipDepth.connect(dip.gain);
+    const fDepth = keep(c.createGain());
+    fDepth.gain.value = 0.4;
+    const bDepth = keep(c.createGain());
+    bDepth.gain.value = -0.3;
+    cos.connect(fDepth);
+    fDepth.connect(front.gain);
+    cos.connect(bDepth);
+    bDepth.connect(back.gain);
     keep(sin);
     keep(cos);
     sources.push(sin, cos);
     sin.start();
     cos.start();
 
+    const mixBus = keep(c.createGain());
+    mixBus.gain.value = 1;
     inp.connect(pan);
+    pan.connect(front);
     pan.connect(lp);
-    lp.connect(dip);
-    dip.connect(out);
+    lp.connect(back);
+    front.connect(mixBus);
+    back.connect(mixBus);
+    mixBus.connect(out);
 
     const room = keep(c.createConvolver());
-    room.buffer = impulse(c, 0.9, 0.35, 0.7);
+    room.buffer = impulse(c, 0.8, 0.3, 0.75);
     const wet = keep(c.createGain());
-    wet.gain.value = 0.22;
-    dip.connect(room);
+    wet.gain.value = 0.12;
+    mixBus.connect(room);
     room.connect(wet);
     wet.connect(out);
   } else if (m === 'hall') {
     // Khán phòng: tiếng gốc + tiếng vang dài ~2,4s, đến muộn hơn một chút (phòng lớn), tiếng vang hơi tối
     const dry = keep(c.createGain());
-    dry.gain.value = 0.78;
+    dry.gain.value = 0.7; // chừa khoảng trống âm lượng cho tiếng vang cộng vào (không vỡ tiếng)
     inp.connect(dry);
     dry.connect(out);
 
@@ -285,7 +294,7 @@ function buildChain(c: Ctx, m: FxMode) {
     tone.type = 'lowpass';
     tone.frequency.value = 6500;
     const wet = keep(c.createGain());
-    wet.gain.value = 0.55;
+    wet.gain.value = 0.42;
     inp.connect(pre);
     pre.connect(hall);
     hall.connect(tone);
@@ -505,6 +514,8 @@ let source: FxSource | null = null; // nguồn đã sẵn sàng (đúng bài cur
 let loadToken = 0;
 let failedId: string | null = null;
 let driftCount = 0;
+let stuck = { p: -1, at: 0 }; // vị trí nguồn hiệu ứng lần cuối còn nhích
+let deadSince = 0; // lúc bộ âm thanh bắt đầu không chạy (0 = đang chạy bình thường)
 let last = { playing: false, time: 0, at: 0 }; // lần báo gần nhất của trình phát chính
 
 const expected = () => (last.playing ? last.time + (Date.now() - last.at) / 1000 : last.time);
@@ -585,20 +596,47 @@ function sync(force = false) {
     return;
   }
   if (!last.playing) {
-    if (src.playing) {
-      src.pause();
-      c.suspend().catch(() => {});
+    // Dừng: chỉ dừng nguồn, KHÔNG tắt bộ âm thanh (tắt rồi bật lại khi app đang chạy nền có thể không lên tiếng nữa)
+    if (src.playing) src.pause();
+    deadSince = 0;
+    return;
+  }
+  // Bộ âm thanh không chạy (bị hệ thống dừng khi chạy nền, có cuộc gọi...): thử bật lại; quá 1,5 giây vẫn không chạy
+  // thì trả tiếng về trình phát chính cho khỏi im lặng, chạy lại được thì tự chuyển về hiệu ứng
+  if (c.state !== 'running') {
+    c.resume().catch(() => {});
+    if (!deadSince) deadSince = Date.now();
+    if (Date.now() - deadSince > 1500 && wantMix !== 0) {
+      wantMix = 0;
+      setMix(0, 0.2);
     }
     return;
   }
-  if (c.state !== 'running') c.resume().catch(() => {});
+  deadSince = 0;
   const want = expected();
   const drift = Math.abs(src.pos() - want);
-  // Lệch xa (tua, lặp lại bài) thì theo ngay; lệch ít thì phải lệch 2 lần liền mới theo (tránh giật vì số báo về bị trễ)
-  driftCount = drift > 0.35 ? driftCount + 1 : 0;
-  if (!src.playing || force || drift > 1.5 || driftCount >= 2) {
+  // Lệch xa (tua, lặp lại bài) thì theo ngay; lệch ít thì phải lệch 2 lần liền mới theo (tránh giật vì số báo về bị trễ).
+  // Lúc app chạy nền số báo về thưa và trễ hơn → chỉ theo khi lệch hẳn (tua từ màn hình khoá), tránh tua tới tua lui làm mất tiếng
+  const bg = AppState.currentState !== 'active';
+  driftCount = drift > (bg ? 2.5 : 0.35) ? driftCount + 1 : 0;
+  if (!src.playing || force || drift > (bg ? 4 : 1.5) || driftCount >= 2) {
     driftCount = 0;
     src.play(want);
+    stuck = { p: src.pos(), at: Date.now() };
+  }
+  // Nguồn hiệu ứng đứng im (không nhích) hơn 2 giây trong khi nhạc vẫn chạy → coi như hỏng tiếng: trả tiếng về trình phát
+  // chính ngay, rồi thử phát lại nguồn hiệu ứng; chạy lại được thì lần báo sau tự chuyển về hiệu ứng
+  const p = src.pos();
+  const now = Date.now();
+  if (Math.abs(p - stuck.p) > 0.05) stuck = { p, at: now };
+  else if (now - stuck.at > 2000) {
+    stuck = { p, at: now };
+    if (wantMix !== 0) {
+      wantMix = 0;
+      setMix(0, 0.2);
+    }
+    src.play(want);
+    return;
   }
   if (wantMix !== 1) {
     wantMix = 1;

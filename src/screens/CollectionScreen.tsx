@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { loadTrendingSummed, parseTrendingId } from '../data/trending';
+import { FadeBottom } from '../components/FadeBottom';
 import { ActivityIndicator, Image, PixelRatio, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -84,6 +86,26 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
     };
   }, [page, retry]);
 
+  // Top Tháng / Năm cộng dồn từ bảng xếp hạng tuần (server ZYX)
+  useEffect(() => {
+    if (page.source !== 'trending') return;
+    const p = parseTrendingId(page.id);
+    if (!p) return setStatus('error');
+    let dead = false;
+    setStatus('loading');
+    loadTrendingSummed(p.range, p.region, 100)
+      .then((r) => {
+        if (dead) return;
+        setRows(r?.songs ?? []);
+        setInfo({ title: page.title, subtitle: 'YouTube Charts', thumb: r?.songs[0]?.thumb });
+        setStatus('done');
+      })
+      .catch(() => !dead && setStatus('error'));
+    return () => {
+      dead = true;
+    };
+  }, [page, retry]);
+
   // Playlist công khai của một người dùng: tải từ server ZYX
   useEffect(() => {
     if (page.source !== 'shared') return;
@@ -124,6 +146,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
     if (page.source === 'liked') return { kind: 'liked', id: 'liked', title: t('home.liked') };
     if (page.source === 'local') return { kind: 'local', id: page.id, title: info.title, thumb: info.thumb };
     if (page.source === 'shared') return { kind: 'shared', id: page.id, title: info.title, thumb: info.thumb };
+    if (page.source === 'trending') return { kind: 'chart', id: page.id, title: info.title, thumb: info.thumb };
     return { kind: page.kind, id: page.id, title: info.title, thumb: info.thumb };
   }, [page, info.title, info.thumb, t]);
 
@@ -191,7 +214,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
       });
     }
     // Đăng lên hồ sơ: mở màn soạn bài, playlist / album này được đính kèm sẵn
-    if (page.source !== 'shared') {
+    if (page.source !== 'shared' && page.source !== 'trending') {
       actions.push({
         label: t('sheet.postToProfile'),
         icon: 'create-outline',
@@ -204,7 +227,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
                 title: info.title,
                 subtitle: info.owner?.name || (page.source === 'yt' ? info.subtitle : '') || '',
                 thumb: info.thumb,
-                source: page.source,
+                source: page.source as Exclude<typeof page.source, 'trending'>,
                 ownerId: page.source === 'local' ? currentAccount()?.id : undefined,
               }),
             250
@@ -238,7 +261,6 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
   // ---- Phần đầu trang
   const heroH = Math.min(Math.round(width * 1.05), 480);
   const { scrollY, onScroll } = useStretchScroll(); // ảnh bìa giãn ra khi kéo quá đầu trang
-  const fadeTo = theme.background.type === 'preset' ? bg : bg + '00';
   const imgSize = Math.round(width * PixelRatio.get());
   const meta = [info.subtitle].filter(Boolean).join(' • ');
 
@@ -309,6 +331,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
     <View>
       <View style={{ height: heroH, marginHorizontal: -(pad.left + 16) }}>
         <StretchyBg scrollY={scrollY} height={heroH}>
+        <FadeBottom from={0.55}>
         {info.thumb ? (
           <SmartImage url={info.thumb} size={imgSize} style={StyleSheet.absoluteFill} />
         ) : page.source === 'liked' ? (
@@ -321,7 +344,8 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
           </View>
         )}
         {/* Tối nhẹ ở đỉnh cho nút back dễ thấy, cạnh dưới tan dần vào nền */}
-        <LinearGradient colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0)', fadeTo]} locations={[0, 0.35, 1]} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0)']} locations={[0, 0.35]} style={StyleSheet.absoluteFill} />
+        </FadeBottom>
         </StretchyBg>
         <View style={[styles.topBar, { top: pad.top + 6, left: pad.left + 16, right: pad.right + 16 }]}>
           <Pressable onPress={goBack} hitSlop={10} style={styles.glassBtn}>
