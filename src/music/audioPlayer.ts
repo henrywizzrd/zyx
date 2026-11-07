@@ -21,9 +21,10 @@ let trackListener: ((key: string) => void) | null = null;
 // tiếng thật phát ra từ bộ hiệu ứng (src/player/fxEngine.ts)
 let userVol = 1;
 let fxMix = 0;
+let duck = 1; // hạ nhỏ tạm thời khi đổi chế độ âm thanh (nhỏ xuống rồi to dần lên)
 const volListeners = new Set<(v: number) => void>();
 function applyVolume() {
-  if (pl) pl.volume = userVol * (1 - fxMix);
+  if (pl) pl.volume = userVol * (1 - fxMix) * duck;
 }
 export function getUserVolume() {
   return userVol;
@@ -38,6 +39,10 @@ export function onUserVolume(cb: (v: number) => void) {
   return () => {
     volListeners.delete(cb);
   };
+}
+export function setDuck(d: number) {
+  duck = Math.max(0, Math.min(1, d));
+  applyVolume();
 }
 export function setFxMix(m: number) {
   fxMix = Math.max(0, Math.min(1, m));

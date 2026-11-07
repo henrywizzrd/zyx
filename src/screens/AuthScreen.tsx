@@ -216,10 +216,8 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top, paddingBottom: insets.bottom + 24, paddingHorizontal: 24 }}
         >
-          {/* Chữ ZYX: khoảng giữa nửa trên màn hình */}
-          <View style={{ height: Math.max(220, height * 0.36), alignItems: 'center', justifyContent: 'center' }}>
-            <GradientLogo />
-          </View>
+          {/* Phần đăng nhập ở trên (bàn phím mở ra không che ô nhập), chữ ZYX nằm dưới */}
+          <View style={{ height: 36 }} />
 
           {/* Gạch ngang, giữa là hình người + Login / Sign up */}
           <View style={styles.divider}>
@@ -326,6 +324,11 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
               <Text style={styles.localNote}>{t('auth.localNote')}</Text>
             </Animated.View>
           )}
+
+          {/* Chữ ZYX: phần trống còn lại phía dưới */}
+          <View style={{ flex: 1, minHeight: Math.max(200, height * 0.3), alignItems: 'center', justifyContent: 'center' }}>
+            <GradientLogo />
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 

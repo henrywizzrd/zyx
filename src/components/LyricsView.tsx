@@ -7,7 +7,6 @@ import { useT } from '../i18n';
 import { usePlayerTransition } from './PlayerTransition';
 import RNMaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { LyricLook } from '../theme/types';
 
 const USE_NATIVE = Platform.OS !== 'web';
 // Kiểu khai báo của thư viện chưa khớp React 19, ép kiểu để dùng như component bình thường
@@ -107,78 +106,22 @@ function MusicNotes({ active }: { active: boolean }) {
   );
 }
 
-// ---- Kiểu KARAOKE: câu đang hát được tô sáng dần từ trái sang phải theo đúng nhịp bài hát.
-// Chữ làm "khuôn" (mặt nạ), phía sau là dải sáng trượt ngang; tự đọc thời gian bài hát ~20 lần/giây
-function KaraokeLine({ text, start, end, readTime, style }: { text: string; start: number; end: number; readTime: () => number; style: any }) {
-  const [w, setW] = useState(0);
-  const x = useRef(new Animated.Value(0)).current; // 0..1 phần đã hát
-  useEffect(() => {
-    const span = Math.max(0.5, end - start);
-    const tick = () => {
-      const p = Math.min(1, Math.max(0, (readTime() - start + LEAD) / span));
-      Animated.timing(x, { toValue: p, duration: 60, easing: Easing.linear, useNativeDriver: USE_NATIVE }).start();
-    };
-    tick();
-    const id = setInterval(tick, 50);
-    return () => clearInterval(id);
-  }, [start, end]); // eslint-disable-line react-hooks/exhaustive-deps
-  const translateX = x.interpolate({ inputRange: [0, 1], outputRange: [-w, 0] });
-  return (
-    <MaskedView
-      style={{ alignSelf: 'flex-start' }}
-      onLayout={(e: any) => setW(e.nativeEvent.layout.width)}
-      maskElement={<Text style={[style, { color: '#000' }]}>{text}</Text>}
-    >
-      {/* Chữ ẩn giữ đúng kích thước khung, phía trên là nền mờ + dải sáng trượt dần */}
-      <Text style={[style, { opacity: 0 }]}>{text}</Text>
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.32)' }]} />
-      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#FFFFFF', transform: [{ translateX }] }]} />
-    </MaskedView>
-  );
-}
-
-// ---- Kiểu NẢY CHỮ: câu vừa tới lượt hát hiện ra từng chữ, mỗi chữ nảy nhẹ lên (chữ sau trễ hơn chữ trước)
-function BounceLine({ text, style }: { text: string; style: any }) {
-  const words = useMemo(() => text.split(/(\s+)/).filter((w) => w.length > 0), [text]);
-  const vals = useRef(words.map(() => new Animated.Value(0))).current;
-  useEffect(() => {
-    Animated.stagger(
-      55,
-      vals.map((v) => Animated.spring(v, { toValue: 1, friction: 5, tension: 140, useNativeDriver: USE_NATIVE }))
-    ).start();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  return (
-    <Text style={style}>
-      {words.map((w, i) => {
-        const v = vals[i] ?? new Animated.Value(1);
-        return (
-          <Animated.Text
-            key={i}
-            style={{
-              opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] }),
-              transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }, { scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }],
-            }}
-          >
-            {w}
-          </Animated.Text>
-        );
-      })}
-    </Text>
-  );
-}
-
 export function LyricsView({
   status,
   lyrics,
   progress = 0,
   onSeek,
-  look = 'glow',
+  focus,
+  fade = true,
 }: {
   status: 'idle' | 'loading' | 'done';
   lyrics: Lyrics | null;
   progress?: number; // chỉ dùng khi không đọc được thời gian từ trình phát (web)
   onSeek: (seconds: number) => void;
-  look?: LyricLook; // kiểu hiện lời: phát sáng / karaoke / nảy chữ
+  // Câu đang hát nằm ở độ cao này trong khung (px tính từ mép trên). Không truyền thì nằm giữa khung.
+  // Lời toàn màn hình dùng: khung lời luôn to bằng cả màn hình, câu đang hát giữ đúng chỗ cũ khi mở / đóng toàn màn hình
+  focus?: number;
+  fade?: boolean; // mép trên / dưới mờ dần (tắt khi bên ngoài đã tự làm mép mờ)
 }) {
   const { track, duration } = usePlayerPick('track', 'duration');
   const { moving } = usePlayerTransition();
@@ -189,6 +132,7 @@ export function LyricsView({
   const ys = useRef<number[]>([]);
   const hs = useRef<number[]>([]); // chiều cao từng dòng, để đặt câu đang hát đúng giữa khung
   const [h, setH] = useState(0);
+  const focusAt = focus != null && h > 0 ? Math.min(h, Math.max(0, focus)) : h / 2;
 
   const rows = useMemo(() => (lyrics ? buildRows(lyrics, duration) : []), [lyrics, duration]);
   const last = useRef(rows);
@@ -238,8 +182,8 @@ export function LyricsView({
   const scrollToLine = (i: number, animated: boolean) => {
     const y = ys.current[i];
     if (y == null || !h) return false;
-    // Đặt tâm của dòng vào đúng giữa khung lời
-    scroll.current?.scrollTo({ y: Math.max(0, y + (hs.current[i] ?? 0) / 2 - h / 2), animated });
+    // Đặt tâm của dòng vào đúng chỗ (giữa khung, hoặc độ cao focus)
+    scroll.current?.scrollTo({ y: Math.max(0, y + (hs.current[i] ?? 0) / 2 - focusAt), animated });
     return true;
   };
 
@@ -281,8 +225,9 @@ export function LyricsView({
   const lastH = useRef(0);
   useEffect(() => {
     if (!h) return;
-    const resized = lastH.current !== h;
-    lastH.current = h;
+    const key = h * 100000 + Math.round(focusAt);
+    const resized = lastH.current !== key;
+    lastH.current = key;
     if (!placed.current || resized) {
       if (cur < 0 || scrollToLine(cur, false)) {
         placed.current = true;
@@ -291,7 +236,7 @@ export function LyricsView({
       return;
     }
     if (cur >= 0 && !browsingRef.current) scrollToLine(cur, true);
-  }, [cur, h]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cur, h, focusAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lưới an toàn: nếu vì lý do nào đó chưa đặt được vị trí thì vẫn hiện sau 400ms
   useEffect(() => {
@@ -324,7 +269,7 @@ export function LyricsView({
         maskElement={
           <LinearGradient
             colors={['transparent', '#000', '#000', 'transparent']}
-            locations={[0, 0.12, 0.88, 1]}
+            locations={fade ? [0, 0.12, 0.88, 1] : [0, 0, 1, 1]}
             style={{ flex: 1 }}
           />
         }
@@ -341,7 +286,7 @@ export function LyricsView({
         onScrollEndDrag={scheduleBack}
         onMomentumScrollEnd={scheduleBack}
         style={{ flex: 1, opacity: ready ? 1 : 0 }}
-        contentContainerStyle={{ paddingTop: h * 0.5, paddingBottom: h * 0.5, paddingHorizontal: GLOW }}
+        contentContainerStyle={{ paddingTop: focusAt, paddingBottom: h - focusAt, paddingHorizontal: GLOW }}
       >
         {!synced && (
           <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13, marginBottom: 12 }}>
@@ -388,19 +333,7 @@ export function LyricsView({
               }}
               style={{ paddingVertical: 6 }}
             >
-              {synced && active && look === 'karaoke' && l.t != null ? (
-                <KaraokeLine
-                  text={l.text}
-                  start={l.t}
-                  end={rows[i + 1]?.t ?? l.t + singFor(l.text)}
-                  readTime={readTime}
-                  style={[styles.line, { color: '#FFFFFF' }]}
-                />
-              ) : synced && active && look === 'bounce' ? (
-                <BounceLine key={`b${i}`} text={l.text} style={[styles.line, styles.active]} />
-              ) : (
-                <Text style={[styles.line, !synced ? styles.plain : active ? styles.active : browsing ? styles.browse : blurFor(Math.abs(i - cur))]}>{l.text}</Text>
-              )}
+              <Text style={[styles.line, !synced ? styles.plain : active ? styles.active : browsing ? styles.browse : blurFor(Math.abs(i - cur))]}>{l.text}</Text>
             </Pressable>
           );
         })}

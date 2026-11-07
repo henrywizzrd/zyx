@@ -203,11 +203,15 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
     };
   });
 
-  // Bên trong ô cửa sổ: co ngược chiều dọc để cả màn player thu nhỏ đều theo sw
+  // Bên trong ô cửa sổ: cả màn player thu nhỏ đều theo tỉ lệ k = tỉ lệ LỚN hơn trong hai chiều, rồi ô cắt phần thừa.
+  //  - màn dọc: k = sw → player vừa khít bề ngang, thừa ở dưới thì bị cắt (như trước)
+  //  - màn ngang: k = sh → player vừa khít chiều cao, thừa bên phải bị cắt. Trước đây vẫn lấy sw nên player nhỏ hơn ô,
+  //    dưới đáy ô trống trơn, ảnh bìa bay lại to hơn player → thò ra dưới thành một khối lệch, nhìn rất sượng
   const inner = useAnimatedStyle(() => {
     const sw = interpolate(p.value, [0, 1], [ow.value / W, 1]);
     const sh = interpolate(p.value, [0, 1], [oh.value / H, 1]);
-    return { transform: [{ scaleY: sw / sh }] };
+    const k = Math.max(sw, sh);
+    return { transform: [{ scaleX: k / sw }, { scaleY: k / sh }] };
   });
   const screen = useAnimatedStyle(() => ({ opacity: interpolate(p.value, [0.22, 0.55], [0, 1], 'clamp') }));
 

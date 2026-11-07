@@ -57,10 +57,22 @@ export function setFxMode(m: FxMode) {
     return;
   }
   if (m === mode) return;
+  const prev = mode;
   mode = m;
   AsyncStorage.setItem(MODE_KEY, m).catch(() => {});
   modeListeners.forEach((l) => l());
-  applyMode();
+  // Đổi chế độ do người dùng bấm: nhạc nhỏ xuống một chút, đổi, rồi to dần lên trong ~1,5 giây
+  // (vào 8D thì tiếng còn từ từ lan dần ra hai bên tai)
+  const live = prev !== 'off' && mix > 0.5 && !!buffer && bufId === curId;
+  if (!live) {
+    // Đang nghe tiếng thường (chưa có bộ hiệu ứng chạy): bật lên thì đợi bộ hiệu ứng sẵn sàng rồi mới nhỏ xuống - to lên
+    swellNext = m !== 'off';
+    transTok++; // huỷ lần nhỏ xuống - to lên đang dở (nếu có) và trả âm lượng về bình thường
+    if (duck !== 1) rampDuck(1, 0.5);
+    applyMode();
+    return;
+  }
+  transition(() => applyMode(true));
 }
 export function useFxMode(): FxMode {
   return useSyncExternalStore(
@@ -139,8 +151,9 @@ export function fxPrefetch(id: string | null) {
 
 // ---------- Âm thanh ----------
 let ctx: Ctx | null = null;
-let input: Node | null = null; // nguồn → input → (chuỗi hiệu ứng) → master → loa
+let input: Node | null = null; // nguồn → input → (chuỗi hiệu ứng) → master → duckNode → loa
 let master: Node | null = null;
+let duckNode: Node | null = null;
 let chain: { mode: FxMode; stop: () => void } | null = null;
 
 function context(): Ctx | null {
@@ -154,7 +167,10 @@ function context(): Ctx | null {
     input = ctx.createGain();
     master = ctx.createGain();
     master.gain.value = 0;
-    master.connect(ctx.destination);
+    duckNode = ctx.createGain();
+    duckNode.gain.value = duck;
+    master.connect(duckNode);
+    duckNode.connect(ctx.destination);
     audio().onUserVolume(() => setMix(mix, 0.05));
   } catch (e) {
     console.warn('[fx] AudioContext', e);
@@ -214,7 +230,9 @@ function buildChain(c: Ctx, m: FxMode) {
     const sin = c.createOscillator();
     sin.frequency.value = RATE;
     const panDepth = keep(c.createGain());
-    panDepth.gain.value = 0.92;
+    // Lan dần ra hai bên tai: độ xoay tăng từ 0 lên hết trong ~2,5 giây
+    panDepth.gain.setValueAtTime(0, c.currentTime);
+    panDepth.gain.linearRampToValueAtTime(0.92, c.currentTime + 2.5);
     sin.connect(panDepth);
     panDepth.connect(pan.pan);
 
@@ -324,6 +342,55 @@ function setMix(target: number, seconds = 0.35) {
   }, 40);
 }
 
+// ---------- Nhỏ xuống - to lên khi đổi chế độ ----------
+let duck = 1;
+let duckTimer: ReturnType<typeof setInterval> | null = null;
+let transTok = 0;
+let swellNext = false; // bộ hiệu ứng sẵn sàng lần tới thì chuyển sang bằng kiểu nhỏ xuống - to lên
+let wantMix = 0;
+
+// Hạ / nâng âm lượng chung của cả hai đường tiếng (trình phát chính và bộ hiệu ứng) tới target trong seconds giây
+function rampDuck(target: number, seconds: number): Promise<void> {
+  if (duckTimer) clearInterval(duckTimer);
+  duckTimer = null;
+  const c = ctx;
+  if (c && duckNode) {
+    const now = c.currentTime;
+    duckNode.gain.cancelScheduledValues(now);
+    duckNode.gain.setValueAtTime(duck, now);
+    duckNode.gain.linearRampToValueAtTime(target, now + seconds);
+  }
+  const from = duck;
+  const steps = Math.max(1, Math.round(seconds / 0.04));
+  let k = 0;
+  return new Promise((resolve) => {
+    duckTimer = setInterval(() => {
+      k++;
+      // to lên theo đường cong êm (chậm dần ở cuối), nhỏ xuống thì đều
+      const x = k / steps;
+      const e = target > from ? 1 - (1 - x) * (1 - x) : x;
+      duck = from + (target - from) * e;
+      audio().setDuck(duck);
+      if (k >= steps) {
+        if (duckTimer) clearInterval(duckTimer);
+        duckTimer = null;
+        duck = target;
+        audio().setDuck(target);
+        resolve();
+      }
+    }, 40);
+  });
+}
+
+// Nhỏ xuống còn ~30% trong 0,3s → làm thay đổi (đổi chuỗi hiệu ứng / chuyển đường tiếng) → to dần lên trong 1,5s
+async function transition(change: () => void) {
+  const tok = ++transTok;
+  await rampDuck(0.3, 0.3);
+  if (tok !== transTok) return;
+  change();
+  await rampDuck(1, 1.5);
+}
+
 // ---------- Bám theo trình phát chính ----------
 let curId: string | null = null; // bài trình phát chính đang phát
 let bufId: string | null = null; // bài đã giải mã xong
@@ -387,9 +454,10 @@ async function loadTrack(id: string) {
 }
 
 // Đặt lại toàn bộ theo chế độ hiện tại
-function applyMode() {
+function applyMode(instant = false) {
   if (mode === 'off') {
-    setMix(0);
+    wantMix = 0;
+    setMix(0, instant ? 0.05 : 0.35);
     const c = ctx;
     setTimeout(() => {
       if (mode !== 'off') return;
@@ -422,7 +490,10 @@ function sync(force = false) {
   if (!ready) {
     // Bài mới chưa sẵn: tiếng trả về trình phát chính, nguồn cũ tắt
     if (src) stopSrc();
-    if (mix !== 0) setMix(0, 0.15);
+    if (wantMix !== 0) {
+      wantMix = 0;
+      setMix(0, 0.15);
+    }
     return;
   }
   if (!last.playing) {
@@ -441,7 +512,14 @@ function sync(force = false) {
     driftCount = 0;
     startAt(want);
   }
-  if (mix !== 1) setMix(1);
+  if (wantMix !== 1) {
+    wantMix = 1;
+    if (swellNext) {
+      // Vừa bật chế độ: nhỏ xuống, chuyển sang bộ hiệu ứng, to dần lên
+      swellNext = false;
+      transition(() => setMix(1, 0.05));
+    } else setMix(1, 0.6); // sang bài mới: chuyển êm sang bộ hiệu ứng
+  }
 }
 
 // Gọi mỗi lần trình phát chính báo trạng thái (PlayerProvider)

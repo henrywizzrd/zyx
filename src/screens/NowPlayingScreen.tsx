@@ -17,7 +17,6 @@ import { useSongMenu } from '../components/useSongMenu';
 import { useActionSheet, useSheetOpen } from '../components/ActionSheet';
 import { FxMode, setFxMode, useFxMode } from '../player/fxEngine';
 import { BlurView } from 'expo-blur';
-import type { LyricLook } from '../theme/types';
 import RNMaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import RAnimated, { Easing as REasing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -100,24 +99,11 @@ const posMemo = { ax: 0, ay: 0, lx: 0, ly: 0, ok: false };
 
 
 export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
-  const { theme, setLyricLook } = useTheme();
+  const { theme } = useTheme();
   const sheet = useActionSheet();
   // Đang mở hàng chờ / bảng thao tác: duỗi phẳng hai trang sách. Trang nghiêng 3D chồm ra phía trước nên iPhone vẽ nó
   // đè lên mọi thứ ở trên (hàng chờ, bảng "Thêm vào playlist"), kể cả khi các bảng đó nằm ở lớp trên
   const sheetOpen = useSheetOpen();
-  const look = theme.player.lyricLook;
-  // Chọn kiểu hiện lời: phát sáng / karaoke / nảy chữ
-  const pickLook = () => {
-    const opts: { id: LyricLook; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
-      { id: 'glow', label: t('lyrics.lookGlow'), icon: 'sunny-outline' },
-      { id: 'karaoke', label: t('lyrics.lookKaraoke'), icon: 'mic-outline' },
-      { id: 'bounce', label: t('lyrics.lookBounce'), icon: 'sparkles-outline' },
-    ];
-    sheet.openActions(
-      { title: t('lyrics.look'), icon: 'text-outline' },
-      opts.map((o) => ({ label: o.label, icon: look === o.id ? 'checkmark-circle' : o.icon, on: look === o.id, run: () => setLyricLook(o.id) }))
-    );
-  };
   const t = useT();
   // Chế độ âm thanh: Bình thường / 8D / Phòng hoà nhạc
   const fxMode = useFxMode();
@@ -252,15 +238,31 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     opacity: 1 - fp.value,
     transform: [{ translateY: (bodyHV.value + 20) * fp.value }],
   }));
-  // Khung lời giãn ra: mép trên lên sát tai thỏ, mép dưới xuống tận chỗ thanh thời gian cũ
-  const lyricsBoxStyle = useAnimatedStyle(() => ({
-    top: interpolate(fp.value, [0, 1], [headerHV.value, pad.top + 8]),
-    bottom: interpolate(fp.value, [0, 1], [0, -(bodyHV.value - pad.bottom - 44)]),
-  }));
-  // Nút toàn màn hình + nút kiểu lời: góc phải dưới khung lời, ngay trên thanh thời gian
+  // Lời toàn màn hình: khung lời LUÔN to bằng cỡ toàn màn hình (mép trên sát tai thỏ, mép dưới tới chỗ thanh thời gian),
+  // chỉ có "cửa sổ" nhìn thấy (mặt nạ mờ mép) là rộng ra / hẹp lại. Lời không bị dựng lại bố cục, câu đang hát đứng yên
+  // đúng chỗ cũ; phần đầu trượt lên, phần dưới trượt xuống, lộ thêm các câu trên / dưới.
+  // (Trước đây đổi top/bottom của khung lời mỗi khung hình → máy tính lại bố cục liên tục, lời bị đẩy lệch → giật)
+  const [stageH, setStageH] = useState(0);
+  const stageHV = useSharedValue(0);
+  const fullTop = pad.top + 8;
+  const fullBottomOver = Math.max(0, bodyH - pad.bottom - 44); // khung lời thò xuống dưới sân khấu (vào chỗ phần dưới)
+  const boxH = Math.max(1, stageH - fullTop + fullBottomOver);
+  const lyricFocus = headerH - fullTop + (stageH - headerH) / 2; // giữa vùng lời lúc bình thường
+  const windowStyle = useAnimatedStyle(() => {
+    const bh = Math.max(1, stageHV.value - fullTop + Math.max(0, bodyHV.value - pad.bottom - 44));
+    const y0 = headerHV.value - fullTop;
+    const k = Math.max(0.05, (stageHV.value - headerHV.value) / bh);
+    return {
+      transform: [
+        { translateY: interpolate(fp.value, [0, 1], [y0, 0]) },
+        { scaleY: interpolate(fp.value, [0, 1], [k, 1]) },
+      ],
+    };
+  });
+  // Nút toàn màn hình: góc phải dưới khung lời, ngay trên thanh thời gian (chỉ dịch chuyển, không đổi bố cục)
   const lyricBtnsStyle = useAnimatedStyle(() => ({
     opacity: interpolate(lp.value, [0.5, 1], [0, 1], 'clamp'),
-    bottom: interpolate(fp.value, [0, 1], [bodyHV.value + 4, pad.bottom + 10]),
+    transform: [{ translateY: fp.value * (bodyHV.value + 4 - (pad.bottom + 10)) }],
   }));
   const lyricsStyle = useAnimatedStyle(() => ({
     opacity: interpolate(lp.value, [0.3, 1], [0, 1], 'clamp'),
@@ -405,17 +407,26 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     const SideButtons = (
       <View style={{ width: 44, alignItems: 'center', gap: 14, justifyContent: 'center' }}>
         <Ionicons name="volume-high" size={18} color={SOFT} />
-        <VolumeBar vertical />
+        {/* Thanh âm lượng không chiếm hết chiều cao: phần trống trên / dưới để vuốt xuống thu nhỏ player */}
+        <View style={{ flex: 1, maxHeight: Math.max(110, usableH - 250), alignItems: 'center' }}>
+          <VolumeBar vertical />
+        </View>
         <Ionicons name="volume-low" size={18} color={SOFT} />
-        <Pressable onPress={() => setLandLyrics((v) => !v)} hitSlop={10} style={{ marginTop: 6 }}>
-          <Ionicons name={landLyrics ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} size={24} color={landLyrics ? '#FFFFFF' : SOFT} />
-        </Pressable>
-        <Pressable onPress={() => setQueueOpen(true)} hitSlop={10}>
-          <Ionicons name="list" size={26} color={SOFT} />
-        </Pressable>
-        {FxButton}
+        {/* Lời | chế độ âm thanh | hàng chờ: ba ô cùng cỡ, cách đều nhau */}
+        <View style={{ alignItems: 'center', gap: 6, marginTop: 4 }}>
+          <Pressable onPress={() => setLandLyrics((v) => !v)} hitSlop={8} style={styles.sideBtn}>
+            <Ionicons name={landLyrics ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} size={24} color={landLyrics ? '#FFFFFF' : SOFT} />
+          </Pressable>
+          {FxButton}
+          <Pressable onPress={() => setQueueOpen(true)} hitSlop={8} style={styles.sideBtn}>
+            <Ionicons name="list" size={26} color={SOFT} />
+          </Pressable>
+        </View>
       </View>
     );
+    // Cột nút bên phải + khoảng trống quanh nó (kéo rộng sang trái và tới sát mép màn hình): vuốt xuống ở đây để thu nhỏ player.
+    // Trước đây vùng vuốt chỉ rộng đúng bằng cột 44px, gần như kín chỗ bởi thanh âm lượng nên không kéo được
+    const sideZone = { alignSelf: 'stretch' as const, flexDirection: 'row' as const, justifyContent: 'center' as const, marginLeft: -20, paddingLeft: 20, paddingRight: insets.right + 14 };
     // Vuốt xuống để thoát khi nằm ngang: thanh ngang ở mép trên (cả dải trên cùng đều vuốt được),
     // và mọi chỗ trống không phải lời / thanh trượt (trang trái, cột nút bên phải)
     const GrabBar = (
@@ -429,7 +440,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
       paddingTop: padT,
       paddingBottom: padB,
       paddingLeft: insets.left + 20,
-      paddingRight: insets.right + 12,
+      paddingRight: 0,
       gap: 28,
     };
 
@@ -458,7 +469,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
               </View>
               <View style={{ marginTop: 14 }}>{Progress}</View>
             </View>
-            <View {...swipe.panHandlers} style={{ alignSelf: 'stretch', flexDirection: 'row' }}>{SideButtons}</View>
+            <View {...swipe.panHandlers} style={sideZone}>{SideButtons}</View>
           </View>
           {GrabBar}
           <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} />
@@ -504,9 +515,9 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
             </View>
           </View>
           <View style={{ flex: 1, transformOrigin: 'left center', transform: [{ perspective: 1400 }, { rotateY: flat ? '0deg' : '-10deg' }] }}>
-            <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} look={look} />
+            <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} />
           </View>
-          <View {...swipe.panHandlers} style={{ alignSelf: 'stretch', flexDirection: 'row' }}>{SideButtons}</View>
+          <View {...swipe.panHandlers} style={sideZone}>{SideButtons}</View>
         </View>
         {/* Gáy sách: dải kính mờ phủ lên mép trong của hai trang, mờ dần ra hai bên → ảnh và lời nối liền nhau */}
         <View pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, left: spineX - SEAM / 2, width: SEAM }}>
@@ -538,12 +549,13 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
       {/* Hàng dưới dựng y hệt khung của hàng điều khiển (cùng các ô rộng bằng nhau) nên nút lời nằm
           thẳng dưới nút lùi, nút hàng chờ thẳng dưới nút tới, đối xứng hai bên nút phát */}
       <View style={[styles.spotRow, { marginTop: 14 }]}>
-        {FxButton}
+        <View style={styles.sideBtn} />
         <Pressable onPress={() => setShowLyrics((v) => !v)} hitSlop={10} style={styles.skipSlot}>
           <LyricsIcon on={showLyrics} />
           {showLyrics && <View style={styles.dot} />}
         </Pressable>
-        <View style={{ width: PLAY }} />
+        {/* Chế độ âm thanh: giữa nút lời và nút hàng chờ, thẳng dưới nút phát */}
+        <View style={{ width: PLAY, alignItems: 'center' }}>{FxButton}</View>
         <Pressable onPress={() => setQueueOpen(true)} hitSlop={10} style={styles.skipSlot}>
           <Ionicons name="list" size={ICON} color={SOFT} />
         </Pressable>
@@ -567,7 +579,14 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
       <StatusBar barStyle="light-content" />
       <View style={{ flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center' }}>
         {/* Sân khấu: ảnh bìa, phần đầu, lời, tên bài */}
-        <View style={{ flex: 1 }}>
+        <View
+          style={{ flex: 1 }}
+          onLayout={(e) => {
+            const v = e.nativeEvent.layout.height;
+            stageHV.value = v;
+            setStageH((o) => (Math.abs(o - v) < 0.5 ? o : v));
+          }}
+        >
           {/* Ảnh bìa tràn ngang: bản rõ (mờ dần khi mở lời) và bản nhoè (hiện lên làm nền cho lời) */}
           <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: infoH, overflow: 'hidden' }}>
             <RAnimated.View style={[StyleSheet.absoluteFill, sharpArtStyle]}>
@@ -596,13 +615,26 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
           </View>
 
           {/* Lời: từ ngay dưới phần đầu tới hết sân khấu */}
-          {lyricsMounted && (
+          {lyricsMounted && stageH > 0 && (
             <RAnimated.View
               pointerEvents={showLyrics ? 'auto' : 'none'}
-              style={[{ position: 'absolute', top: headerH, bottom: 0, left: side, right: pad.right + 24 }, lyricsBoxStyle, lyricsStyle]}
+              style={[{ position: 'absolute', top: fullTop, height: boxH, left: side, right: pad.right + 24 }, lyricsStyle]}
             >
-              {/* Lời có ngay từ lần vẽ đầu (đã tải thì lấy từ bộ nhớ), không phải chờ */}
-              <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} look={look} />
+              <MaskedView
+                style={{ flex: 1, marginHorizontal: -30 }}
+                maskElement={
+                  <View style={{ flex: 1 }}>
+                    <RAnimated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0, height: boxH, transformOrigin: 'center top' }, windowStyle]}>
+                      <LinearGradient colors={['transparent', '#000', '#000', 'transparent']} locations={[0, 0.12, 0.88, 1]} style={{ flex: 1 }} />
+                    </RAnimated.View>
+                  </View>
+                }
+              >
+                <View style={{ flex: 1, marginHorizontal: 30 }}>
+                  {/* Lời có ngay từ lần vẽ đầu (đã tải thì lấy từ bộ nhớ), không phải chờ */}
+                  <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} focus={lyricFocus} fade={false} />
+                </View>
+              </MaskedView>
             </RAnimated.View>
           )}
 
@@ -710,11 +742,8 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         {lyricsMounted && bodyH > 0 && (
           <RAnimated.View
             pointerEvents={showLyrics ? 'box-none' : 'none'}
-            style={[{ position: 'absolute', right: pad.right + 18, flexDirection: 'row', gap: 18, alignItems: 'center' }, lyricBtnsStyle]}
+            style={[{ position: 'absolute', right: pad.right + 18, bottom: bodyH + 4, flexDirection: 'row', gap: 18, alignItems: 'center' }, lyricBtnsStyle]}
           >
-            <Pressable onPress={pickLook} hitSlop={10}>
-              <Ionicons name="text-outline" size={20} color="rgba(255,255,255,0.8)" />
-            </Pressable>
             <Pressable onPress={() => setFull((f) => !f)} hitSlop={10}>
               <Ionicons name={full ? 'contract-outline' : 'expand-outline'} size={22} color="rgba(255,255,255,0.85)" />
             </Pressable>
