@@ -15,12 +15,42 @@ let currentKey: string | null = null;
 let lockScreenOn = false;
 let trackListener: ((key: string) => void) | null = null;
 
+// ---- Âm lượng
+// userVol = âm lượng người dùng kéo trong player. fxMix = phần tiếng đang chuyển sang bộ hiệu ứng (Chế độ âm thanh, 0..1):
+// khi bật 8D / Phòng hoà nhạc, trình phát chính vẫn chạy (giữ màn hình khoá, chạy nền, chuyển bài) nhưng im tiếng,
+// tiếng thật phát ra từ bộ hiệu ứng (src/player/fxEngine.ts)
+let userVol = 1;
+let fxMix = 0;
+const volListeners = new Set<(v: number) => void>();
+function applyVolume() {
+  if (pl) pl.volume = userVol * (1 - fxMix);
+}
+export function getUserVolume() {
+  return userVol;
+}
+export function setUserVolume(v: number) {
+  userVol = Math.max(0, Math.min(1, v));
+  applyVolume();
+  volListeners.forEach((l) => l(userVol));
+}
+export function onUserVolume(cb: (v: number) => void) {
+  volListeners.add(cb);
+  return () => {
+    volListeners.delete(cb);
+  };
+}
+export function setFxMix(m: number) {
+  fxMix = Math.max(0, Math.min(1, m));
+  applyVolume();
+}
+
 export function getPlayer(): AudioPlaylist {
   if (!pl) {
     // shouldPlayInBackground: tắt màn hình / chuyển sang app khác vẫn phát tiếp
     // interruptionMode 'doNotMix': app nhạc chính (dừng app khác đang phát), bắt buộc để hiện điều khiển ở màn hình khoá
     setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' }).catch(() => {});
     pl = createAudioPlaylist({ updateInterval: 500, loop: 'none' });
+    applyVolume();
     // Trình phát tự đổi bài (hết bài, hoặc bấm nút ở màn hình khoá): báo cho app
     pl.addListener('trackChanged', ({ currentIndex }) => {
       const key = keys[currentIndex];

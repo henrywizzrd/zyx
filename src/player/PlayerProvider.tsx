@@ -9,6 +9,7 @@ import { getLikedIds, PlayContext, recordPlay, setLiked as saveLiked } from '../
 import { localUri } from '../data/downloads';
 import { Image as ExpoImage } from 'expo-image';
 import { showToast } from '../components/toastBridge';
+import { fxPrefetch, fxTick, setFxResolver } from './fxEngine';
 
 // ---- Link phát của từng bài, lấy sẵn trước khi cần
 // Ở chế độ nền (tắt màn hình), iPhone chỉ cho app chạy tiếp khi đang PHÁT âm thanh. Hết bài mà phải đợi vài giây lấy link
@@ -409,6 +410,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audio().setNext(null);
       return;
     }
+    fxPrefetch(nextTrackId); // Chế độ âm thanh đang bật: tải trước file bài sau
     let dead = false;
     // Đợi bài hiện tại chạy được một chút rồi mới lấy link bài sau (không tranh mạng với bài đang mở)
     const timer = setTimeout(() => {
@@ -528,6 +530,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   // Theo dõi trạng thái thật của trình phát
   useEffect(() => {
     if (!musicSupported) return;
+    setFxResolver(resolveUrl);
     const p = audio().getPlayer();
     const sub = p.addListener('playlistStatusUpdate', (s) => {
       // Nghe tiếp từ lần trước: bài đã nạp xong thì tua tới chỗ đang nghe dở
@@ -538,6 +541,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
       setIsPlaying(s.playing);
       setProgress(s.currentTime);
+      // Chế độ âm thanh (8D / Phòng hoà nhạc) bám theo trình phát chính
+      fxTick(queueRef.current[indexRef.current]?.id ?? null, s.playing, s.currentTime);
       // Độ dài bài khi phát qua mạng hay nhích lên xuống vài phần trăm giây mỗi lần báo:
       // chỉ cập nhật khi lệch thật (> 0,5s), không thì cả app vẽ lại liên tục chỉ vì con số lẻ
       if (s.isLoaded && s.duration > 0) setDuration((d) => (Math.abs(d - s.duration) > 0.5 ? s.duration : d));

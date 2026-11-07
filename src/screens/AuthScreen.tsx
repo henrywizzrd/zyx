@@ -267,7 +267,7 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
                         setCode(v.replace(/\D/g, '').slice(0, 8));
                         setError(null);
                       }}
-                      placeholder="000000"
+                      placeholder="00000000"
                       placeholderTextColor="#5A5A5A"
                       keyboardType="number-pad"
                       textContentType="oneTimeCode"

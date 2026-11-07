@@ -15,6 +15,7 @@ import { audio, musicSupported } from '../music/lazy';
 import { QueueSheet } from '../components/QueueSheet';
 import { useSongMenu } from '../components/useSongMenu';
 import { useActionSheet, useSheetOpen } from '../components/ActionSheet';
+import { FxMode, setFxMode, useFxMode } from '../player/fxEngine';
 import { BlurView } from 'expo-blur';
 import type { LyricLook } from '../theme/types';
 import RNMaskedView from '@react-native-masked-view/masked-view';
@@ -118,6 +119,25 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     );
   };
   const t = useT();
+  // Chế độ âm thanh: Bình thường / 8D / Phòng hoà nhạc
+  const fxMode = useFxMode();
+  const pickFx = () => {
+    const opts: { id: FxMode; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
+      { id: 'off', label: t('fx.off'), icon: 'musical-note-outline' },
+      { id: '8d', label: t('fx.8d'), icon: 'sync-outline' },
+      { id: 'hall', label: t('fx.hall'), icon: 'business-outline' },
+    ];
+    sheet.openActions(
+      { title: t('fx.title'), subtitle: t('fx.hint'), icon: 'headset-outline' },
+      opts.map((o) => ({ label: o.label, icon: fxMode === o.id ? 'checkmark-circle' : o.icon, on: fxMode === o.id, run: () => setFxMode(o.id) }))
+    );
+  };
+  const FxButton = (
+    <Pressable onPress={pickFx} hitSlop={10} style={styles.sideBtn}>
+      <Ionicons name={fxMode === 'off' ? 'headset-outline' : 'headset'} size={22} color={fxMode === 'off' ? SOFT : ON} />
+      {fxMode !== 'off' && <View style={styles.dot} />}
+    </Pressable>
+  );
   const pad = useContentInsets();
   const songMenu = useSongMenu();
   const {
@@ -393,6 +413,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         <Pressable onPress={() => setQueueOpen(true)} hitSlop={10}>
           <Ionicons name="list" size={26} color={SOFT} />
         </Pressable>
+        {FxButton}
       </View>
     );
     // Vuốt xuống để thoát khi nằm ngang: thanh ngang ở mép trên (cả dải trên cùng đều vuốt được),
@@ -517,7 +538,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
       {/* Hàng dưới dựng y hệt khung của hàng điều khiển (cùng các ô rộng bằng nhau) nên nút lời nằm
           thẳng dưới nút lùi, nút hàng chờ thẳng dưới nút tới, đối xứng hai bên nút phát */}
       <View style={[styles.spotRow, { marginTop: 14 }]}>
-        <View style={styles.sideBtn} />
+        {FxButton}
         <Pressable onPress={() => setShowLyrics((v) => !v)} hitSlop={10} style={styles.skipSlot}>
           <LyricsIcon on={showLyrics} />
           {showLyrics && <View style={styles.dot} />}
@@ -740,10 +761,10 @@ const ProgressBar = React.memo(function ProgressBar({
 
 // Âm lượng: tự giữ giá trị của mình, kéo chỉ vẽ lại thanh này
 const VolumeBar = React.memo(function VolumeBar({ vertical = false }: { vertical?: boolean }) {
-  const [vol, setVol] = useState(() => (musicSupported ? audio().getPlayer().volume : 1));
+  const [vol, setVol] = useState(() => (musicSupported ? audio().getUserVolume() : 1));
   const onVolume = (v: number) => {
     setVol(v);
-    if (musicSupported) audio().getPlayer().volume = v;
+    if (musicSupported) audio().setUserVolume(v);
   };
   if (vertical) return <Slider vertical value={vol} thickness={6} onChange={onVolume} fill="rgba(255,255,255,0.9)" track="rgba(255,255,255,0.22)" />;
   return (

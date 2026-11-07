@@ -366,6 +366,14 @@ export const vi = {
   'community.songsCount': "{n} bài",
   'sheet.postToProfile': "Đăng lên hồ sơ",
   'community.playlistPrivate': "Playlist này đang để riêng tư trong máy người đăng",
+  'fx.title': "Chế độ âm thanh",
+  'fx.sub': "Áp dụng cho mọi bài",
+  'fx.off': "Bình thường",
+  'fx.8d': "8D (xoay quanh đầu)",
+  'fx.hall': "Phòng hoà nhạc",
+  'fx.hint': "Nên đeo tai nghe. Mỗi bài cần tải xong mới có hiệu ứng (vài giây đầu là tiếng thường)",
+  'fx.needBuild': "Cần cài bản app mới (build mới trong Releases) để dùng chế độ âm thanh",
+  'fx.trackFail': "Bài này chưa dùng được chế độ âm thanh, đang phát tiếng thường",
 };
 
 export type StringKey = keyof typeof vi;
@@ -715,4 +723,12 @@ export const en: Record<StringKey, string> = {
   'community.songsCount': "{n} songs",
   'sheet.postToProfile': "Post to profile",
   'community.playlistPrivate': "This playlist is private on the poster's device",
+  'fx.title': "Audio mode",
+  'fx.sub': "Applies to every song",
+  'fx.off': "Normal",
+  'fx.8d': "8D (around your head)",
+  'fx.hall': "Concert hall",
+  'fx.hint': "Best with headphones. Each song needs to finish downloading first (the first few seconds play normally)",
+  'fx.needBuild': "Install the new app build (from Releases) to use audio modes",
+  'fx.trackFail': "Audio mode isn't available for this song, playing normally",
 };
