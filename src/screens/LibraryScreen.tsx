@@ -490,8 +490,9 @@ export function LibraryScreen() {
           <Ionicons name="camera-outline" size={18} color="#FFFFFF" />
         </Pressable>
 
-        {/* Header profile */}
-        <View style={{ paddingTop: pad.top + 28, paddingHorizontal: H_PAD, flexDirection: 'row', gap: 16, alignItems: 'flex-end' }}>
+        {/* Header profile: cả cụm (avatar, tên, các tab, danh sách) nằm thấp xuống khoảng 1/3 màn hình,
+            phần trên để trống cho ảnh bìa hiện rõ. Ảnh bìa vẫn giữ nguyên vị trí và chiều cao */}
+        <View style={{ paddingTop: Math.max(pad.top + 28, Math.round(Math.min(height * 0.3, COVER_H * 0.56))), paddingHorizontal: H_PAD, flexDirection: 'row', gap: 16, alignItems: 'flex-end' }}>
           <Pressable onPress={() => editImage('avatar')} style={[styles.avatar, { backgroundColor: profile.avatarColor }]}>
             {profile.avatar ? (
               <Image source={{ uri: profile.avatar }} resizeMode="cover" style={StyleSheet.absoluteFill} />

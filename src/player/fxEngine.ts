@@ -63,7 +63,7 @@ export function setFxMode(m: FxMode) {
   modeListeners.forEach((l) => l());
   // Đổi chế độ do người dùng bấm: nhạc nhỏ xuống một chút, đổi, rồi to dần lên trong ~1,5 giây
   // (vào 8D thì tiếng còn từ từ lan dần ra hai bên tai)
-  const live = prev !== 'off' && mix > 0.5 && !!buffer && bufId === curId;
+  const live = prev !== 'off' && mix > 0.5 && !!source && source.id === curId;
   if (!live) {
     // Đang nghe tiếng thường (chưa có bộ hiệu ứng chạy): bật lên thì đợi bộ hiệu ứng sẵn sàng rồi mới nhỏ xuống - to lên
     swellNext = m !== 'off';
@@ -146,7 +146,12 @@ function fileFor(id: string): Promise<string> {
 // Tải trước file bài kế tiếp (chỉ khi đang bật chế độ), để sang bài là có hiệu ứng ngay
 export function fxPrefetch(id: string | null) {
   if (!id || mode === 'off' || !fxSupported()) return;
-  setTimeout(() => fileFor(id).catch(() => {}), 4000);
+  // Đợi file bài đang nghe tải xong rồi mới tải bài sau (tải cùng lúc dễ làm nghẽn mạng của trình phát chính)
+  setTimeout(async () => {
+    const cur = curId ? filePending.get(curId) : undefined;
+    if (cur) await cur.catch(() => {});
+    if (mode !== 'off') fileFor(id).catch(() => {});
+  }, 4000);
 }
 
 // ---------- Âm thanh ----------
@@ -392,58 +397,143 @@ async function transition(change: () => void) {
 }
 
 // ---------- Bám theo trình phát chính ----------
+// Nguồn phát của bộ hiệu ứng. Ưu tiên ĐỌC DẦN file (giải mã từng đoạn khi phát, như thẻ <audio>): chỉ tốn vài MB.
+// Trước đây giải mã cả bài vào bộ nhớ (~80-100MB một bài): chạy nền lâu, iPhone thấy app tốn RAM nên tắt luôn app
+// → mất nhạc, mất cả trình phát trên Dynamic Island. Máy không đọc dần được định dạng này thì mới giải mã cả bài như cũ
+interface FxSource {
+  id: string;
+  playing: boolean;
+  pos(): number; // vị trí đang phát trong bài (giây)
+  play(at: number): void; // phát từ vị trí at
+  pause(): void;
+  close(): void;
+}
+
+function streamSource(c: Ctx, id: string, uri: string): FxSource | null {
+  const A = lib();
+  if (!A || !input) return null;
+  let path = uri.replace(/^file:\/\//, '');
+  try {
+    path = decodeURI(path);
+  } catch {}
+  const node: any = (c as any).context?.createFileSource?.({ source: path, loop: false, volume: 1, playbackRate: 1, preservesPitch: false });
+  if (!node) return null;
+  // Đưa nguồn vào chuỗi hiệu ứng (không thì thư viện tự nối thẳng ra loa)
+  const media = new A.MediaElementAudioSourceNode(c as any, { mediaElement: { getFileSourceNode: () => node } as any });
+  media.connect(input);
+  const src: FxSource = {
+    id,
+    playing: false,
+    pos: () => (typeof node.currentTime === 'number' ? node.currentTime : -1),
+    play(at) {
+      try {
+        node.seekToTime(Math.max(0, at));
+        node.start(c.currentTime);
+        (c as any).markRunningOnSourceStart?.();
+        src.playing = true;
+      } catch (e) {
+        console.warn('[fx] play', e);
+      }
+    },
+    pause() {
+      try {
+        node.pause();
+      } catch {}
+      src.playing = false;
+    },
+    close() {
+      src.pause();
+      try {
+        media.disconnect();
+      } catch {}
+      try {
+        node.onended = '0';
+        node.disconnect(undefined);
+      } catch {}
+    },
+  };
+  return src;
+}
+
+// Dự phòng: giải mã cả bài vào bộ nhớ (cách cũ)
+async function bufferSource(c: Ctx, id: string, uri: string): Promise<FxSource> {
+  const A = lib()!;
+  const buffer: Buf = await A.decodeAudioData(uri);
+  let node: Src | null = null;
+  let start = 0; // ctx.currentTime lúc bắt đầu
+  let offset = 0; // vị trí trong bài lúc đó
+  const stopNode = () => {
+    if (!node) return;
+    try {
+      node.stop();
+    } catch {}
+    try {
+      node.disconnect();
+    } catch {}
+    node = null;
+  };
+  const src: FxSource = {
+    id,
+    playing: false,
+    pos: () => (node ? offset + (c.currentTime - start) : -1),
+    play(at) {
+      stopNode();
+      if (!input || at >= buffer.duration - 0.05) return;
+      const n = c.createBufferSource();
+      n.buffer = buffer;
+      n.connect(input);
+      const when = c.currentTime + 0.03;
+      n.start(when, Math.max(0, at + 0.03));
+      node = n;
+      start = when;
+      offset = Math.max(0, at + 0.03);
+      src.playing = true;
+    },
+    pause() {
+      stopNode();
+      src.playing = false;
+    },
+    close() {
+      stopNode();
+    },
+  };
+  return src;
+}
+
 let curId: string | null = null; // bài trình phát chính đang phát
-let bufId: string | null = null; // bài đã giải mã xong
-let buffer: Buf | null = null;
+let source: FxSource | null = null; // nguồn đã sẵn sàng (đúng bài curId thì mới dùng)
 let loadToken = 0;
 let failedId: string | null = null;
-let src: Src | null = null;
-let srcStart = 0; // ctx.currentTime lúc nguồn bắt đầu
-let srcOffset = 0; // vị trí trong bài lúc đó
 let driftCount = 0;
 let last = { playing: false, time: 0, at: 0 }; // lần báo gần nhất của trình phát chính
 
 const expected = () => (last.playing ? last.time + (Date.now() - last.at) / 1000 : last.time);
-const fxPos = () => (ctx && src ? srcOffset + (ctx.currentTime - srcStart) : -1);
 
-function stopSrc() {
-  if (!src) return;
-  try {
-    src.stop();
-  } catch {}
-  try {
-    src.disconnect();
-  } catch {}
-  src = null;
-}
-
-function startAt(offset: number) {
-  const c = ctx;
-  if (!c || !buffer || !input) return;
-  stopSrc();
-  if (offset >= buffer.duration - 0.05) return;
-  const s = c.createBufferSource();
-  s.buffer = buffer;
-  s.connect(input);
-  const when = c.currentTime + 0.03;
-  s.start(when, Math.max(0, offset + 0.03));
-  src = s;
-  srcStart = when;
-  srcOffset = Math.max(0, offset + 0.03);
+function dropSource() {
+  source?.close();
+  source = null;
 }
 
 async function loadTrack(id: string) {
   const token = ++loadToken;
-  const A = lib();
   const c = context();
-  if (!A || !c) return;
+  if (!c) return;
   try {
-    const path = await fileFor(id);
+    const uri = await fileFor(id);
     if (token !== loadToken) return;
-    const b = await A.decodeAudioData(path, c.sampleRate);
-    if (token !== loadToken) return;
-    buffer = b;
-    bufId = id;
+    let s: FxSource | null = null;
+    try {
+      s = streamSource(c, id, uri);
+    } catch (e) {
+      console.warn('[fx] stream', e);
+    }
+    if (!s) s = await bufferSource(c, id, uri);
+    if (token !== loadToken) {
+      s.close();
+      return;
+    }
+    dropSource();
+    source = s;
     sync(true);
   } catch (e) {
     if (token !== loadToken) return;
@@ -461,11 +551,9 @@ function applyMode(instant = false) {
     const c = ctx;
     setTimeout(() => {
       if (mode !== 'off') return;
-      stopSrc();
+      dropSource();
       chain?.stop();
       chain = null;
-      buffer = null; // nhả bộ nhớ (một bài giải mã ra tốn vài chục MB)
-      bufId = null;
       loadToken++;
       c?.suspend().catch(() => {});
     }, 450);
@@ -477,7 +565,7 @@ function applyMode(instant = false) {
     chain?.stop();
     chain = buildChain(c, mode);
   }
-  if (curId && bufId !== curId) loadTrack(curId);
+  if (curId && source?.id !== curId) loadTrack(curId);
   sync(true);
 }
 
@@ -486,10 +574,10 @@ function sync(force = false) {
   if (mode === 'off') return;
   const c = ctx;
   if (!c || !chain) return;
-  const ready = buffer && bufId === curId;
-  if (!ready) {
+  const src = source && source.id === curId ? source : null;
+  if (!src) {
     // Bài mới chưa sẵn: tiếng trả về trình phát chính, nguồn cũ tắt
-    if (src) stopSrc();
+    if (source?.playing) source.pause();
     if (wantMix !== 0) {
       wantMix = 0;
       setMix(0, 0.15);
@@ -497,20 +585,20 @@ function sync(force = false) {
     return;
   }
   if (!last.playing) {
-    if (src) {
-      stopSrc();
+    if (src.playing) {
+      src.pause();
       c.suspend().catch(() => {});
     }
     return;
   }
   if (c.state !== 'running') c.resume().catch(() => {});
   const want = expected();
-  const drift = Math.abs(fxPos() - want);
+  const drift = Math.abs(src.pos() - want);
   // Lệch xa (tua, lặp lại bài) thì theo ngay; lệch ít thì phải lệch 2 lần liền mới theo (tránh giật vì số báo về bị trễ)
   driftCount = drift > 0.35 ? driftCount + 1 : 0;
-  if (!src || force || drift > 1.5 || driftCount >= 2) {
+  if (!src.playing || force || drift > 1.5 || driftCount >= 2) {
     driftCount = 0;
-    startAt(want);
+    src.play(want);
   }
   if (wantMix !== 1) {
     wantMix = 1;
@@ -528,13 +616,9 @@ export function fxTick(id: string | null, playing: boolean, time: number) {
   const changed = id !== curId;
   curId = id;
   if (mode === 'off' || !fxSupported()) return;
-  if (changed) {
-    if (id && bufId !== id) {
-      stopSrc();
-      buffer = null; // bỏ bài cũ trước khi giải mã bài mới (đỡ tốn bộ nhớ)
-      bufId = null;
-      loadTrack(id);
-    }
+  if (changed && id && source?.id !== id) {
+    dropSource(); // bỏ bài cũ trước khi mở bài mới
+    loadTrack(id);
   }
   if (!chain) applyMode();
   else sync();

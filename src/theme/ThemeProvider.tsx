@@ -122,6 +122,7 @@ function sanitize(t: Theme): Theme {
       sections,
       hidden: t.home.hidden.filter((s) => SECTIONS.includes(s)),
       trendingRange: RANGES.includes(t.home.trendingRange) ? t.home.trendingRange : d.home.trendingRange,
+      trendingRegion: (['ZZ', 'VN', 'KR', 'US'] as const).includes(t.home.trendingRegion) ? t.home.trendingRegion : d.home.trendingRegion,
     },
   });
 }

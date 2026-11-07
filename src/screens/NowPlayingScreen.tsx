@@ -520,7 +520,9 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
           <View {...swipe.panHandlers} style={sideZone}>{SideButtons}</View>
         </View>
         {/* Gáy sách: dải kính mờ phủ lên mép trong của hai trang, mờ dần ra hai bên → ảnh và lời nối liền nhau */}
-        <View pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, left: spineX - SEAM / 2, width: SEAM }}>
+        {/* Lúc mở bảng (hàng chờ, chế độ âm thanh...) hai trang duỗi phẳng ra: không còn gáy sách nên bỏ dải nối,
+            không thì nó che mất mép trái của lời thành một vệt lạ ở giữa */}
+        <View pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, left: spineX - SEAM / 2, width: SEAM, opacity: flat ? 0 : 1 }}>
           <MaskedView
             style={StyleSheet.absoluteFill}
             maskElement={

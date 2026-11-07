@@ -7,6 +7,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, PixelRatio, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useContentInsets } from '../components/FloatingDock';
@@ -15,7 +16,7 @@ import { useSongMenu } from '../components/useSongMenu';
 import { useNav } from '../nav/Nav';
 import { musicSupported, toTrack, ytmusic } from '../music/lazy';
 import type { Card, Shelf } from '../music/ytmusic';
-import type { HomeSection, TrendingRange } from '../theme/types';
+import type { HomeSection, TrendingRange, TrendingRegion } from '../theme/types';
 import type { Track } from '../data/mock';
 import { useT } from '../i18n';
 import { SmartImage } from '../components/Cover';
@@ -38,7 +39,7 @@ function once<T>(key: string, load: () => Promise<T>): Promise<T> {
   remote.set(key, { at: Date.now(), p });
   return p;
 }
-const charts = () => once('charts', () => ytmusic().getChartShelves('VN'));
+const charts = (region: TrendingRegion) => once(`charts:${region}`, () => ytmusic().getChartShelves(region));
 const homeFeed = () => once('home', () => ytmusic().getHomeShelves());
 const explore = () => once('explore', () => ytmusic().getExploreShelves());
 
@@ -86,8 +87,24 @@ const RANGE_MATCH: Record<TrendingRange, RegExp> = {
   month: /month|tháng|monthly/i,
   year: /year|năm|yearly|20\d\d/i,
 };
-async function loadTrending(range: TrendingRange): Promise<{ title: string; playlistId?: string; songs: Track[] } | null> {
-  const shelves = await charts();
+type TrendingData = { title: string; playlistId?: string; songs: Track[]; gathering?: { have: number; need: number } };
+// Tháng / Năm: YouTube Music chỉ có bảng xếp hạng tuần → server ZYX (Supabase) lưu bảng xếp hạng tuần của YouTube Charts
+// mỗi ngày rồi cộng dồn: Tháng = các tuần trong 31 ngày gần nhất, Năm = 365 ngày. Mới chạy thì chưa đủ tuần (gathering)
+async function loadTrendingSummed(range: 'month' | 'year', region: TrendingRegion): Promise<TrendingData | null> {
+  const { supabase } = require('../backend/supabase') as typeof import('../backend/supabase');
+  const { data, error } = await supabase.rpc('trending_top', { p_region: region, p_days: range === 'month' ? 31 : 365, p_limit: 50 });
+  if (error) throw error;
+  const rows = (data ?? []) as { video_id: string; title: string; artist: string | null; thumb: string | null; total_weeks: number }[];
+  if (!rows.length) return null;
+  const songs: Track[] = rows.map((r) => ({ id: r.video_id, title: r.title, artist: r.artist ?? '', thumb: r.thumb ?? undefined, color: '#333333', duration: 0 }));
+  const need = range === 'month' ? 4 : 52;
+  const have = rows[0].total_weeks ?? 0;
+  return { title: '', songs, gathering: have < need ? { have, need } : undefined };
+}
+
+async function loadTrending(range: TrendingRange, region: TrendingRegion): Promise<TrendingData | null> {
+  if (range !== 'week') return loadTrendingSummed(range, region);
+  const shelves = await charts(region);
   const cards = shelves.flatMap((s) => s.cards.map((c) => ({ ...c, shelf: s.title })));
   const lists = cards.filter((c) => c.kind === 'playlist');
   const pick = lists.find((c) => RANGE_MATCH[range].test(`${c.title} ${c.subtitle} ${c.shelf}`)) ?? (range === 'week' ? lists[0] : undefined);
@@ -371,8 +388,37 @@ function Trending() {
   const songMenu = useSongMenu();
   const { push } = useNav();
   const range = theme.home.trendingRange;
-  const r = useRemote(`trending:${range}`, () => once(`trending:${range}`, () => loadTrending(range)), true, 6 * 60 * 60 * 1000);
-  const { text, textSecondary, accent, surface } = theme.colors;
+  const region = theme.home.trendingRegion;
+  const key = `trending:${region}:${range}`;
+  const r = useRemote(key, () => once(key, () => loadTrending(range, region)), true, 6 * 60 * 60 * 1000);
+  const { text, textSecondary, accent, surface, border } = theme.colors;
+  const regionName = (k: TrendingRegion) => t(`home.region.${k}`);
+  // Ô chọn khu vực: bấm vào thì trải xuống danh sách (Toàn cầu / Việt Nam / Hàn Quốc / Mỹ)
+  const [regionOpen, setRegionOpen] = useState(false);
+  const regionBox = (
+    <Pressable onPress={() => setRegionOpen((v) => !v)} style={[styles.regionBox, { backgroundColor: surface, borderColor: border }]}>
+      <Ionicons name="globe-outline" size={14} color={textSecondary} />
+      <Text style={{ color: text, fontSize: 13, fontWeight: '700' }}>{regionName(region)}</Text>
+      <Ionicons name={regionOpen ? 'chevron-up' : 'chevron-down'} size={14} color={textSecondary} />
+    </Pressable>
+  );
+  const regionList = regionOpen && (
+    <Animated.View entering={FadeInDown.duration(180)} style={[styles.regionList, { backgroundColor: surface, borderColor: border }]}>
+      {(['ZZ', 'VN', 'KR', 'US'] as TrendingRegion[]).map((k) => (
+        <Pressable
+          key={k}
+          onPress={() => {
+            setHome({ trendingRegion: k });
+            setRegionOpen(false);
+          }}
+          style={({ pressed }) => [styles.regionRow, pressed && { backgroundColor: border }]}
+        >
+          <Text style={{ flex: 1, color: k === region ? accent : text, fontSize: 15, fontWeight: k === region ? '800' : '600' }}>{regionName(k)}</Text>
+          {k === region && <Ionicons name="checkmark" size={18} color={accent} />}
+        </Pressable>
+      ))}
+    </Animated.View>
+  );
 
   const chips = (
     <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -385,11 +431,15 @@ function Trending() {
   );
 
   const data = r.data;
-  const chartTitle = data ? data.title || t('home.topWeekSongs') : '';
+  const chartTitle = data ? data.title || t(range === 'month' ? 'home.topMonthSongs' : range === 'year' ? 'home.topYearSongs' : 'home.topWeekSongs') : '';
   const ctx = data ? { kind: 'chart' as const, id: data.playlistId ?? 'chart', title: chartTitle } : null;
   return (
     <View>
       <SectionTitle title={t('home.section.trending')} right={chips} />
+      <View style={{ alignItems: 'flex-start', marginBottom: 8 }}>
+        {regionBox}
+        {regionList}
+      </View>
       {r.status === 'loading' &&
         // Khung chờ đúng hình dạng danh sách, đỡ trống trơn
         [0, 1, 2, 3, 4].map((i) => (
@@ -405,12 +455,17 @@ function Trending() {
       {r.status === 'error' && <Failed onRetry={r.retry} />}
       {r.status === 'done' && !data && (
         <Text style={{ color: textSecondary, fontSize: 14 }}>
-          {t('home.trendingNone', { range: t(range === 'month' ? 'home.rangeWord.month' : 'home.rangeWord.year') })}
+          {t('home.trendingNone', { range: t(range === 'month' ? 'home.rangeWord.month' : 'home.rangeWord.year'), region: regionName(region) })}
         </Text>
       )}
       {data && (
         <>
-          <Text style={{ color: textSecondary, fontSize: 13, marginBottom: 6 }}>{t('home.trendingSource', { title: chartTitle })}</Text>
+          <Text style={{ color: textSecondary, fontSize: 13, marginBottom: 6 }}>
+            {range === 'week'
+              ? t('home.trendingSource', { title: chartTitle, region: regionName(region) })
+              : t('home.trendingSummed', { title: chartTitle, region: regionName(region) })}
+            {data.gathering ? ` • ${t('home.trendingGathering', { have: data.gathering.have, need: data.gathering.need })}` : ''}
+          </Text>
           {data.songs.slice(0, 10).map((s, i) => (
             <Pressable
               key={`${s.id}:${i}`}
@@ -689,6 +744,9 @@ const styles = StyleSheet.create({
   chipTitle: { flex: 1, marginHorizontal: 10, fontSize: 13, fontWeight: '700' },
   cardTitle: { marginTop: 8, fontSize: 14, fontWeight: '700' },
   pill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14 },
+  regionBox: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
+  regionList: { marginTop: 6, minWidth: 190, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', paddingVertical: 4 },
+  regionRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, height: 42 },
   rankRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   rankThumb: { width: 46, height: 46, borderRadius: 4 },
 });

@@ -527,6 +527,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     audio().getPlayer().seekTo(Math.max(0, s));
   }, []);
 
+  const stallRef = useRef({ t: -1, at: 0 });
   // Theo dõi trạng thái thật của trình phát
   useEffect(() => {
     if (!musicSupported) return;
@@ -541,6 +542,23 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
       setIsPlaying(s.playing);
       setProgress(s.currentTime);
+      // Lưới an toàn khi nhạc tự đứng giữa chừng: trình phát vẫn đang "phát" (hoặc đang chờ tải) mà thời gian không
+      // nhích suốt 12 giây → link phát bị ngắt / hết hạn. Lấy link mới rồi phát tiếp đúng chỗ đang nghe
+      const now = Date.now();
+      const st = stallRef.current;
+      if (!(s.playing || s.isBuffering) || Math.abs(s.currentTime - st.t) > 0.05 || loadingRef.current) {
+        st.t = s.currentTime;
+        st.at = now;
+      } else if (now - st.at > 12000) {
+        st.at = now;
+        const cur = queueRef.current[indexRef.current];
+        if (cur && !localUri(cur.id)) {
+          console.warn('[player] nhạc đứng im, tải lại link', cur.title);
+          urlCache.delete(cur.id);
+          pendingSeek.current = { qid: cur.qid, at: s.currentTime };
+          load(cur);
+        }
+      }
       // Chế độ âm thanh (8D / Phòng hoà nhạc) bám theo trình phát chính
       fxTick(queueRef.current[indexRef.current]?.id ?? null, s.playing, s.currentTime);
       // Độ dài bài khi phát qua mạng hay nhích lên xuống vài phần trăm giây mỗi lần báo:

@@ -10,7 +10,7 @@ export const defaultTheme: Theme = {
   background: { type: 'preset', color: PRESETS.dark.bg, uri: '', dim: 0.25 },
   colors: PRESETS.dark,
   glass: { blur: 40 },
-  effects: { ambient: { snow: true, green: true, ocean: true, latte: true } },
+  effects: { ambient: { snow: true, green: true, ocean: true, latte: true, sakura: true, meteor: true } },
   dock: {
     position: 'bottom',
     items: ['home', 'search', 'library', 'settings'],
@@ -32,5 +32,6 @@ export const defaultTheme: Theme = {
     sections: ['myPlaylists', 'recent', 'feed', 'trending', 'recommended', 'playlistPicks'],
     hidden: [],
     trendingRange: 'week',
+    trendingRegion: 'ZZ',
   },
 };

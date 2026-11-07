@@ -45,6 +45,18 @@ function MiniScreen({ p, id, width, h }: { p: Palette; id: ThemePresetId; width:
         [[0.08, 0.06, 30], [0.82, 0.5, -20], [0.12, 0.66, 70]].map(([x, y, r], i) => (
           <View key={i} style={{ position: 'absolute', left: x * width, top: y * h, width: 7, height: 10, borderRadius: 5, backgroundColor: '#8A5A3B', opacity: 0.6, transform: [{ rotate: `${r}deg` }] }} />
         ))}
+      {id === 'sakura' &&
+        [[0.7, 0.04, 16], [0.84, 0.1, 13], [0.62, 0.12, 10], [0.9, 0.0, 14]].map(([x, y, r], i) => (
+          <View key={`s${i}`} style={{ position: 'absolute', left: x * width, top: y * h, width: r, height: r, borderRadius: r, backgroundColor: '#F4B4C9', opacity: 0.9 }} />
+        ))}
+      {id === 'meteor' && (
+        <>
+          {[[0.12, 0.2], [0.8, 0.12], [0.5, 0.42], [0.3, 0.6], [0.9, 0.55], [0.65, 0.25]].map(([x, y], i) => (
+            <View key={`m${i}`} style={{ position: 'absolute', left: x * width, top: y * h, width: 2, height: 2, borderRadius: 1, backgroundColor: '#FFFFFF' }} />
+          ))}
+          <View style={{ position: 'absolute', left: width * 0.45, top: h * 0.22, width: width * 0.3, height: 1.2, backgroundColor: 'rgba(255,255,255,0.7)', transform: [{ rotate: '-38deg' }] }} />
+        </>
+      )}
       {id === 'ocean' &&
         [[0.85, 0.62, 6], [0.8, 0.5, 4], [0.86, 0.4, 3], [0.1, 0.58, 5]].map(([x, y, r], i) => (
           <View key={i} style={{ position: 'absolute', left: x * width, top: y * h, width: r, height: r, borderRadius: r, borderWidth: 1, borderColor: '#5B8FC9' }} />

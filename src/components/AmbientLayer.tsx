@@ -6,5 +6,11 @@ const impl = Platform.OS === 'web' ? null : (require('../theme/effects/Ambient')
 
 export function AmbientEffect({ paused }: { paused?: boolean }) {
   if (!impl) return null;
-  return <impl.AmbientEffect paused={paused} />;
+  // Cảnh nền đứng yên (Sakura, Mưa sao băng) + phần chuyển động
+  return (
+    <>
+      <impl.ThemeScene />
+      <impl.AmbientEffect paused={paused} />
+    </>
+  );
 }

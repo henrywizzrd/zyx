@@ -19,6 +19,7 @@ import { addToPlaylist, createPlaylist, getPlaylists, playlistHas, useDbVersion 
 import { download, removeDownload, useDownloads } from '../data/downloads';
 import { musicSupported, ytmusic } from '../music/lazy';
 import { useScreenSize } from './ScreenSize';
+import { playerProgress } from './PlayerTransition';
 import { openComposer } from './PostComposer';
 
 // Bảng thao tác của app (thay cho action sheet / hộp thoại của iOS):
@@ -81,7 +82,15 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
   const { push } = useNav();
   const dlState = useDownloads();
   useDbVersion(); // playlist đổi thì vẽ lại (dấu tích, số bài)
-  const colors = theme.colors;
+  // Mở từ trong player: kính mờ tối giống bảng hàng chờ (chữ trắng), thay vì màu theo theme
+  const [dark, setDark] = useState(false);
+  const colors = useMemo(
+    () =>
+      dark
+        ? { ...theme.colors, text: '#FFFFFF', textSecondary: 'rgba(255,255,255,0.62)', border: 'rgba(255,255,255,0.14)', surface: 'rgba(255,255,255,0.1)' }
+        : theme.colors,
+    [dark, theme.colors]
+  );
   const { text, textSecondary, accent, border, surface, glassRgb, glassTint } = colors;
 
   const [content, setContent] = useState<Content | null>(null);
@@ -95,6 +104,7 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
   mountedRef.current = !!content;
   const present = useCallback(
     (c: Content) => {
+      if (!mountedRef.current) setDark(playerProgress.value > 0.5);
       setContent(c);
       setShown(true);
       if (mountedRef.current) y.value = withSpring(0, SPRING); // đang đóng dở mà mở lại: kéo lên luôn
@@ -390,8 +400,21 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
               style={[styles.card, { marginBottom: Math.max(8, insets.bottom - 26) }, landscape && { width: Math.min(winW - 32, 560), alignSelf: 'center', marginHorizontal: 0 }, cardStyle]}
             >
               {/* Kính mờ theo theme */}
-              {Platform.OS === 'ios' && <BlurView intensity={50} tint={glassTint} style={StyleSheet.absoluteFill} />}
-              <View style={[StyleSheet.absoluteFill, { backgroundColor: Platform.OS === 'ios' ? `rgba(${glassRgb},0.72)` : surface }]} />
+              {dark ? (
+                Platform.OS === 'ios' ? (
+                  <>
+                    <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} />
+                    <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(20,20,20,0.32)' }]} />
+                  </>
+                ) : (
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(22,22,22,0.86)' }]} />
+                )
+              ) : (
+                <>
+                  {Platform.OS === 'ios' && <BlurView intensity={50} tint={glassTint} style={StyleSheet.absoluteFill} />}
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: Platform.OS === 'ios' ? `rgba(${glassRgb},0.72)` : surface }]} />
+                </>
+              )}
               <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.edge, { borderColor: border }]} />
 
               {/* Phần đầu: thanh kéo + bài / album đang thao tác. Vuốt xuống ở đây để đóng */}

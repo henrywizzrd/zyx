@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
-import { Canvas, Picture, Skia, useClock } from '@shopify/react-native-skia';
+import { Canvas, ImageSVG, Picture, Skia, useClock } from '@shopify/react-native-skia';
 import { useDerivedValue } from 'react-native-reanimated';
 import { useTheme } from '../ThemeProvider';
 import { drawFlake, FLAKE_SVGS } from './snowflakes';
@@ -8,6 +8,7 @@ import { drawLeaf, LEAF_COLORS, LEAF_SVGS, makeLeafPaths } from './leaves';
 import { BEAN_COLORS, BEAN_SVG } from './beans';
 import { drawBubble, drawFish, FISH_BODY, FISH_COLORS, FISH_FIN, FISH_TAIL } from './ocean';
 import { useScreenSize } from '../../components/ScreenSize';
+import { LOOSE_PETAL_PATH, meteorSkySvg, PETAL_PATH, sakuraSceneSvg } from './scenes';
 
 // Hiệu ứng rơi nhẹ liên tục phía sau nội dung (bật/tắt trong trang Giao diện):
 //  - bộ Snow: bông tuyết
@@ -34,10 +35,38 @@ export function AmbientEffect({ paused }: { paused?: boolean }) {
   if (theme.preset === 'green' && on.green) return <LeafCanvas />;
   if (theme.preset === 'ocean' && on.ocean) return <OceanCanvas onMedia={onMedia} />;
   if (theme.preset === 'latte' && on.latte) return <CoffeeBeans />;
+  if (theme.preset === 'sakura' && on.sakura) return <SakuraPetals />;
+  if (theme.preset === 'meteor' && on.meteor) return <MeteorShower />;
   return null;
 }
 
+// Cảnh nền đứng yên của bộ Sakura / Mưa sao băng (vẽ một lần, không chạy liên tục nên luôn hiện, kể cả khi tắt hiệu ứng).
+// Người dùng đặt ảnh / video làm nền thì không vẽ cảnh (để thấy ảnh của họ)
+export function ThemeScene() {
+  const { theme } = useTheme();
+  const { width, height } = useScreenSize();
+  const kind = theme.background.type === 'preset' && (theme.preset === 'sakura' || theme.preset === 'meteor') ? theme.preset : null;
+  const svg = useMemo(() => {
+    if (!kind || width < 1 || height < 1) return null;
+    try {
+      return Skia.SVG.MakeFromString(kind === 'sakura' ? sakuraSceneSvg(width, height) : meteorSkySvg(width, height));
+    } catch (e) {
+      console.warn('[theme] scene', e);
+      return null;
+    }
+  }, [kind, width, height]);
+  if (!svg) return null;
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Canvas style={StyleSheet.absoluteFill}>
+        <ImageSVG svg={svg} x={0} y={0} width={width} height={height} />
+      </Canvas>
+    </View>
+  );
+}
+
 const rnd = (i: number, k: number) => {
+  'worklet'; // dùng được cả trong hàm vẽ chạy trên UI thread (sao băng chọn vị trí mới mỗi đợt)
   const v = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453;
   return v - Math.floor(v);
 };
@@ -284,6 +313,171 @@ function CoffeeBeans() {
           canvas.drawPath(bean, paint);
           canvas.restore();
         }
+      }
+    } catch (e) {
+      // vẽ lỗi thì khung hình này để trống
+    }
+    return rec.finishRecordingAsPicture();
+  });
+  return <Layer picture={picture} />;
+}
+
+// Bộ Sakura: cánh hoa anh đào (và thỉnh thoảng cả bông hoa nhỏ) rơi chéo theo gió, đưa qua lại và lật như lá
+const PETAL_COLORS = ['#F7A8C0', '#F9C2D3', '#FBD7E2', '#F48FB1'];
+function SakuraPetals() {
+  const { width, height } = useScreenSize();
+  const clock = useClock();
+  // Mỗi cánh 10 số: x, y ban đầu, tốc độ rơi, kích thước, độ đưa, tần số đưa, độ đậm, tốc độ lật, màu, là bông hoa (1) hay cánh (0)
+  const petals = useMemo(() => {
+    const out: number[] = [];
+    for (let i = 0; i < scaled(18, width, height); i++) {
+      const depth = rnd(i, 3);
+      out.push(
+        rnd(i, 1), rnd(i, 2), 26 + depth * 30, 7 + depth * 7, 14 + rnd(i, 4) * 26, 0.1 + rnd(i, 5) * 0.16,
+        0.6 + depth * 0.35, 0.3 + rnd(i, 6) * 0.5, i % PETAL_COLORS.length, i % 6 === 0 ? 1 : 0
+      );
+    }
+    return out;
+  }, [width, height]);
+
+  const picture = useDerivedValue(() => {
+    const t = clock.value / 1000;
+    const rec = Skia.PictureRecorder();
+    const canvas = rec.beginRecording(Skia.XYWHRect(0, 0, width, height));
+    try {
+      const petal = Skia.Path.MakeFromSVGString(LOOSE_PETAL_PATH);
+      const flowerPetal = Skia.Path.MakeFromSVGString(PETAL_PATH);
+      if (petal && flowerPetal) {
+        const paint = Skia.Paint();
+        paint.setAntiAlias(true);
+        const center = Skia.Paint();
+        center.setAntiAlias(true);
+        center.setColor(Skia.Color('#E2799A'));
+        const M = 40;
+        const H = height + M * 2;
+        const W = width + M * 2;
+        for (let i = 0, k = 0; i < petals.length; i += 10, k++) {
+          const sway = Math.sin(t * petals[i + 5] * 6.28 + k);
+          const fall = petals[i + 2] * t;
+          // gió thổi chéo nhẹ từ phải sang trái (cánh rơi từ cây bên phải)
+          let x = (petals[i] * W - fall * 0.45 + sway * petals[i + 4]) % W;
+          if (x < 0) x += W;
+          const y = ((petals[i + 1] * H + fall) % H) - M;
+          const flip = Math.cos(t * petals[i + 7] * 6.28 + k * 1.7);
+          const size = petals[i + 3];
+          paint.setColor(Skia.Color(PETAL_COLORS[petals[i + 8]]));
+          paint.setAlphaf(petals[i + 6]);
+          canvas.save();
+          canvas.translate(x - M, y);
+          canvas.rotate(k * 53 + sway * 40 + t * 20, 0, 0);
+          if (petals[i + 9] > 0) {
+            // bông hoa nhỏ 5 cánh xoay tròn khi rơi
+            canvas.scale(size * 1.1, size * 1.1 * Math.max(0.35, Math.abs(flip)));
+            for (let p = 0; p < 5; p++) {
+              canvas.save();
+              canvas.rotate(p * 72, 0, 0);
+              canvas.scale(0.62, 1);
+              canvas.drawPath(flowerPetal, paint);
+              canvas.restore();
+            }
+            canvas.drawCircle(0, 0, 0.17, center);
+          } else {
+            canvas.scale(size, size * Math.max(0.2, Math.abs(flip)));
+            canvas.drawPath(petal, paint);
+          }
+          canvas.restore();
+        }
+      }
+    } catch (e) {
+      // vẽ lỗi thì khung hình này để trống
+    }
+    return rec.finishRecordingAsPicture();
+  });
+  return <Layer picture={picture} />;
+}
+
+// Bộ Mưa sao băng: vài ngôi sao lấp lánh, và cứ khoảng 8 giây lại có một đợt 5-6 sao băng vạch chéo xuống bên trái
+// (thêm một ngôi lẻ ở giữa hai đợt). Trời sao + dải ngân hà là cảnh đứng yên (ThemeScene)
+const SHOWER_EVERY = 8;
+function MeteorShower() {
+  const { width, height } = useScreenSize();
+  const clock = useClock();
+  // Sao lấp lánh: x, y, bán kính, tốc độ nhấp nháy, pha
+  const twinkles = useMemo(() => {
+    const out: number[] = [];
+    for (let i = 0; i < scaled(26, width, height); i++) out.push(rnd(i, 31), rnd(i, 32), 0.8 + rnd(i, 33) * 1.1, 0.4 + rnd(i, 34) * 1.2, rnd(i, 35) * 6.28);
+    return out;
+  }, [width, height]);
+
+  const picture = useDerivedValue(() => {
+    const t = clock.value / 1000;
+    const rec = Skia.PictureRecorder();
+    const canvas = rec.beginRecording(Skia.XYWHRect(0, 0, width, height));
+    try {
+      const paint = Skia.Paint();
+      paint.setAntiAlias(true);
+      paint.setColor(Skia.Color('#FFFFFF'));
+      for (let i = 0; i < twinkles.length; i += 5) {
+        const a = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(t * twinkles[i + 3] * 3 + twinkles[i + 4]));
+        paint.setAlphaf(a);
+        const x = twinkles[i] * width;
+        const y = twinkles[i + 1] * height;
+        const r = twinkles[i + 2];
+        canvas.drawCircle(x, y, r, paint);
+        // tia sáng chữ thập mờ cho sao to
+        if (r > 1.4) {
+          paint.setAlphaf(a * 0.35);
+          canvas.drawRect(Skia.XYWHRect(x - r * 3.2, y - 0.35, r * 6.4, 0.7), paint);
+          canvas.drawRect(Skia.XYWHRect(x - 0.35, y - r * 3.2, 0.7, r * 6.4), paint);
+        }
+      }
+
+      // Sao băng: hướng bay xuống dưới sang trái ~38°
+      const dx = -Math.cos(0.66);
+      const dy = Math.sin(0.66);
+      const diag = Math.hypot(width, height);
+      const cycle = Math.floor(t / SHOWER_EVERY);
+      const local = t - cycle * SHOWER_EVERY;
+      const trail = Skia.Paint();
+      trail.setAntiAlias(true);
+      trail.setStyle(1);
+      trail.setStrokeCap(1);
+      const head = Skia.Paint();
+      head.setAntiAlias(true);
+      head.setColor(Skia.Color('#FFFFFF'));
+      // 6 ngôi trong đợt + 1 ngôi lẻ giữa hai đợt
+      for (let m = 0; m < 7; m++) {
+        const lone = m === 6;
+        const seed = cycle * 7 + m;
+        const start = lone ? SHOWER_EVERY * 0.55 + rnd(seed, 41) * 0.8 : rnd(seed, 42) * 1.8 + (m === 5 && rnd(seed, 43) < 0.4 ? 99 : 0); // đợt có 5 hoặc 6 ngôi
+        const dur = 0.9 + rnd(seed, 44) * 0.6;
+        const p = (local - start) / dur;
+        if (p < 0 || p > 1) continue;
+        const sx = width * (0.25 + rnd(seed, 45) * 0.95);
+        const sy = height * (-0.05 + rnd(seed, 46) * 0.45);
+        const travel = diag * (0.28 + rnd(seed, 47) * 0.2);
+        const ease = 1 - (1 - p) * (1 - p);
+        const hx = sx + dx * travel * ease;
+        const hy = sy + dy * travel * ease;
+        const len = (80 + rnd(seed, 48) * 90) * Math.min(1, p * 4); // đuôi dài dần lúc mới xuất hiện
+        const fade = p < 0.12 ? p / 0.12 : p > 0.75 ? (1 - p) / 0.25 : 1;
+        const tx = hx - dx * len;
+        const ty = hy - dy * len;
+        trail.setShader(
+          Skia.Shader.MakeLinearGradient(
+            { x: hx, y: hy },
+            { x: tx, y: ty },
+            [Skia.Color(`rgba(255,255,255,${(0.95 * fade).toFixed(3)})`), Skia.Color('rgba(180,200,255,0)')],
+            null,
+            0
+          )
+        );
+        trail.setStrokeWidth(1.6);
+        canvas.drawLine(hx, hy, tx, ty, trail);
+        head.setAlphaf(0.25 * fade);
+        canvas.drawCircle(hx, hy, 4.5, head);
+        head.setAlphaf(fade);
+        canvas.drawCircle(hx, hy, 1.6, head);
       }
     } catch (e) {
       // vẽ lỗi thì khung hình này để trống
