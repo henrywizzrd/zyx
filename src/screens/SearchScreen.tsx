@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useGlass, GlassFill, glassShadow } from '../components/Glass';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { usePlayerPick } from '../player/PlayerProvider';
@@ -767,11 +768,20 @@ function GenreTile({ title, color, width, height, onPress }: { title: string; co
   const rgb = rgbOf(color);
   const dark = theme.colors.glassTint === 'dark';
   return (
-    <ScalePressable onPress={onPress} style={[styles.tile, { width, height }]}>
-      {/* tấm kính pha màu thể loại, viền sáng cùng màu */}
-      <GlassFill radius={16} slab />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(${rgb},${glass.alpha(dark ? 0.26 : 0.36, dark ? 0.5 : 0.65).toFixed(2)})` }]} />
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: 16, borderCurve: 'continuous', borderWidth: 1.2, borderColor: `rgba(${rgb},0.75)` }]} />
+    <ScalePressable onPress={onPress} style={[styles.tile, { width, height }, glassShadow(1, !dark)]}>
+      {/* tấm kính như dock (nổi trên nền, có bóng đổ), màu thể loại loang nhẹ từ góc trên trái thay vì phủ đặc
+          → vẫn thấy chất kính, nhận ra thể loại qua sắc màu + viền + biểu tượng */}
+      <GlassFill radius={TILE_R} solid={0.5} slab />
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: TILE_R, borderCurve: 'continuous', overflow: 'hidden' }]}>
+        <LinearGradient
+          colors={[`rgba(${rgb},${glass.alpha(dark ? 0.42 : 0.5, dark ? 0.58 : 0.66).toFixed(2)})`, `rgba(${rgb},${dark ? 0.1 : 0.14})`, `rgba(${rgb},0)`]}
+          locations={[0, 0.55, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </View>
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: TILE_R, borderCurve: 'continuous', borderWidth: 1, borderColor: `rgba(${rgb},0.55)` }]} />
       <Text numberOfLines={2} style={[styles.tileTitle, { color: dark ? '#FFFFFF' : theme.colors.text }]}>{title}</Text>
       <Ionicons
         name={iconFor(title)}
@@ -783,6 +793,7 @@ function GenreTile({ title, color, width, height, onPress }: { title: string; co
   );
 }
 
+const TILE_R = 18;
 const styles = StyleSheet.create({
   ytThumb: { width: 96, height: 54, borderRadius: 6 },
   searchBox: {
@@ -796,7 +807,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   input: { flex: 1, fontSize: 15, fontWeight: '500', paddingVertical: 0 },
-  tile: { height: 96, borderRadius: 16, borderCurve: 'continuous', padding: 12, overflow: 'hidden' },
+  tile: { height: 96, borderRadius: TILE_R, borderCurve: 'continuous', padding: 12 },
   tileTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
   tileDeco: {
     position: 'absolute',

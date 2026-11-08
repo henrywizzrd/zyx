@@ -4,7 +4,7 @@ import { Animated, Easing, Platform, Pressable, StyleSheet, View } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { usePlayerPick } from '../player/PlayerProvider';
-import { useDraggable } from './useDraggable';
+import { GLIDE, useDraggable } from './useDraggable';
 import type { MiniAnchor } from '../theme/types';
 import { playerOrigin } from './PlayerTransition';
 import { MP_THICKNESS, resolveMini, useFrame } from './layout';
@@ -87,10 +87,10 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
   }, [geom.x, geom.y, S, bubbleRadius, hidden, theme.miniPlayer.merged]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- Thả ở chỗ mới: trượt bong bóng từ chỗ ngón tay nhả tới chỗ mới
-  const landing = useRef<{ dx: number; dy: number } | null>(null);
+  const landing = useRef<{ dx: number; dy: number; vx: number; vy: number } | null>(null);
   const drop = useCallback(
-    (a: MiniAnchor, dx: number, dy: number) => {
-      landing.current = { dx, dy };
+    (a: MiniAnchor, dx: number, dy: number, vx: number, vy: number) => {
+      landing.current = { dx, dy, vx, vy };
       setAnchor(a);
     },
     [setAnchor]
@@ -116,7 +116,8 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
     const oy = prevGeom.y + l.dy - geom.y;
     d.pan.stopAnimation();
     d.pan.setValue({ x: ox, y: oy });
-    Animated.timing(d.pan, { toValue: { x: 0, y: 0 }, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE }).start();
+    // Trượt tiếp từ đúng vận tốc lúc buông tay rồi hít vào chỗ mới (trước đây: luôn bay 220ms, bỏ qua cú ném → khựng lúc nhả)
+    Animated.spring(d.pan, { toValue: { x: 0, y: 0 }, velocity: { x: clampV(l.vx), y: clampV(l.vy) } as any, ...GLIDE, useNativeDriver: USE_NATIVE }).start();
   }, [geom.x, geom.y, anchor.edge, anchor.t]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Bong bóng lún nhẹ khi ngón tay chạm vào
@@ -196,6 +197,9 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
     </View>
   );
 }
+
+// Vận tốc ngón tay (px/ms) → px/giây cho lò xo của Animated, giới hạn để cú ném quá mạnh không văng vọt
+const clampV = (v: number) => Math.max(-4, Math.min(4, v || 0)) * 1000;
 
 const styles = StyleSheet.create({
   layer: { position: 'absolute' },

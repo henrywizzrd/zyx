@@ -10,6 +10,9 @@ import { log } from '../data/applog';
 const USE_NATIVE = Platform.OS !== 'web';
 const MERGE_PAD = 12; // ngón tay cách khối kia bao nhiêu px thì tính là chạm để hợp nhất
 const LONG_PRESS_MS = 300;
+// Bong bóng trượt về chỗ: lò xo giảm chấn tới hạn (damping = 2√stiffness) — giống "trượt có ma sát rồi hít về mép" trên
+// trang thử: tới nơi là dừng, không vượt, không nảy. Vận tốc lúc buông tay được giữ nguyên nên không bị khựng lúc nhả
+export const GLIDE = { stiffness: 110, damping: 21, mass: 1, overshootClamping: true };
 
 type Rect = { x: number; y: number; w: number; h: number };
 type Target = Position | MiniAnchor | 'merge';
@@ -30,7 +33,7 @@ const targetKey = (t: Target) => (typeof t === 'string' ? t : anchorKey(t, 2));
 export interface LiveAnchor {
   anchor: MiniAnchor;
   origin: () => { cx: number; cy: number };
-  drop: (a: MiniAnchor, dx: number, dy: number) => void;
+  drop: (a: MiniAnchor, dx: number, dy: number, vx: number, vy: number) => void; // vx, vy: vận tốc lúc buông tay (px/ms)
 }
 
 // Dock giãn ra / co lại êm khi thêm / bớt mục Player (không nảy)
@@ -95,8 +98,8 @@ export function useDraggable(kind: 'dock' | 'player', live?: LiveAnchor) {
 
   const snapBack = () => {
     if (latest.current.live) {
-      // Mini player: trượt về chỗ cũ, không nảy
-      Animated.timing(pan, { toValue: { x: 0, y: 0 }, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE }).start();
+      // Mini player: trượt về chỗ cũ như tấm kính trên mặt bàn (lò xo giảm chấn tới hạn: không vượt, không nảy)
+      Animated.spring(pan, { toValue: { x: 0, y: 0 }, ...GLIDE, useNativeDriver: USE_NATIVE }).start();
       return;
     }
     Animated.timing(pan, { toValue: { x: 0, y: 0 }, duration: 240, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE }).start();
@@ -110,7 +113,7 @@ export function useDraggable(kind: 'dock' | 'player', live?: LiveAnchor) {
     lastEdge.current = undefined;
   };
 
-  const finish = (dx: number, dy: number) => {
+  const finish = (dx: number, dy: number, vx = 0, vy = 0) => {
     const t = target.current;
     reset();
 
@@ -147,7 +150,7 @@ export function useDraggable(kind: 'dock' | 'player', live?: LiveAnchor) {
     if (t && typeof t !== 'string') {
       if (anchorKey(t, 3) !== latest.current.akey) {
         const live = latest.current.live;
-        if (live) live.drop(t, dx, dy);
+        if (live) live.drop(t, dx, dy, vx, vy);
         else {
           landFrom.current = { cx: start.current.cx + dx, cy: start.current.cy + dy };
           setMiniPlayerAnchor(t);
@@ -180,10 +183,12 @@ export function useDraggable(kind: 'dock' | 'player', live?: LiveAnchor) {
 
   const responder = useRef(
     PanResponder.create({
-      // Chỉ nhận cử chỉ kéo sau khi đã giữ lâu, để các nút bên trong vẫn bấm bình thường
-      onMoveShouldSetPanResponder: () => armed.current,
+      // Dock: chỉ nhận cử chỉ kéo sau khi đã giữ lâu, để các nút bên trong vẫn bấm bình thường.
+      // Mini player: kéo được ngay (như trang thử trên web) — ngón tay di quá 6px là cầm lên, chạm nhẹ vẫn là mở player
+      onMoveShouldSetPanResponder: (_, g) => armed.current || (kind === 'player' && !landRef.current && Math.hypot(g.dx, g.dy) > 6),
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => {
+        if (!armed.current) arm(); // mini player kéo ngay không cần giữ lâu: chuẩn bị như lúc giữ lâu
         dragging.current = true;
       },
       onPanResponderMove: (_, g) => {
@@ -218,7 +223,7 @@ export function useDraggable(kind: 'dock' | 'player', live?: LiveAnchor) {
             lastKey.current = targetKey(next);
           }
         }
-        finish(g.dx, g.dy);
+        finish(g.dx, g.dy, g.vx, g.vy);
       },
       onPanResponderTerminate: () => cancel(),
     })
