@@ -6,7 +6,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { usePlayerPick } from '../player/PlayerProvider';
 import { GLIDE, useDraggable } from './useDraggable';
 import type { MiniAnchor } from '../theme/types';
-import { playerOrigin } from './PlayerTransition';
+import { playerOrigin, prewarmPlayer } from './PlayerTransition';
 import { MP_THICKNESS, resolveMini, useFrame } from './layout';
 
 const USE_NATIVE = Platform.OS !== 'web';
@@ -122,7 +122,10 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
 
   // Bong bóng lún nhẹ khi ngón tay chạm vào
   const press = useRef(new Animated.Value(1)).current;
-  const pressIn = () => Animated.timing(press, { toValue: 0.9, duration: 70, useNativeDriver: USE_NATIVE }).start();
+  const pressIn = () => {
+    prewarmPlayer(); // ngón tay vừa chạm: đánh thức màn player trước, nhấc tay là mở ra đầy đủ nút
+    Animated.timing(press, { toValue: 0.9, duration: 70, useNativeDriver: USE_NATIVE }).start();
+  };
   const pressOut = () => Animated.timing(press, { toValue: 1, duration: 160, easing: Easing.out(Easing.quad), useNativeDriver: USE_NATIVE }).start();
 
   // Hiệu ứng tách ra: bay từ mục Player trên dock về vị trí của bong bóng.

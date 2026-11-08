@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, PanResponder, PanResponderInstance, StyleSheet, View } from 'react-native';
+import { Image, PanResponder, PanResponderInstance, Platform, StyleSheet, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 import Animated, { Easing, interpolate, makeMutable, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { usePlayerPick } from '../player/PlayerProvider';
 import { SmartImage } from './Cover';
@@ -20,6 +21,13 @@ export const playerOrigin: {
 
 // Độ mở của player (0 = mini player, 1 = đầy đủ), dùng chung cho lớp làm mờ nền phía sau (BackdropBlur trong App)
 export const playerProgress = makeMutable(0);
+
+// Đánh thức màn player TRƯỚC khi mở: ngón tay vừa chạm bong bóng (chưa nhấc lên) là màn player đang ngủ được vẽ lại
+// ngay (vẫn ẩn), tới lúc nhấc tay mở ra thì đã sẵn sàng — không còn cảnh nở ra mà thiếu nút, đợi phóng to xong mới hiện
+let warmHook: (() => void) | null = null;
+export function prewarmPlayer() {
+  warmHook?.();
+}
 
 type Ctx = {
   reportCover: (r: Rect) => void; // không còn dùng, giữ lại để các file cũ không lỗi
@@ -90,6 +98,17 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
   // Không làm vậy thì mỗi khung hình máy phải vẽ lại toàn bộ: ảnh bìa có mép mờ (mask), chữ phát sáng, nền mờ...
   // bên trong một khung bo góc đang đổi kích thước → tụt khung hình
   const [moving, setMoving] = useState(open);
+  // "Chụp thành ảnh" chỉ bật sau 2 khung hình kể từ lúc bắt đầu chuyển: để màn player kịp vẽ đủ (nút, chữ...) rồi mới chụp.
+  // Bật ngay thì có khi chụp đúng lúc màn player chưa vẽ xong → nở ra mà mất nút cho tới khi phóng to xong
+  const [raster, setRaster] = useState(false);
+  useEffect(() => {
+    setRaster(false);
+    if (!moving) return;
+    let id = requestAnimationFrame(() => {
+      id = requestAnimationFrame(() => setRaster(true));
+    });
+    return () => cancelAnimationFrame(id);
+  }, [moving]);
   const onOpenedRef = useRef(onOpened);
   onOpenedRef.current = onOpened;
   const stopMoving = useCallback(() => {
@@ -217,6 +236,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
     const k = Math.max(sw, sh);
     return { transform: [{ scaleX: k / sw }, { scaleY: k / sh }] };
   });
+  const veil = useAnimatedStyle(() => ({ opacity: interpolate(p.value, [0.3, 0.92], [1, 0], 'clamp') }));
   const screen = useAnimatedStyle(() => ({ opacity: interpolate(p.value, [0.22, 0.55], [0, 1], 'clamp') }));
 
   // Ảnh album (vuông, ở đầu) phủ lên, mờ dần để lộ màn player (đóng lại thì hiện dần trở lại).
@@ -259,6 +279,19 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
   if (mounted) everRef.current = true;
   // Đóng băng sau một nhịp: để màn player kịp nhận active = false (dừng xoay nền, dừng đồng hồ lời...) rồi mới đứng im
   const [frozen, setFrozen] = useState(false);
+  const [warm, setWarm] = useState(false);
+  const warmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    warmHook = () => {
+      setWarm(true);
+      // Chạm rồi kéo đi chỗ khác (không mở): một lúc sau ngủ lại
+      if (warmTimer.current) clearTimeout(warmTimer.current);
+      warmTimer.current = setTimeout(() => setWarm(false), 2500);
+    };
+    return () => {
+      warmHook = null;
+    };
+  }, []);
   useEffect(() => {
     if (mounted) return setFrozen(false);
     const id = setTimeout(() => setFrozen(true), 60);
@@ -273,9 +306,16 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
       <Animated.View style={[styles.frame, { width: W, height: H }, win]}>
         <Animated.View style={[styles.innerFrame, { width: W, height: H }, inner]}>
           <TransitionContext.Provider value={ctx}>
-            <Animated.View style={[{ width: W, height: H }, screen]} shouldRasterizeIOS={moving} renderToHardwareTextureAndroid={moving}>
-              <Freeze freeze={frozen && !mounted}>{children}</Freeze>
+            <Animated.View style={[{ width: W, height: H }, screen]} shouldRasterizeIOS={moving && raster} renderToHardwareTextureAndroid={moving && raster}>
+              <Freeze freeze={frozen && !mounted && !warm}>{children}</Freeze>
             </Animated.View>
+            {/* Nhoè chuyển động: lúc mới nở ra màn player mờ nhoè, nét dần khi gần to hẳn (đóng thì ngược lại) —
+                mắt thấy chuyển động liền mạch hơn, che luôn những khung hình chưa kịp vẽ */}
+            {Platform.OS === 'ios' && (
+              <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, veil]}>
+                <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+              </Animated.View>
+            )}
           </TransitionContext.Provider>
         </Animated.View>
       </Animated.View>
