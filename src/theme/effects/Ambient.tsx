@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
 import { Canvas, ImageSVG, Picture, Skia } from '@shopify/react-native-skia';
 import { makeMutable, useDerivedValue, useFrameCallback } from 'react-native-reanimated';
@@ -8,12 +8,18 @@ import { makeMutable, useDerivedValue, useFrameCallback } from 'react-native-rea
 // (trước đây mỗi lớp có đồng hồ riêng tính từ lúc nó xuất hiện → sao băng lệch nhau)
 const sharedClock = makeMutable(0);
 const clockBase = makeMutable(-1);
+// Lớp hiệu ứng có đang chạy không (mở Player / app ở nền: dừng vẽ nhưng VẪN giữ lớp, mở lại không phải dựng từ đầu)
+const RunningContext = createContext(true);
 function useAmbientClock() {
-  useFrameCallback((f) => {
+  const running = useContext(RunningContext);
+  const cb = useFrameCallback((f) => {
     'worklet';
     if (clockBase.value < 0) clockBase.value = f.timestamp;
     sharedClock.value = f.timestamp - clockBase.value;
-  });
+  }, running);
+  useEffect(() => {
+    cb.setActive(running);
+  }, [running]); // eslint-disable-line react-hooks/exhaustive-deps
   return sharedClock;
 }
 import { useTheme } from '../ThemeProvider';
@@ -39,7 +45,20 @@ export function AmbientEffect({ paused }: { paused?: boolean }) {
     const sub = AppState.addEventListener('change', (s) => setActive(s !== 'background'));
     return () => sub.remove();
   }, []);
-  if (paused || !active) return null;
+  const running = !paused && active;
+  const effect = pickEffect(theme);
+  if (!effect) return null;
+  // Đóng player: trước đây lớp hiệu ứng được dựng lại từ đầu → luồng JS khựng ~300ms mỗi lần. Giờ chỉ tạm dừng và ẩn đi
+  return (
+    <RunningContext.Provider value={running}>
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: running ? 1 : 0 }]}>
+        {effect}
+      </View>
+    </RunningContext.Provider>
+  );
+}
+
+function pickEffect(theme: ReturnType<typeof useTheme>['theme']): React.ReactElement | null {
   const onMedia = theme.background.type !== 'preset' && !!theme.background.uri;
   const on = theme.effects.ambient;
   if (theme.preset === 'snow' && on.snow) {

@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { defaultTheme } from './defaultTheme';
 import { AmbientPresetId, PRESETS, ThemePresetId } from './presets';
 import { CoverTint, useCoverTint } from './coverTint';
+import { log as appLog } from '../data/applog';
 import { Edge, HomeSection, LibraryLayout, MiniAnchor, MiniPlayerVariant, Position, TabId, Theme, TrendingRange } from './types';
 
 const STORAGE_KEY = 'zyx:theme';
@@ -242,7 +243,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setHome: (patch) => setThemeState((t) => ({ ...t, home: { ...t.home, ...patch } })),
       setLanguage: (language) => setThemeState((t) => ({ ...t, language })),
       // Chọn một bộ màu cụ thể thì thôi theo hệ thống; chọn "Theo hệ thống" thì followSystem = true
-      setPreset: (preset, followSystem = false) => setThemeState((t) => derive({ ...t, preset, followSystem })),
+      setPreset: (preset, followSystem = false) => {
+        appLog('ui', `đổi theme → ${preset}${followSystem ? ' (theo hệ thống)' : ''}`);
+        setThemeState((t) => derive({ ...t, preset, followSystem }));
+      },
       setBackground: (patch) => setThemeState((t) => derive({ ...t, background: { ...t.background, ...patch } })),
       setGlassBlur: (blur) => setThemeState((t) => ({ ...t, glass: { blur: Math.max(0, Math.min(100, blur)) } })),
       setAmbient: (preset, on) =>

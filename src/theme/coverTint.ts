@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { Platform } from 'react-native';
 import type { Palette } from './presets';
+import { log } from '../data/applog';
 
 // Bộ màu "Theo ảnh bìa": lấy màu nổi bật của ảnh bìa bài đang phát → nền tối ngả theo màu đó + màu nhấn sáng.
 // Ảnh bìa thu nhỏ còn 24×24 điểm bằng Skia rồi đọc màu (nhẹ, vài mili giây)
@@ -92,6 +93,7 @@ function build(h: number, s: number): CoverTint {
 export async function updateCoverTint(url: string | undefined | null) {
   if (Platform.OS === 'web' || !url || url === tintFor) return;
   tintFor = url;
+  const t0 = Date.now();
   try {
     const S = require('@shopify/react-native-skia') as typeof import('@shopify/react-native-skia');
     const data = await S.Skia.Data.fromURI(url);
@@ -107,7 +109,9 @@ export async function updateCoverTint(url: string | undefined | null) {
     if (!px || tintFor !== url) return;
     const { h, s } = pick(px instanceof Uint8Array ? px : Uint8Array.from(px, (v) => Math.round(v * 255)));
     tint = build(h, s);
+    const t1 = Date.now();
     subs.forEach((f) => f());
+    log('ui', `màu ảnh bìa: ${tint.accent} (đọc ảnh ${t1 - t0}ms, vẽ lại app ${Date.now() - t1}ms)`);
   } catch (e) {
     console.warn('[coverTint]', e);
   }
