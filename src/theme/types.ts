@@ -41,6 +41,7 @@ export interface Theme {
     position: Position;
     items: TabId[];
     labels: boolean; // hiện chữ dưới icon (Trang chủ, Tìm kiếm...)
+    rimLight?: boolean; // ánh sáng ở viền trên / dưới của tấm kính dock (mặc định bật)
     mode: DockMode;
     bubbleSide: Side; // bubble ở góc dưới bên trái hay phải (mini player sang góc đối diện)
     style: { background: string; radius: number; margin: number };

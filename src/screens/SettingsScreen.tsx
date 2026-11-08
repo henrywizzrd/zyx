@@ -32,7 +32,7 @@ function Chips<T extends string>({ options, value, onSelect, labels }: { options
 }
 
 export function SettingsScreen() {
-  const { theme, landscape, resetTheme, setMerged, setLanguage, setDockLabels, setDockMode, setDockBubbleSide } = useTheme();
+  const { theme, landscape, resetTheme, setMerged, setLanguage, setDockLabels, setDockRimLight, setDockMode, setDockBubbleSide } = useTheme();
   const t = useT();
   const { push } = useNav();
   const pad = useContentInsets();
@@ -97,6 +97,15 @@ export function SettingsScreen() {
           />
         </>
       )}
+
+      {/* Ánh sáng viền trên / dưới của tấm kính dock */}
+      <Text style={label}>{t('settings.dockRim')}</Text>
+      <Chips
+        options={['on', 'off'] as const}
+        value={theme.dock.rimLight === false ? 'off' : 'on'}
+        onSelect={(v) => setDockRimLight(v === 'on')}
+        labels={{ on: t('common.on'), off: t('common.off') }}
+      />
 
       <Text style={label}>{t('settings.merge')}</Text>
       <Chips

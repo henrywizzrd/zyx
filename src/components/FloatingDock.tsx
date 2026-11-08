@@ -212,7 +212,7 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
           }}
         >
           {/* Tấm kính nổi kiểu Apple Music: mờ phần phía sau + vệt sáng + cạnh kính */}
-          <GlassFill radius={radius} solid={0.5} slab />
+          <GlassFill radius={radius} solid={0.5} slab noRim={theme.dock.rimLight === false} />
           {/* Giữ lâu vào khoảng trống giữa các nút cũng kéo được dock */}
           <Pressable
             {...d.pressProps}

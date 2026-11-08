@@ -63,7 +63,9 @@ export function glassShadow(lift = 1, light = false) {
 export const SQUIRCLE = { borderCurve: 'continuous' as const };
 
 // dark: luôn là kính tối (bảng mở từ trong player, chữ trắng) bất kể theme
-export function GlassFill({ radius = 0, solid = 0, slab = false, dark: forceDark = false }: { radius?: number; solid?: number; slab?: boolean; dark?: boolean }) {
+// noRim: tắt ánh sáng ở viền (vệt sáng mép trên, bóng tối mép dưới, viền bắt sáng) — tuỳ chọn của dock.
+// Liquid Glass thật của iOS tự vẽ ánh sáng viền và không tắt được, nên khi tắt thì dùng kính tự vẽ (vẫn mờ, vẫn trong)
+export function GlassFill({ radius = 0, solid = 0, slab = false, dark: forceDark = false, noRim = false }: { radius?: number; solid?: number; slab?: boolean; dark?: boolean; noRim?: boolean }) {
   const { theme } = useTheme();
   const glassRgb = forceDark ? '22,22,26' : theme.colors.glassRgb;
   const glassTint = forceDark ? 'dark' : theme.colors.glassTint;
@@ -74,7 +76,7 @@ export function GlassFill({ radius = 0, solid = 0, slab = false, dark: forceDark
   const real = Platform.OS !== 'web';
 
   // ---- iOS 26+: Liquid Glass thật (khúc xạ, mép kính, phản chiếu do hệ thống vẽ)
-  if (LG) {
+  if (LG && !noRim) {
     const tint =
       material === 'smoke'
         ? `rgba(0,0,0,${(0.22 + 0.33 * g.level).toFixed(2)})`
@@ -115,14 +117,14 @@ export function GlassFill({ radius = 0, solid = 0, slab = false, dark: forceDark
         style={StyleSheet.absoluteFill}
       />
       {/* mép dày: dải sáng mờ ở mép trên, dải tối ở mép dưới */}
-      <LinearGradient
+      {!noRim && <LinearGradient
         colors={[dark ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.5)', 'rgba(255,255,255,0)', 'rgba(0,0,0,0)', dark ? 'rgba(0,0,0,0.22)' : 'rgba(0,0,0,0.08)']}
         locations={[0, 0.18, 0.82, 1]}
         style={StyleSheet.absoluteFill}
-      />
+      />}
       {/* cạnh kính: viền mảnh đều bốn phía + viền sáng hơn ở nửa trên (ánh đèn từ trên) */}
-      <View style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, borderWidth: slab ? 1 : StyleSheet.hairlineWidth, borderColor: slab ? (dark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.6)') : border }]} />
-      {slab && Platform.OS !== 'web' && (
+      <View style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, borderWidth: slab && !noRim ? 1 : StyleSheet.hairlineWidth, borderColor: noRim ? (dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)') : slab ? (dark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.6)') : border }]} />
+      {slab && !noRim && Platform.OS !== 'web' && (
         <MaskedView style={StyleSheet.absoluteFill} maskElement={<LinearGradient colors={['#000', 'transparent']} locations={[0, 0.55]} style={{ flex: 1 }} />}>
           <View style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, borderWidth: 1, borderColor: dark ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.8)' }]} />
         </MaskedView>

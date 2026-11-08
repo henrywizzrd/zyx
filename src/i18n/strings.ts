@@ -446,6 +446,7 @@ export const vi = {
   'stats.topArtists': "Nghệ sĩ nghe nhiều nhất",
   'stats.plays': "{n} lượt",
   'stats.empty': "Chưa có gì để thống kê. Nghe vài bài rồi quay lại đây nhé.",
+  'settings.dockRim': "Ánh sáng viền dock",
 };
 
 export type StringKey = keyof typeof vi;
@@ -875,4 +876,5 @@ export const en: Record<StringKey, string> = {
   'stats.topArtists': "Top artists",
   'stats.plays': "{n} plays",
   'stats.empty': "Nothing to show yet. Play a few songs and come back.",
+  'settings.dockRim': "Dock edge light",
 };

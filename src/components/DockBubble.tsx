@@ -210,7 +210,7 @@ export function DockBubble({ active, onChange, hidden = false }: { active: TabId
         {/* Bubble */}
         <GestureDetector gesture={gesture}>
           <Animated.View style={[styles.bubble, { position: 'absolute', bottom: 0 }, right ? { right: 0 } : { left: 0 }, bubbleStyle]}>
-            <GlassFill radius={Math.round(S * 0.3)} solid={0.5} slab />
+            <GlassFill radius={Math.round(S * 0.3)} solid={0.5} slab noRim={theme.dock.rimLight === false} />
             {open ? (
               <Ionicons name="close" size={26} color={text} />
             ) : activeId ? (
@@ -231,6 +231,7 @@ function RingItem({
   index: number; dx: number; dy: number; cx: number; cy: number; p: SharedValue<number>; hover: SharedValue<number>; total: number;
   active: boolean; accent: string; color: string; onPress: () => void; children: React.ReactNode;
 }) {
+  const { theme } = useTheme();
   // Mỗi tab bay ra từ tâm bubble, tab sau trễ hơn tab trước một chút (xoè như quạt)
   const style = useAnimatedStyle(() => {
     const delay = (index / Math.max(1, total)) * 0.35;
@@ -249,7 +250,7 @@ function RingItem({
   return (
     <Animated.View style={[styles.item, { left: cx - ITEM / 2, top: cy - ITEM / 2 }, style]}>
       <Pressable onPress={onPress} style={styles.itemPress}>
-        <GlassFill radius={Math.round(ITEM * 0.3)} solid={0.55} slab />
+        <GlassFill radius={Math.round(ITEM * 0.3)} solid={0.55} slab noRim={theme.dock.rimLight === false} />
         {/* Sáng lên khi ngón tay vuốt tới */}
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: Math.round(ITEM * 0.3), borderCurve: 'continuous', backgroundColor: accent + '55', borderWidth: 2, borderColor: accent }, glow]} />
         {active && <View pointerEvents="none" style={[styles.dot, { backgroundColor: accent }]} />}

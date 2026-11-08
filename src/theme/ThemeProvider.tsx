@@ -143,6 +143,7 @@ interface ThemeContextValue {
   resetTheme: () => void;
   setDockPosition: (p: Position) => void;
   setDockLabels: (on: boolean) => void;
+  setDockRimLight: (on: boolean) => void;
   setDockMode: (m: Theme['dock']['mode']) => void;
   setLyricLook: (l: Theme['player']['lyricLook']) => void;
   setDockBubbleSide: (s: Theme['dock']['bubbleSide']) => void;
@@ -247,6 +248,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setDockPosition: (position) =>
         setThemeState((t) => ({ ...t, dock: { ...t.dock, position } })),
       setDockLabels: (labels) => setThemeState((t) => ({ ...t, dock: { ...t.dock, labels } })),
+      setDockRimLight: (rimLight) => setThemeState((t) => ({ ...t, dock: { ...t.dock, rimLight } })),
       // Đổi sang bubble: mini player tách khỏi dock (nếu đang gộp) để nằm ở góc đối diện
       setDockMode: (mode) => setThemeState((t) => ({ ...t, dock: { ...t.dock, mode }, miniPlayer: mode === 'bubble' ? { ...t.miniPlayer, merged: false } : t.miniPlayer })),
       setLyricLook: (lyricLook) => setThemeState((t) => ({ ...t, player: { ...t.player, lyricLook } })),
