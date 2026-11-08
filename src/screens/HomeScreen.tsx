@@ -1,5 +1,5 @@
 import { SplitPane } from '../components/SplitPane';
-import { GlassFill } from '../components/Glass';
+import { GlassFill, glassShadow } from '../components/Glass';
 import { ScalePressable } from '../components/PressScale';
 import { Stagger } from '../components/Stagger';
 import { loadTrendingSummed, trendingId } from '../data/trending';
@@ -269,8 +269,8 @@ function MyPlaylists() {
   const dbv = useDbVersion();
   const lists = useMemo(() => getPlaylists().slice(0, 7), [dbv]);
   const chip = (key: string, title: string, onPress: () => void, cover: React.ReactNode) => (
-    <ScalePressable key={key} onPress={onPress} outerStyle={{ width: '48.8%' }} style={[styles.chip, { width: '100%' }]}>
-      <GlassFill radius={12} solid={0.35} slab />
+    <ScalePressable key={key} onPress={onPress} outerStyle={{ width: '48.8%' }} style={[styles.chip, { width: '100%' }, glassShadow(0.8, theme.colors.glassTint !== 'dark')]}>
+      <GlassFill radius={CHIP_R} solid={0.5} slab />
       {cover}
       <Text numberOfLines={2} style={[styles.chipTitle, { color: theme.colors.text }]}>{title}</Text>
     </ScalePressable>
@@ -684,6 +684,7 @@ export function HomeScreen() {
   const { theme, landscape } = useTheme();
   const t = useT();
   const pad = useContentInsets();
+  const { push } = useNav();
   const [editing, setEditing] = useState(false);
   const visible = theme.home.sections.filter((s) => !theme.home.hidden.includes(s));
 
@@ -718,6 +719,11 @@ export function HomeScreen() {
     <>
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
         <Text style={[styles.greeting, { color: theme.colors.text }]}>{t(greetingKey())}</Text>
+        {/* Thống kê nghe nhạc */}
+        <Pressable onPress={() => push({ type: 'stats' })} hitSlop={10} style={[styles.editBtn, { marginRight: 10 }]} accessibilityLabel={t('stats.title')}>
+          <GlassFill radius={19} solid={0.35} slab />
+          <Ionicons name="stats-chart" size={17} color={theme.colors.text} />
+        </Pressable>
         <Pressable onPress={() => setEditing((v) => !v)} hitSlop={10} style={styles.editBtn}>
             <GlassFill radius={19} solid={0.35} slab />
           <Ionicons name="options-outline" size={20} color={theme.colors.text} />
@@ -763,15 +769,7 @@ export function HomeScreen() {
         paddingRight: pad.right + PAD,
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-        <Text style={[styles.greeting, { color: theme.colors.text }]}>{t(greetingKey())}</Text>
-        <Pressable onPress={() => setEditing((v) => !v)} hitSlop={10} style={styles.editBtn}>
-            <GlassFill radius={19} solid={0.35} slab />
-          <Ionicons name="options-outline" size={20} color={theme.colors.text} />
-        </Pressable>
-      </View>
-
-      {editing && <EditHome onClose={() => setEditing(false)} />}
+      {header}
 
       {visible.map((s, i) => (
         <View key={s} style={{ marginTop: i === 0 ? 0 : 30 }}>
@@ -785,6 +783,7 @@ export function HomeScreen() {
   );
 }
 
+const CHIP_R = 16;
 const styles = StyleSheet.create({
   greeting: { flex: 1, fontSize: 26, fontWeight: '800' },
   editBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
@@ -796,8 +795,9 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 8 },
   bigItem: { width: '48.4%', marginBottom: 14 },
   bigCover: { width: '100%', aspectRatio: 1, borderRadius: 8 },
-  chip: { width: '48.8%', height: 56, borderRadius: 12, borderCurve: 'continuous', flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
-  chipCover: { width: 56, height: 56 },
+  // Ô playlist = tấm kính nhỏ (giống dock): ảnh bìa nằm lọt bên trong, cách mép kính 6px
+  chip: { width: '48.8%', height: 62, borderRadius: CHIP_R, borderCurve: 'continuous', flexDirection: 'row', alignItems: 'center', padding: 6 },
+  chipCover: { width: 50, height: 50, borderRadius: CHIP_R - 6, borderCurve: 'continuous', overflow: 'hidden' },
   chipTitle: { flex: 1, marginHorizontal: 10, fontSize: 13, fontWeight: '700' },
   cardTitle: { marginTop: 8, fontSize: 14, fontWeight: '700' },
   pill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14 },

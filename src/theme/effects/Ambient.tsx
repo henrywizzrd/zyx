@@ -6,21 +6,27 @@ import { makeMutable, useDerivedValue, useFrameCallback } from 'react-native-rea
 // Đồng hồ chung cho mọi lớp hiệu ứng: hạt rơi / sao băng tính hoàn toàn theo thời gian t, nên hai lớp cùng một t
 // vẽ ra y hệt nhau. Nhờ vậy bản sao nền trong trang đang vuốt quay lại khớp đúng với nền chung phía sau
 // (trước đây mỗi lớp có đồng hồ riêng tính từ lúc nó xuất hiện → sao băng lệch nhau)
+// Giới hạn khung hình: iPhone màn 120Hz vẽ lại hiệu ứng 120 lần/giây — gấp đôi cần thiết cho hạt rơi.
+// sharedClock nhảy tối đa 60 lần/giây; slowClock 30 lần/giây cho hiệu ứng chuyển động chậm (cực quang, lưới neon):
+// mỗi lần đồng hồ nhảy mới vẽ lại, nên đỡ được 1/2 đến 3/4 công vẽ mà mắt không thấy khác
 const sharedClock = makeMutable(0);
+const slowClock = makeMutable(0);
 const clockBase = makeMutable(-1);
 // Lớp hiệu ứng có đang chạy không (mở Player / app ở nền: dừng vẽ nhưng VẪN giữ lớp, mở lại không phải dựng từ đầu)
 const RunningContext = createContext(true);
-function useAmbientClock() {
+function useAmbientClock(slow = false) {
   const running = useContext(RunningContext);
   const cb = useFrameCallback((f) => {
     'worklet';
     if (clockBase.value < 0) clockBase.value = f.timestamp;
-    sharedClock.value = f.timestamp - clockBase.value;
+    const t = f.timestamp - clockBase.value;
+    if (t - sharedClock.value >= 15 || t < sharedClock.value) sharedClock.value = t;
+    if (t - slowClock.value >= 31 || t < slowClock.value) slowClock.value = t;
   }, running);
   useEffect(() => {
     cb.setActive(running);
   }, [running]); // eslint-disable-line react-hooks/exhaustive-deps
-  return sharedClock;
+  return slow ? slowClock : sharedClock;
 }
 import { useTheme } from '../ThemeProvider';
 import { drawFlake, FLAKE_SVGS } from './snowflakes';
@@ -544,7 +550,7 @@ const AURORA_BANDS: [string, number, number, number, number, number, number][] =
 ];
 function AuroraRibbons() {
   const { width, height } = useScreenSize();
-  const clock = useAmbientClock();
+  const clock = useAmbientClock(true);
   const picture = useDerivedValue(() => {
     const t = clock.value / 1000;
     const rec = Skia.PictureRecorder();
@@ -638,6 +644,11 @@ function RainOnGlass() {
       rim.setStyle(1);
       rim.setStrokeWidth(0.8);
       const g = Math.floor(t / GUST_EVERY);
+      // màu tính một lần mỗi khung (trước đây đọc chuỗi 'rgba(...)' 4 lần cho MỖI giọt → hơn 200 lần mỗi khung)
+      const cBody = Skia.Color('rgba(255,255,255,0.05)');
+      const cRimLight = Skia.Color('rgba(255,255,255,0.28)');
+      const cRimDark = Skia.Color('rgba(0,0,0,0.25)');
+      const cSpark = Skia.Color('rgba(255,255,255,0.65)');
       for (let i = 0; i < big.length; i += 5) {
         const x = big[i] * width;
         const y = big[i + 1] * height;
@@ -661,13 +672,13 @@ function RainOnGlass() {
         canvas.scale(sx, sy);
         const ry = r * 1.12;
         // thân giọt gần như trong suốt, vành dưới sáng, mép trên tối, một chấm sáng
-        drop.setColor(Skia.Color('rgba(255,255,255,0.05)'));
+        drop.setColor(cBody);
         canvas.drawOval(Skia.XYWHRect(-r, -ry, r * 2, ry * 2), drop);
-        rim.setColor(Skia.Color('rgba(255,255,255,0.28)'));
+        rim.setColor(cRimLight);
         canvas.drawArc(Skia.XYWHRect(-r * 0.92, -ry * 0.92, r * 1.84, ry * 1.84), 20, 140, false, rim);
-        rim.setColor(Skia.Color('rgba(0,0,0,0.25)'));
+        rim.setColor(cRimDark);
         canvas.drawArc(Skia.XYWHRect(-r, -ry, r * 2, ry * 2), 200, 140, false, rim);
-        drop.setColor(Skia.Color('rgba(255,255,255,0.65)'));
+        drop.setColor(cSpark);
         canvas.drawCircle(-r * 0.32, -ry * 0.42, Math.max(0.7, r * 0.2), drop);
         canvas.restore();
       }
@@ -733,9 +744,9 @@ function RainOnGlass() {
 const GLITCH_EVERY = 6.5;
 function NeonGrid() {
   const { width, height } = useScreenSize();
-  const clock = useAmbientClock();
-  const picture = useDerivedValue(() => {
-    const t = clock.value / 1000;
+  const clock = useAmbientClock(true);
+  // Đường dọc không bao giờ chuyển động: vẽ một lần vào lớp riêng (trước đây vẽ lại kèm làm nhoè 17 đường mỗi khung)
+  const still = useMemo(() => {
     const rec = Skia.PictureRecorder();
     const canvas = rec.beginRecording(Skia.XYWHRect(0, 0, width, height));
     try {
@@ -746,19 +757,36 @@ function NeonGrid() {
       glow.setStyle(1);
       glow.setStrokeWidth(3);
       glow.setMaskFilter(Skia.MaskFilter.MakeBlur(0, 4, true));
+      glow.setColor(Skia.Color('rgba(255,61,203,0.35)'));
       const core = Skia.Paint();
       core.setAntiAlias(true);
       core.setStyle(1);
       core.setStrokeWidth(1);
-      // Đường dọc: hội tụ về điểm giữa chân trời
+      core.setColor(Skia.Color('rgba(255,120,225,0.55)'));
       const V = 16;
       for (let i = 0; i <= V; i++) {
         const bx = cx + (i - V / 2) * width * 0.2;
-        glow.setColor(Skia.Color('rgba(255,61,203,0.35)'));
-        core.setColor(Skia.Color('rgba(255,120,225,0.55)'));
         canvas.drawLine(cx, hy, bx, height, glow);
         canvas.drawLine(cx, hy, bx, height, core);
       }
+    } catch {}
+    return rec.finishRecordingAsPicture();
+  }, [width, height]);
+  const picture = useDerivedValue(() => {
+    const t = clock.value / 1000;
+    const rec = Skia.PictureRecorder();
+    const canvas = rec.beginRecording(Skia.XYWHRect(0, 0, width, height));
+    try {
+      const hy = height * 0.62;
+      const glow = Skia.Paint();
+      glow.setAntiAlias(true);
+      glow.setStyle(1);
+      glow.setStrokeWidth(3);
+      glow.setMaskFilter(Skia.MaskFilter.MakeBlur(0, 4, true));
+      const core = Skia.Paint();
+      core.setAntiAlias(true);
+      core.setStyle(1);
+      core.setStrokeWidth(1);
       // Đường ngang: trôi dần xuống (lại gần), càng gần càng thưa và sáng
       const Hn = 10;
       for (let k = 0; k < Hn; k++) {
@@ -791,5 +819,14 @@ function NeonGrid() {
     }
     return rec.finishRecordingAsPicture();
   });
-  return <Layer picture={picture} />;
+  return (
+    <>
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <Canvas style={StyleSheet.absoluteFill}>
+          <Picture picture={still} />
+        </Canvas>
+      </View>
+      <Layer picture={picture} />
+    </>
+  );
 }

@@ -18,7 +18,7 @@ const hashOf = (s: string) => {
   return String(h);
 };
 
-async function coverUrl(uid: string, localId: string, cover?: string, fallback?: string) {
+export async function coverUrl(uid: string, localId: string, cover?: string, fallback?: string) {
   if (!cover) return fallback?.startsWith('http') ? fallback : null;
   if (cover.startsWith('http')) return cover;
   if (Platform.OS === 'web') return null;

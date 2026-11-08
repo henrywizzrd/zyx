@@ -81,6 +81,10 @@ function open(): DB | null {
       db.execSync(`ALTER TABLE playlists ADD COLUMN ${col}`);
     } catch {}
   }
+  // Số giây đã thật sự nghe của mỗi lượt (cho trang Thống kê). Bản cũ chưa có cột này → null (tính gần đúng theo độ dài bài)
+  try {
+    db.execSync('ALTER TABLE play_history ADD COLUMN secs REAL');
+  } catch {}
   return db;
 }
 
@@ -201,6 +205,17 @@ export function getTopArtists(days = 30, limit = 4): { artist: string; plays: nu
       })
       .filter((x): x is { artist: string; plays: number; seed: Track } => !!x);
   });
+}
+
+// Ghi số giây đã nghe vào lượt nghe gần nhất của bài này (gọi lúc rời bài). Không báo màn hình cập nhật (đỡ vẽ lại)
+export function setLastPlaySecs(trackId: string, secs: number) {
+  if (!(secs > 0)) return;
+  safe(undefined, (d) =>
+    d.runSync(
+      'UPDATE play_history SET secs = ? WHERE id = (SELECT id FROM play_history WHERE track_id = ? ORDER BY played_at DESC LIMIT 1)',
+      [Math.round(secs), trackId]
+    )
+  );
 }
 
 export function historyCount(): number {
@@ -408,4 +423,129 @@ export function setSaved(item: Omit<SavedItem, 'savedAt'>, on: boolean) {
     }
   });
   changed();
+}
+
+// ---------------- Thống kê nghe nhạc (trang Wrapped) ----------------
+// Mỗi lượt nghe tính số giây thật sự nghe (secs); lượt cũ chưa có secs thì tính gần đúng = độ dài bài (tối đa 10 phút)
+const LISTENED = 'COALESCE(h.secs, MIN(CASE WHEN t.duration > 0 THEN t.duration ELSE 180 END, 600))';
+export interface ListenStats {
+  seconds: number;
+  plays: number;
+  songs: number;
+  artists: number;
+  topSongs: { track: Track; plays: number; seconds: number }[];
+  topArtists: { artist: string; plays: number; seconds: number; thumb?: string }[];
+  byDay: number[]; // giây nghe theo từng ngày trong khoảng (cũ → mới)
+  byHour: number[]; // 24 ô: giây nghe theo giờ trong ngày
+}
+export function getListenStats(since: number, buckets: number, bucketMs: number): ListenStats {
+  const empty: ListenStats = { seconds: 0, plays: 0, songs: 0, artists: 0, topSongs: [], topArtists: [], byDay: new Array(buckets).fill(0), byHour: new Array(24).fill(0) };
+  return safe(empty, (d) => {
+    const tot = d.getFirstSync<{ s: number | null; n: number; songs: number; artists: number }>(
+      `SELECT SUM(${LISTENED}) AS s, COUNT(*) AS n, COUNT(DISTINCT h.track_id) AS songs, COUNT(DISTINCT t.artist) AS artists
+       FROM play_history h JOIN tracks t ON t.id = h.track_id WHERE h.played_at >= ?`,
+      [since]
+    );
+    const songs = d.getAllSync<TrackRow & { plays: number; s: number }>(
+      `SELECT t.*, COUNT(*) AS plays, SUM(${LISTENED}) AS s FROM play_history h JOIN tracks t ON t.id = h.track_id
+       WHERE h.played_at >= ? GROUP BY h.track_id ORDER BY plays DESC, s DESC LIMIT 10`,
+      [since]
+    );
+    const artists = d.getAllSync<{ artist: string; plays: number; s: number; thumb: string | null }>(
+      `SELECT t.artist AS artist, COUNT(*) AS plays, SUM(${LISTENED}) AS s, MAX(t.thumb) AS thumb
+       FROM play_history h JOIN tracks t ON t.id = h.track_id
+       WHERE h.played_at >= ? AND t.artist <> '' GROUP BY t.artist ORDER BY s DESC LIMIT 10`,
+      [since]
+    );
+    const rows = d.getAllSync<{ at: number; s: number }>(
+      `SELECT h.played_at AS at, ${LISTENED} AS s FROM play_history h JOIN tracks t ON t.id = h.track_id WHERE h.played_at >= ?`,
+      [since]
+    );
+    const byDay = new Array(buckets).fill(0);
+    const byHour = new Array(24).fill(0);
+    for (const r of rows) {
+      const i = Math.floor((r.at - since) / bucketMs);
+      if (i >= 0 && i < buckets) byDay[i] += r.s;
+      byHour[new Date(r.at).getHours()] += r.s;
+    }
+    return {
+      seconds: tot?.s ?? 0,
+      plays: tot?.n ?? 0,
+      songs: tot?.songs ?? 0,
+      artists: tot?.artists ?? 0,
+      topSongs: songs.map((r) => ({ track: rowToTrack(r), plays: r.plays, seconds: r.s })),
+      topArtists: artists.map((r) => ({ artist: r.artist, plays: r.plays, seconds: r.s, thumb: r.thumb ?? undefined })),
+      byDay,
+      byHour,
+    };
+  });
+}
+
+// ---------------- Sao lưu / khôi phục thư viện (xem src/data/backup.ts) ----------------
+export interface LibraryDump {
+  v: 1;
+  tracks: [string, string, string, string | null, number, string | null][];
+  liked: [string, number][];
+  playlists: [string, string, number, number, number, string | null, string | null][]; // id, title, public, created, updated, cover, description
+  items: [string, string, number, number][]; // playlist, track, position, added
+  saved: [SavedKind, string, string, string, string | null, number][];
+  history: [string, number, string, string, string, string | null, number | null][]; // track, at, ctx kind/id/title/thumb, secs
+}
+
+export function isLibraryEmpty(): boolean {
+  return safe(false, (d) =>
+    !d.getFirstSync(
+      'SELECT 1 FROM playlists UNION ALL SELECT 1 FROM liked UNION ALL SELECT 1 FROM saved UNION ALL SELECT 1 FROM play_history LIMIT 1'
+    )
+  );
+}
+
+export function exportLibrary(historyLimit = 6000): LibraryDump | null {
+  return safe(null, (d) => {
+    const playlists = d.getAllSync<{ id: string; title: string; is_public: number; created_at: number; updated_at: number; cover: string | null; description: string | null }>(
+      'SELECT id, title, is_public, created_at, updated_at, cover, description FROM playlists'
+    );
+    const items = d.getAllSync<{ playlist_id: string; track_id: string; position: number; added_at: number }>('SELECT * FROM playlist_tracks');
+    const liked = d.getAllSync<{ track_id: string; liked_at: number }>('SELECT * FROM liked');
+    const saved = d.getAllSync<{ kind: SavedKind; id: string; title: string; subtitle: string; thumb: string | null; saved_at: number }>('SELECT * FROM saved');
+    const history = d.getAllSync<{ track_id: string; played_at: number; ctx_kind: string; ctx_id: string; ctx_title: string; ctx_thumb: string | null; secs: number | null }>(
+      'SELECT track_id, played_at, ctx_kind, ctx_id, ctx_title, ctx_thumb, secs FROM play_history ORDER BY played_at DESC LIMIT ?',
+      [historyLimit]
+    );
+    const need = new Set<string>([...items.map((r) => r.track_id), ...liked.map((r) => r.track_id), ...history.map((r) => r.track_id)]);
+    const tracks = d.getAllSync<TrackRow>('SELECT * FROM tracks').filter((t) => need.has(t.id));
+    return {
+      v: 1,
+      tracks: tracks.map((t) => [t.id, t.title, t.artist, t.album, t.duration, t.thumb]),
+      liked: liked.map((r) => [r.track_id, r.liked_at]),
+      playlists: playlists.map((p) => [p.id, p.title, p.is_public, p.created_at, p.updated_at, p.cover, p.description]),
+      items: items.map((r) => [r.playlist_id, r.track_id, r.position, r.added_at]),
+      saved: saved.map((r) => [r.kind, r.id, r.title, r.subtitle, r.thumb, r.saved_at]),
+      history: history.map((r) => [r.track_id, r.played_at, r.ctx_kind, r.ctx_id, r.ctx_title, r.ctx_thumb, r.secs]),
+    };
+  });
+}
+
+// Thêm dữ liệu sao lưu vào máy (không xoá gì đang có; trùng thì giữ cái trong máy)
+export function importLibrary(dump: LibraryDump): boolean {
+  const ok = safe(false, (d) => {
+    d.withTransactionSync(() => {
+      for (const t of dump.tracks ?? [])
+        d.runSync('INSERT OR IGNORE INTO tracks (id, title, artist, album, duration, thumb) VALUES (?, ?, ?, ?, ?, ?)', t);
+      for (const p of dump.playlists ?? [])
+        d.runSync('INSERT OR IGNORE INTO playlists (id, title, is_public, created_at, updated_at, cover, description) VALUES (?, ?, ?, ?, ?, ?, ?)', p);
+      for (const r of dump.items ?? [])
+        d.runSync('INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position, added_at) VALUES (?, ?, ?, ?)', r);
+      for (const r of dump.liked ?? []) d.runSync('INSERT OR IGNORE INTO liked (track_id, liked_at) VALUES (?, ?)', r);
+      for (const r of dump.saved ?? [])
+        d.runSync('INSERT OR IGNORE INTO saved (kind, id, title, subtitle, thumb, saved_at) VALUES (?, ?, ?, ?, ?, ?)', r);
+      const hasHistory = !!d.getFirstSync('SELECT 1 FROM play_history LIMIT 1');
+      if (!hasHistory)
+        for (const r of [...(dump.history ?? [])].reverse())
+          d.runSync('INSERT INTO play_history (track_id, played_at, ctx_kind, ctx_id, ctx_title, ctx_thumb, secs) VALUES (?, ?, ?, ?, ?, ?, ?)', r);
+    });
+    return true;
+  });
+  changed();
+  return ok;
 }

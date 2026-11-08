@@ -6,6 +6,9 @@ import RNMaskedView from '@react-native-masked-view/masked-view';
 
 const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
 import { useTheme } from '../theme/ThemeProvider';
+import { Ionicons } from '@expo/vector-icons';
+import { SmartImage } from './Cover';
+import type { Track } from '../data/mock';
 
 // Lớp kính mờ (frosted) phủ kín khung chứa nó, đặt làm con đầu tiên của dock, mini player, popup...
 // Gồm: làm mờ phần phía sau (độ mờ chỉnh trong Theme Studio) + lớp màu theo theme + viền mảnh.
@@ -124,6 +127,81 @@ export function GlassFill({ radius = 0, solid = 0, slab = false, dark: forceDark
           <View style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, borderWidth: 1, borderColor: dark ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.8)' }]} />
         </MaskedView>
       )}
+    </View>
+  );
+}
+
+// Ảnh bìa là chính tấm kính (mini player): mặt ảnh đặc, không trong suốt, còn phần "kính" nằm ở mép và góc —
+// như ảnh được đúc trong một khối kính dày đặt trên mặt bàn:
+//  1. vành khúc xạ: dải mép rộng ~8% cạnh hiện lại chính ảnh đó nhưng phóng to + nhoè (ánh sáng bẻ cong qua mép vát)
+//  2. mép vát: sáng ở góc trên trái (đèn chiếu từ trên), tối dần về góc dưới phải
+//  3. đường cạnh: viền sáng mảnh bắt sáng ở mép ngoài + một đường mảnh nơi mép vát gặp mặt phẳng
+//  4. vệt phản chiếu chéo nhẹ trên mặt
+// Bóng đổ do khung bên ngoài lo (glassShadow)
+export function ArtSlab({ track, size, radius }: { track: Track; size: number; radius: number }) {
+  const E = Math.max(4, Math.round(size * 0.085)); // bề rộng mép vát
+  const masks = Platform.OS !== 'web';
+  const round = [StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius }];
+  const ring = (w: number) => <View style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, borderWidth: w, borderColor: '#000' }]} />;
+  return (
+    <View style={[{ width: size, height: size, borderRadius: radius, overflow: 'hidden', backgroundColor: track.color }, SQUIRCLE]}>
+      {track.thumb ? (
+        <SmartImage url={track.thumb} size={180} style={StyleSheet.absoluteFill} />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+          <Ionicons name="musical-notes" size={Math.round(size * 0.36)} color="rgba(255,255,255,0.85)" />
+        </View>
+      )}
+      {/* vệt phản chiếu chéo trên mặt */}
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0)']}
+        locations={[0, 0.3, 0.55]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      {masks && (
+        <MaskedView pointerEvents="none" style={StyleSheet.absoluteFill} maskElement={ring(E)}>
+          {/* 1. vành khúc xạ */}
+          {track.thumb ? (
+            <View style={[StyleSheet.absoluteFill, { transform: [{ scale: 1.14 }] }]}>
+              <SmartImage url={track.thumb} size={96} blurRadius={4} style={StyleSheet.absoluteFill} />
+            </View>
+          ) : null}
+          {/* 2. mép vát: sáng trên trái → tối dưới phải */}
+          <LinearGradient
+            colors={['rgba(255,255,255,0.42)', 'rgba(255,255,255,0.1)', 'rgba(0,0,0,0.06)', 'rgba(0,0,0,0.34)']}
+            locations={[0, 0.35, 0.65, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </MaskedView>
+      )}
+      {/* 3. đường cạnh: viền ngoài bắt sáng (sáng nhất ở góc trên trái, hắt lại nhẹ ở góc dưới phải) */}
+      {masks ? (
+        <MaskedView pointerEvents="none" style={StyleSheet.absoluteFill} maskElement={ring(1.25)}>
+          <LinearGradient
+            colors={['rgba(255,255,255,0.95)', 'rgba(255,255,255,0.25)', 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.5)']}
+            locations={[0, 0.4, 0.7, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </MaskedView>
+      ) : (
+        <View pointerEvents="none" style={[...round, { borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' }]} />
+      )}
+      {/* đường mảnh nơi mép vát gặp mặt phẳng */}
+      <View
+        pointerEvents="none"
+        style={[
+          { position: 'absolute', left: E, top: E, right: E, bottom: E, borderRadius: Math.max(2, radius - E), borderWidth: StyleSheet.hairlineWidth },
+          SQUIRCLE,
+          { borderTopColor: 'rgba(0,0,0,0.25)', borderLeftColor: 'rgba(0,0,0,0.2)', borderRightColor: 'rgba(255,255,255,0.28)', borderBottomColor: 'rgba(255,255,255,0.32)' },
+        ]}
+      />
     </View>
   );
 }

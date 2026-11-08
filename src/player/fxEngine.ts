@@ -59,7 +59,7 @@ let speed: FxSpeed = 'normal';
 const rate = () => SPEED_RATE[speed];
 const reverbOn = () => speed === 'slowedReverb';
 // Bộ hiệu ứng chạy khi có chế độ âm thanh HOẶC đang đổi tốc độ
-const engineOn = () => mode !== 'off' || speed !== 'normal';
+export const engineOn = () => mode !== 'off' || speed !== 'normal';
 AsyncStorage.getItem(SPEED_KEY)
   .then((v) => {
     if (v && v !== 'normal' && (FX_SPEEDS as string[]).includes(v) && fxSupported()) {

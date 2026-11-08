@@ -12,7 +12,6 @@ export type TabId = 'home' | 'search' | 'library' | 'settings' | 'player';
 export type HomeSection = 'myPlaylists' | 'recent' | 'feed' | 'trending' | 'recommended' | 'playlistPicks';
 export type TrendingRange = 'week' | 'month' | 'year';
 export type TrendingRegion = 'ZZ' | 'VN' | 'KR' | 'US'; // ZZ = toàn cầu (mã YouTube Music)
-export type MiniPlayerVariant = 'pill' | 'rect';
 export type LibraryLayout = 'list' | 'columns' | 'covers2' | 'covers3';
 // Dock dạng thanh (kiểu Apple Music) hoặc dạng bubble ở góc dưới (bấm/giữ mở 1/4 vòng tab)
 export type DockMode = 'bar' | 'bubble';
@@ -47,7 +46,6 @@ export interface Theme {
     style: { background: string; radius: number; margin: number };
   };
   miniPlayer: {
-    variant: MiniPlayerVariant;
     anchor: MiniAnchor;
     collapsed: boolean; // đang thu nhỏ thành bubble (chỉ còn ảnh album)
     merged: boolean;

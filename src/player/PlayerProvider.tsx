@@ -5,11 +5,12 @@ import type { Track } from '../data/mock';
 import { MiniAnchor, Position } from '../theme/types';
 import { audio, musicSupported, toTrack, ytmusic } from '../music/lazy';
 import { bigThumb } from '../components/Cover';
-import { getLikedIds, PlayContext, recordPlay, setLiked as saveLiked } from '../data/db';
+import { getLikedIds, PlayContext, recordPlay, setLastPlaySecs, setLiked as saveLiked } from '../data/db';
 import { localUri } from '../data/downloads';
 import { Image as ExpoImage } from 'expo-image';
 import { showToast } from '../components/toastBridge';
-import { flog, fxPrefetch, fxTick, setFxResolver } from './fxEngine';
+import { engineOn, flog, fxPrefetch, fxTick, getLiveRate, setFxResolver } from './fxEngine';
+import './crossfade'; // nạp cài đặt Chuyển bài mượt
 import { bgStats } from '../data/applog';
 
 // ---- Link phát của từng bài, lấy sẵn trước khi cần
@@ -613,6 +614,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const id = setInterval(() => checkStallRef.current(), 3000);
     return () => clearInterval(id);
   }, []);
+  const listenRef = useRef<{ id: string | null; secs: number; t: number }>({ id: null, secs: 0, t: 0 });
+  // Xuống nền / tắt app: ghi tạm số giây đã nghe của bài đang phát (lỡ app bị tắt hẳn)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => {
+      const L = listenRef.current;
+      if (st !== 'active' && L.id && L.secs >= 5) setLastPlaySecs(L.id, L.secs);
+    });
+    return () => sub.remove();
+  }, []);
   const lastStatus = useRef<{ playing: boolean; isBuffering: boolean; isLoaded: boolean; currentTime: number } | null>(null);
   // Theo dõi trạng thái thật của trình phát
   useEffect(() => {
@@ -648,6 +658,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       checkStallRef.current();
       // Chế độ âm thanh (8D / Phòng hoà nhạc) bám theo trình phát chính
       fxTick(queueRef.current[indexRef.current]?.id ?? null, s.playing, s.currentTime, s.duration ?? 0);
+      // Chuyển bài mượt (crossfade 6 giây) — chỉ khi không bật bộ hiệu ứng
+      if (s.isLoaded) audio().crossfadeTick(s.currentTime, s.duration ?? 0, s.playing, !engineOn(), (m) => flog(m, 'music'));
+      // Đếm số giây thật sự nghe của bài này (cho trang Thống kê); đổi bài thì ghi lại cho bài trước
+      const curId = queueRef.current[indexRef.current]?.id ?? null;
+      const L = listenRef.current;
+      if (L.id !== curId) {
+        if (L.id && L.secs >= 5) setLastPlaySecs(L.id, L.secs);
+        listenRef.current = { id: curId, secs: 0, t: s.currentTime };
+      } else {
+        const dt = s.currentTime - L.t;
+        if (s.playing && dt > 0 && dt < 3) L.secs += dt / (getLiveRate() || 1);
+        L.t = s.currentTime;
+      }
       // Độ dài bài khi phát qua mạng hay nhích lên xuống vài phần trăm giây mỗi lần báo:
       // chỉ cập nhật khi lệch thật (> 0,5s), không thì cả app vẽ lại liên tục chỉ vì con số lẻ
       if (s.isLoaded && s.duration > 0) setDuration((d) => (Math.abs(d - s.duration) > 0.5 ? s.duration : d));

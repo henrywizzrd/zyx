@@ -3,6 +3,7 @@ import { installAppLog, setLogContext } from './src/data/applog';
 import { JankMonitor } from './src/components/JankMonitor';
 import { updateCoverTint } from './src/theme/coverTint';
 import { LogScreen } from './src/screens/LogScreen';
+import { StatsScreen } from './src/screens/StatsScreen';
 import { ActivityIndicator, Animated, Platform, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -29,6 +30,7 @@ import { UserScreen } from './src/screens/UserScreen';
 import { FeedScreen } from './src/screens/FeedScreen';
 import { ComposerHost } from './src/components/PostComposer';
 import { syncSharedPlaylists } from './src/data/sharedSync';
+import { startBackup } from './src/data/backup';
 import { useDbVersion } from './src/data/db';
 import { useSession } from './src/data/auth';
 import { PlayerTransition } from './src/components/PlayerTransition';
@@ -275,6 +277,8 @@ function Root() {
                   <FeedScreen />
                 ) : pg.type === 'log' ? (
                   <LogScreen />
+                ) : pg.type === 'stats' ? (
+                  <StatsScreen />
                 ) : (
                   <ThemeStudioScreen />
                 )}
@@ -328,6 +332,10 @@ function SharedSyncer() {
   const dbv = useDbVersion();
   const session = useSession();
   const acc = session?.mode === 'account' ? session.id : undefined;
+  // Sao lưu / khôi phục thư viện theo tài khoản (src/data/backup.ts)
+  useEffect(() => {
+    startBackup(acc ?? null);
+  }, [acc]);
   useEffect(() => {
     if (!acc) return;
     const id = setTimeout(syncSharedPlaylists, 2500);

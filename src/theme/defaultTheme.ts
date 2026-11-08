@@ -20,7 +20,6 @@ export const defaultTheme: Theme = {
     style: { background: '#242424F2', radius: 28, margin: 12 },
   },
   miniPlayer: {
-    variant: 'pill',
     anchor: { edge: 'bottom', t: 0.5 },
     collapsed: false,
     merged: false,

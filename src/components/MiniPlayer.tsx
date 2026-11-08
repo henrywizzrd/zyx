@@ -1,13 +1,11 @@
 import React, { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { GlassFill, glassShadow } from './Glass';
+import { ArtSlab, glassShadow } from './Glass';
 import { Animated, Easing, Platform, Pressable, StyleSheet, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { usePlayerPick } from '../player/PlayerProvider';
 import { useDraggable } from './useDraggable';
 import type { MiniAnchor } from '../theme/types';
-import { Cover } from './Cover';
 import { playerOrigin } from './PlayerTransition';
 import { MP_THICKNESS, resolveMini, useFrame } from './layout';
 
@@ -66,8 +64,9 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
   const S = MP_THICKNESS; // cỡ bong bóng
   // Tấm kính vuông bo góc liền (squircle), ảnh bìa nằm bên trong tấm kính, cách mép một khoảng = độ dày kính
   const bubbleRadius = Math.round(S * 0.3);
-  const INSET = 6;
-  const artRadius = bubbleRadius - INSET + 1;
+  // Cả ảnh bìa là tấm kính: không còn khung kính bao quanh ảnh nữa (INSET = 0), hiệu ứng nằm ở mép và góc (xem ArtSlab)
+  const INSET = 0;
+  const artRadius = bubbleRadius;
 
   // Dock đang ở dạng bubble (một góc dưới): mini player luôn nằm ở góc dưới đối diện
   const bubbleDock = theme.dock.mode === 'bubble';
@@ -173,10 +172,9 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
           <Animated.View
             style={[
               { width: S, height: S, borderRadius: bubbleRadius, borderCurve: 'continuous', opacity: d.opacity, transform: [{ scale: d.scale }] },
-              glassShadow(1, theme.colors.glassTint !== 'dark'),
+              glassShadow(1.15, theme.colors.glassTint !== 'dark'),
             ]}
           >
-            <GlassFill radius={bubbleRadius} slab />
             <Pressable
               {...d.pressProps}
               onPressIn={pressIn}
@@ -187,9 +185,7 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
               onPress={openPlayer}
             >
               <Animated.View style={{ transform: [{ scale: press }] }}>
-                <Cover track={track} size={180} style={{ width: S - INSET * 2, height: S - INSET * 2, margin: INSET, borderRadius: artRadius, borderCurve: 'continuous' }}>
-                  <Ionicons name="musical-notes" size={22} color="rgba(255,255,255,0.85)" />
-                </Cover>
+                <ArtSlab track={track} size={S} radius={bubbleRadius} />
               </Animated.View>
             </Pressable>
           </Animated.View>

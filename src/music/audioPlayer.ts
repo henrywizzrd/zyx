@@ -11,6 +11,7 @@ import { createAudioPlayer, createAudioPlaylist, setAudioModeAsync, AudioMetadat
 
 let pl: AudioPlaylist | null = null;
 let keys: string[] = [];
+let uris: string[] = []; // link của từng ô (song song với keys) — để crossfade mở lại đúng bài đang phát
 let currentKey: string | null = null;
 let lockScreenOn = false;
 let trackListener: ((key: string) => void) | null = null;
@@ -22,9 +23,10 @@ let trackListener: ((key: string) => void) | null = null;
 let userVol = 1;
 let fxMix = 0;
 let duck = 1; // hạ nhỏ tạm thời khi đổi chế độ âm thanh (nhỏ xuống rồi to dần lên)
+let xIn = 1; // crossfade: bài mới to dần từ 0 lên 1
 const volListeners = new Set<(v: number) => void>();
 function applyVolume() {
-  if (pl) pl.volume = userVol * (1 - fxMix) * duck;
+  if (pl) pl.volume = userVol * (1 - fxMix) * duck * xIn;
 }
 export function getUserVolume() {
   return userVol;
@@ -95,6 +97,7 @@ export function startTrack(key: string, uri: string, prev?: { key: string; uri: 
   const p = getPlayer();
   const cur = p.currentIndex;
   currentKey = key;
+  endCrossfade(); // người dùng tự chọn bài: bỏ crossfade đang chạy
   if (keys[cur] === key && p.trackCount > 0) {
     p.seekTo(0).catch(() => {});
   } else if (keys[cur + 1] === key && cur + 1 < p.trackCount) {
@@ -104,12 +107,15 @@ export function startTrack(key: string, uri: string, prev?: { key: string; uri: 
   } else {
     p.clear();
     keys = [];
+    uris = [];
     if (prev) {
       p.add({ uri: prev.uri });
       keys.push(prev.key);
+      uris.push(prev.uri);
     }
     p.add({ uri });
     keys.push(key);
+    uris.push(uri);
     if (prev) p.skipTo(1);
   }
   p.play();
@@ -124,9 +130,11 @@ export function setNext(next: { key: string; uri: string } | null) {
   // Bỏ các ô sau bài đang phát (bỏ từ cuối lên: bỏ ô phía sau không làm gián đoạn bài đang phát)
   for (let i = p.trackCount - 1; i > cur; i--) p.remove(i);
   keys = keys.slice(0, cur + 1);
+  uris = uris.slice(0, cur + 1);
   if (next) {
     p.add({ uri: next.uri });
     keys.push(next.key);
+    uris.push(next.uri);
   }
 }
 
@@ -157,3 +165,113 @@ export function showNowPlaying(meta: AudioMetadata) {
   }
 }
 
+
+// ---------------- Crossfade giữa bài (6 giây) ----------------
+// Còn 6 giây là hết bài: mở thêm một trình phát phụ chạy nốt đuôi bài cũ (đúng chỗ đang nghe), rồi cho trình phát chính
+// sang bài kế ngay (màn hình khoá, chạy nền, lịch sử... đi theo bài mới như bình thường). Trong 6 giây đó đuôi bài cũ
+// nhỏ dần, bài mới to dần (kiểu "công suất đều": tổng âm lượng không bị hụt ở giữa).
+// Trình phát phụ được mở sẵn từ lúc còn ~10 giây để kịp tải; tới giờ mà chưa tải xong thì thôi, chuyển bài bình thường.
+// Không chạy khi: tắt trong Cài đặt, đang bật Chế độ âm thanh / đổi tốc độ (bộ hiệu ứng tự lo tiếng), lặp 1 bài, bài < 30 giây.
+export const CROSSFADE_SEC = 6;
+let xfadeOn = false;
+let tail: AudioPlayer | null = null;
+let xState: 'idle' | 'prep' | 'fading' = 'idle';
+let xFor: string | null = null; // bài (key) đã crossfade / đang chuẩn bị — mỗi bài một lần
+let xTimer: ReturnType<typeof setInterval> | null = null;
+
+export function setCrossfadeEnabled(on: boolean) {
+  xfadeOn = on;
+  if (!on) endCrossfade();
+}
+
+function releaseTail() {
+  const t = tail;
+  tail = null;
+  if (!t) return;
+  try {
+    t.pause();
+  } catch {}
+  try {
+    t.remove();
+  } catch {}
+}
+
+export function endCrossfade() {
+  if (xTimer) clearInterval(xTimer);
+  xTimer = null;
+  releaseTail();
+  xState = 'idle';
+  if (xIn !== 1) {
+    xIn = 1;
+    applyVolume();
+  }
+}
+
+// Gọi mỗi lần trình phát chính báo trạng thái (~0,5 giây). allowed = không bật bộ hiệu ứng / đổi tốc độ
+export function crossfadeTick(time: number, duration: number, playing: boolean, allowed: boolean, log?: (m: string) => void) {
+  if (xState === 'fading') {
+    if (!playing) endCrossfade(); // dừng nhạc giữa chừng: kết thúc luôn, không để đuôi bài cũ kêu một mình
+    return;
+  }
+  const p = pl;
+  if (!p || !xfadeOn || !allowed || !playing || !(duration >= 30) || p.loop === 'single' || rate !== 1) {
+    if (xState === 'prep') endCrossfade();
+    return;
+  }
+  const cur = p.currentIndex;
+  const key = keys[cur];
+  const remaining = duration - time;
+  const nextReady = cur < p.trackCount - 1;
+  if (xState === 'idle') {
+    if (!nextReady || !key || xFor === key || !uris[cur]) return;
+    if (remaining <= CROSSFADE_SEC + 4 && remaining > CROSSFADE_SEC + 0.6) {
+      xFor = key;
+      xState = 'prep';
+      try {
+        tail = createAudioPlayer({ uri: uris[cur] }, { updateInterval: 1000 });
+        tail.volume = 0;
+      } catch {
+        endCrossfade();
+      }
+    }
+    return;
+  }
+  // prep
+  if (!nextReady || keys[cur] !== xFor || remaining > CROSSFADE_SEC + 4.5) {
+    endCrossfade(); // tua ngược / đổi bài / bỏ bài kế: thôi
+    return;
+  }
+  if (remaining > CROSSFADE_SEC) return;
+  const t = tail;
+  if (!t || !t.isLoaded) {
+    log?.('crossfade: đuôi bài chưa tải kịp → chuyển bài bình thường');
+    endCrossfade();
+    return;
+  }
+  xState = 'fading';
+  const from = time + 0.12;
+  t.seekTo(from)
+    .catch(() => {})
+    .then(() => {
+      if (xState !== 'fading' || tail !== t) return;
+      const base = userVol * duck;
+      t.volume = base;
+      t.play();
+      xIn = 0;
+      applyVolume();
+      p.next(); // trình phát chính sang bài kế (app được báo qua trackChanged như khi hết bài)
+      log?.(`crossfade ${CROSSFADE_SEC}s từ ${from.toFixed(1)}s`);
+      const t0 = Date.now();
+      const ms = Math.max(1000, (duration - from) * 1000);
+      xTimer = setInterval(() => {
+        const k = Math.min(1, (Date.now() - t0) / ms);
+        const b = userVol * duck;
+        try {
+          t.volume = b * Math.cos((k * Math.PI) / 2);
+        } catch {}
+        xIn = Math.sin((k * Math.PI) / 2);
+        applyVolume();
+        if (k >= 1) endCrossfade();
+      }, 120);
+    });
+}

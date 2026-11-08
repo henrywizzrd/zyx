@@ -1,12 +1,13 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Appearance, useColorScheme, View } from 'react-native';
 import { useScreenSize } from '../components/ScreenSize';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { markBackupDirty, themeBridge } from '../data/backup';
 import { defaultTheme } from './defaultTheme';
 import { AmbientPresetId, PRESETS, ThemePresetId } from './presets';
 import { CoverTint, useCoverTint } from './coverTint';
 import { log as appLog } from '../data/applog';
-import { Edge, HomeSection, LibraryLayout, MiniAnchor, MiniPlayerVariant, Position, TabId, Theme, TrendingRange } from './types';
+import { Edge, HomeSection, LibraryLayout, MiniAnchor, Position, TabId, Theme, TrendingRange } from './types';
 
 const STORAGE_KEY = 'zyx:theme';
 
@@ -15,7 +16,6 @@ const POSITIONS: Position[] = [
   'top-left', 'top-right', 'bottom-left', 'bottom-right',
 ];
 const EDGES: Edge[] = ['top', 'bottom', 'left', 'right'];
-const VARIANTS: MiniPlayerVariant[] = ['pill', 'rect'];
 const TABS: TabId[] = ['home', 'search', 'library', 'settings'];
 const SECTIONS: HomeSection[] = ['myPlaylists', 'recent', 'feed', 'trending', 'recommended', 'playlistPicks'];
 const RANGES: TrendingRange[] = ['week', 'month', 'year'];
@@ -119,7 +119,6 @@ function sanitize(t: Theme): Theme {
         edge: EDGES.includes(t.miniPlayer.anchor.edge) ? t.miniPlayer.anchor.edge : d.miniPlayer.anchor.edge,
         t: Number.isFinite(t.miniPlayer.anchor.t) ? Math.max(0, Math.min(1, t.miniPlayer.anchor.t)) : d.miniPlayer.anchor.t,
       },
-      variant: VARIANTS.includes(t.miniPlayer.variant) ? t.miniPlayer.variant : d.miniPlayer.variant,
     },
     player: { lyricLook: (['glow', 'karaoke', 'bounce'] as const).includes(t.player.lyricLook) ? t.player.lyricLook : 'glow' },
     library: {
@@ -149,7 +148,6 @@ interface ThemeContextValue {
   setDockBubbleSide: (s: Theme['dock']['bubbleSide']) => void;
   setMiniPlayerAnchor: (a: MiniAnchor) => void;
   setMiniPlayerCollapsed: (c: boolean) => void;
-  setMiniPlayerVariant: (v: MiniPlayerVariant) => void;
   setMerged: (merged: boolean) => void;
   setLibraryLayout: (l: LibraryLayout) => void;
   setLibraryOrder: (ids: string[]) => void;
@@ -217,9 +215,24 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (!ready) return;
     const id = setTimeout(() => {
       AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(theme)).catch(() => {});
+      markBackupDirty();
     }, 300);
     return () => clearTimeout(id);
   }, [theme, ready]);
+
+  // Sao lưu theme cùng thư viện (src/data/backup.ts). Ảnh / video nền là file trong máy → cài lại là mất, nên khôi phục thì về nền thường
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
+  useEffect(() => {
+    themeBridge.get = () => themeRef.current;
+    themeBridge.set = (raw) => {
+      try {
+        const bg = raw?.background;
+        if (bg && bg.type !== 'preset' && !(typeof bg.uri === 'string' && bg.uri.startsWith('http'))) raw = { ...raw, background: { ...bg, type: 'preset', uri: '' } };
+        setThemeState(sanitize(merge(defaultTheme, migrate(raw))));
+      } catch {}
+    };
+  }, []);
 
   const coverTint = useCoverTint();
   const value = useMemo<ThemeContextValue>(() => {
@@ -240,7 +253,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setDockBubbleSide: (bubbleSide) => setThemeState((t) => ({ ...t, dock: { ...t.dock, bubbleSide } })),
       setMiniPlayerAnchor: (anchor) => patchMini({ anchor }),
       setMiniPlayerCollapsed: (collapsed) => patchMini({ collapsed }),
-      setMiniPlayerVariant: (variant) => patchMini({ variant }),
       setMerged: (merged) => patchMini({ merged }),
       setLibraryLayout: (layout) =>
         setThemeState((t) => ({ ...t, library: { ...t.library, layout } })),

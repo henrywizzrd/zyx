@@ -4,13 +4,11 @@ import React from 'react';
 import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { useContentInsets } from '../components/FloatingDock';
-import { MiniPlayerVariant } from '../theme/types';
 import { LANGUAGES, useT } from '../i18n';
 import { Ionicons } from '@expo/vector-icons';
 import { useNav } from '../nav/Nav';
 import { signOut, useSession } from '../data/auth';
-
-const VARIANTS: MiniPlayerVariant[] = ['pill', 'rect'];
+import { setCrossfade, useCrossfade } from '../player/crossfade';
 
 // labels: chữ hiển thị cho từng lựa chọn (bỏ trống thì hiện chính giá trị)
 function Chips<T extends string>({ options, value, onSelect, labels }: { options: readonly T[]; value: T; onSelect: (v: T) => void; labels?: Partial<Record<T, string>> }) {
@@ -34,7 +32,7 @@ function Chips<T extends string>({ options, value, onSelect, labels }: { options
 }
 
 export function SettingsScreen() {
-  const { theme, landscape, resetTheme, setMiniPlayerVariant, setMerged, setLanguage, setDockLabels, setDockMode, setDockBubbleSide } = useTheme();
+  const { theme, landscape, resetTheme, setMerged, setLanguage, setDockLabels, setDockMode, setDockBubbleSide } = useTheme();
   const t = useT();
   const { push } = useNav();
   const pad = useContentInsets();
@@ -42,6 +40,7 @@ export function SettingsScreen() {
   const session = useSession();
   const profile = useProfile();
   const syncErr = useProfileSyncError();
+  const crossfade = useCrossfade();
 
   const settingsPart = (
     <>
@@ -99,19 +98,21 @@ export function SettingsScreen() {
         </>
       )}
 
-      <Text style={label}>{t('settings.miniStyle')}</Text>
-      <Chips
-        options={VARIANTS}
-        value={theme.miniPlayer.variant}
-        onSelect={setMiniPlayerVariant}
-        labels={{ pill: t('settings.mini.pill'), rect: t('settings.mini.rect') }}
-      />
-
       <Text style={label}>{t('settings.merge')}</Text>
       <Chips
         options={['on', 'off'] as const}
         value={theme.miniPlayer.merged ? 'on' : 'off'}
         onSelect={(v) => setMerged(v === 'on')}
+        labels={{ on: t('common.on'), off: t('common.off') }}
+      />
+
+      {/* Chuyển bài mượt: bài cũ nhỏ dần, bài mới to dần trong 6 giây */}
+      <Text style={[label, { marginBottom: 4 }]}>{t('settings.crossfade')}</Text>
+      <Text style={{ color: theme.colors.textSecondary, fontSize: 13, marginBottom: 12, opacity: 0.8 }}>{t('settings.crossfadeHint')}</Text>
+      <Chips
+        options={['on', 'off'] as const}
+        value={crossfade ? 'on' : 'off'}
+        onSelect={(v) => setCrossfade(v === 'on')}
         labels={{ on: t('common.on'), off: t('common.off') }}
       />
 
