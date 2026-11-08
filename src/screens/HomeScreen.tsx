@@ -269,8 +269,8 @@ function MyPlaylists() {
   const dbv = useDbVersion();
   const lists = useMemo(() => getPlaylists().slice(0, 7), [dbv]);
   const chip = (key: string, title: string, onPress: () => void, cover: React.ReactNode) => (
-    <ScalePressable key={key} onPress={onPress} outerStyle={{ width: '48.8%' }} style={[styles.chip, { width: '100%' }, glassShadow(0.8, theme.colors.glassTint !== 'dark')]}>
-      <GlassFill radius={CHIP_R} solid={0.5} slab />
+    <ScalePressable key={key} onPress={onPress} outerStyle={{ width: '48.8%' }} style={[styles.chip, { width: '100%' }]}>
+      <GlassFill radius={12} solid={0.35} slab />
       {cover}
       <Text numberOfLines={2} style={[styles.chipTitle, { color: theme.colors.text }]}>{title}</Text>
     </ScalePressable>
@@ -783,7 +783,6 @@ export function HomeScreen() {
   );
 }
 
-const CHIP_R = 16;
 const styles = StyleSheet.create({
   greeting: { flex: 1, fontSize: 26, fontWeight: '800' },
   editBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
@@ -795,9 +794,8 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 8 },
   bigItem: { width: '48.4%', marginBottom: 14 },
   bigCover: { width: '100%', aspectRatio: 1, borderRadius: 8 },
-  // Ô playlist = tấm kính nhỏ (giống dock): ảnh bìa nằm lọt bên trong, cách mép kính 6px
-  chip: { width: '48.8%', height: 62, borderRadius: CHIP_R, borderCurve: 'continuous', flexDirection: 'row', alignItems: 'center', padding: 6 },
-  chipCover: { width: 50, height: 50, borderRadius: CHIP_R - 6, borderCurve: 'continuous', overflow: 'hidden' },
+  chip: { width: '48.8%', height: 56, borderRadius: 12, borderCurve: 'continuous', flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
+  chipCover: { width: 56, height: 56 },
   chipTitle: { flex: 1, marginHorizontal: 10, fontSize: 13, fontWeight: '700' },
   cardTitle: { marginTop: 8, fontSize: 14, fontWeight: '700' },
   pill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14 },
