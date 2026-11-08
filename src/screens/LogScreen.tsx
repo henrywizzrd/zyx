@@ -4,11 +4,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useContentInsets } from '../components/FloatingDock';
 import { useNav } from '../nav/Nav';
-import { useAnimatedBack } from '../nav/SwipeBack';
+import { useAnimatedBack, useEntered } from '../nav/SwipeBack';
 import { useT } from '../i18n';
 import { clearLog, fmtTime, LogLine, LogTag, logToText, useLog } from '../data/applog';
 
 type Filter = 'all' | LogTag;
+const EMPTY: LogLine[] = [];
 const FILTERS: Filter[] = ['all', 'music', 'fx', 'error', 'jank', 'swipe', 'ui'];
 const TAG_COLOR: Record<LogTag, string> = {
   music: '#3DB2FF',
@@ -28,6 +29,8 @@ export function LogScreen() {
   const { pop } = useNav();
   const goBack = useAnimatedBack() ?? pop;
   const all = useLog();
+  // Trượt vào xong mới dựng danh sách (log mở ra khựng ~350ms vì dựng cả trăm dòng cùng lúc với hiệu ứng trượt)
+  const entered = useEntered();
   const [filter, setFilter] = useState<Filter>('all');
   const n = all.length;
   const rows = useMemo(() => {
@@ -106,13 +109,14 @@ export function LogScreen() {
   return (
     <View style={StyleSheet.absoluteFill}>
       <FlatList
-        data={rows}
+        data={entered ? rows : EMPTY}
         keyExtractor={(l, i) => `${l.t}-${i}`}
         renderItem={renderItem}
         ListHeaderComponent={header}
-        ListEmptyComponent={<Text style={{ color: textSecondary, textAlign: 'center', marginTop: 40 }}>{t('log.empty')}</Text>}
-        initialNumToRender={30}
-        windowSize={7}
+        ListEmptyComponent={!entered ? undefined : <Text style={{ color: textSecondary, textAlign: 'center', marginTop: 40 }}>{t('log.empty')}</Text>}
+        initialNumToRender={18}
+        maxToRenderPerBatch={20}
+        windowSize={5}
         contentContainerStyle={{
           paddingTop: pad.top + 8,
           paddingBottom: pad.bottom + pad.endPadding,

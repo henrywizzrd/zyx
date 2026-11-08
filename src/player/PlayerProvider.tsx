@@ -214,6 +214,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const track = queue[index] ?? IDLE;
 
+  // Canh nhạc bị đứng (xem phần "Lưới an toàn" ở dưới). Khai báo trước load() để load() đặt lại được
+  const stallRef = useRef({ t: -1, at: 0 });
+  const loadAtRef = useRef(0); // lúc vừa đưa link vào trình phát (0 = không chờ bài nào nạp)
   const load = useCallback(async (t: QueueItem) => {
     if (!musicSupported) return;
     needsLoad.current = false;
@@ -228,7 +231,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setProgress(0);
     setDuration(t.duration);
     const t0 = Date.now();
-    flog(`tải bài: ${t.title} — ${t.artist ?? ''}`, 'music');
+    // Bài mới: đồng hồ "đứng im" tính lại từ đầu (trước đây còn giữ mốc từ lúc mở app → vừa bấm bài đã báo đứng im 12s)
+    stallRef.current = { t: -1, at: t0 };
+    loadAtRef.current = 0;
+    flog(`tải bài: ${t.title}${t.artist ? ` — ${t.artist}` : ''}`, 'music');
     try {
       const uri = await resolveUrl(t.id);
       if (id !== reqId.current) return; // đã bấm bài khác
@@ -239,6 +245,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const before = k > 0 ? q[k - 1] : null;
       const beforeUri = before ? cachedUrl(before.id) : null;
       audio().startTrack(t.qid, uri, before && beforeUri ? { key: before.qid, uri: beforeUri } : null);
+      loadAtRef.current = Date.now();
+      stallRef.current = { t: -1, at: loadAtRef.current };
       // Màn hình khoá / thanh thông báo (Android: cần cái này để nhạc chạy nền lâu dài)
       audio().showNowPlaying(nowPlayingMeta(t));
       // Ghi lịch sử nghe (thêm đủ thông tin bài để Home dựng Recent / Recommend)
@@ -531,8 +539,48 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     audio().getPlayer().seekTo(Math.max(0, s));
   }, []);
 
-  const stallRef = useRef({ t: -1, at: 0 });
   const lastPst = useRef('');
+  // Lưới an toàn khi nhạc tự đứng:
+  //  - bài đã nạp, trình phát đang "phát" (hoặc đang chờ tải) mà thời gian không nhích suốt 12 giây → link bị ngắt / hết hạn
+  //  - đưa link vào rồi mà 25 giây vẫn chưa nạp xong
+  // → lấy link mới rồi phát tiếp đúng chỗ đang nghe.
+  // Chạy cả khi có báo trạng thái lẫn mỗi 3 giây (lúc kẹt thật, trình phát không báo gì nữa nên chỉ dựa vào báo là không bắt được).
+  // Chưa nạp bài (vừa mở app, chưa bấm phát) thì không tính.
+  const checkStallRef = useRef(() => {});
+  checkStallRef.current = () => {
+    const s = lastStatus.current;
+    if (!s || loadingRef.current || failedRef.current) return;
+    const now = Date.now();
+    const st = stallRef.current;
+    const cur = queueRef.current[indexRef.current];
+    if (!cur) return;
+    let why = '';
+    if (!s.isLoaded) {
+      if (loadAtRef.current && now - loadAtRef.current > 25000) why = 'nạp bài quá 25s';
+    } else if (!(s.playing || s.isBuffering) || Math.abs(s.currentTime - st.t) > 0.05) {
+      st.t = s.currentTime;
+      st.at = now;
+    } else if (now - st.at > 12000) {
+      why = `đứng im ${Math.round((now - st.at) / 1000)}s ở ${s.currentTime.toFixed(1)}s`;
+    }
+    if (!why) return;
+    st.at = now;
+    loadAtRef.current = 0;
+    if (localUri(cur.id)) {
+      flog(`trình phát ${why} (bài đã tải, không tải lại link)`, 'music');
+      return;
+    }
+    flog(`trình phát ${why} → tải lại link (${cur.title})`, 'music');
+    urlCache.delete(cur.id);
+    if (s.isLoaded) pendingSeek.current = { qid: cur.qid, at: s.currentTime }; // chưa nạp thì giữ chỗ nghe dở cũ (nếu có)
+    load(cur);
+  };
+  useEffect(() => {
+    if (!musicSupported) return;
+    const id = setInterval(() => checkStallRef.current(), 3000);
+    return () => clearInterval(id);
+  }, []);
+  const lastStatus = useRef<{ playing: boolean; isBuffering: boolean; isLoaded: boolean; currentTime: number } | null>(null);
   // Theo dõi trạng thái thật của trình phát
   useEffect(() => {
     if (!musicSupported) return;
@@ -553,24 +601,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
       setIsPlaying(s.playing);
       setProgress(s.currentTime);
-      // Lưới an toàn khi nhạc tự đứng giữa chừng: trình phát vẫn đang "phát" (hoặc đang chờ tải) mà thời gian không
-      // nhích suốt 12 giây → link phát bị ngắt / hết hạn. Lấy link mới rồi phát tiếp đúng chỗ đang nghe
-      const now = Date.now();
-      const st = stallRef.current;
-      if (!(s.playing || s.isBuffering) || Math.abs(s.currentTime - st.t) > 0.05 || loadingRef.current) {
-        st.t = s.currentTime;
-        st.at = now;
-      } else if (now - st.at > 12000) {
-        st.at = now;
-        const cur = queueRef.current[indexRef.current];
-        if (cur && !localUri(cur.id)) {
-          console.warn('[player] nhạc đứng im, tải lại link', cur.title);
-          flog(`trình phát đứng im 12s → tải lại link (${cur.title})`, 'music');
-          urlCache.delete(cur.id);
-          pendingSeek.current = { qid: cur.qid, at: s.currentTime };
-          load(cur);
-        }
-      }
+      lastStatus.current = { playing: s.playing, isBuffering: s.isBuffering, isLoaded: s.isLoaded, currentTime: s.currentTime };
+      if (s.isLoaded) loadAtRef.current = 0; // bài đã nạp xong
+      checkStallRef.current();
       // Chế độ âm thanh (8D / Phòng hoà nhạc) bám theo trình phát chính
       fxTick(queueRef.current[indexRef.current]?.id ?? null, s.playing, s.currentTime);
       // Độ dài bài khi phát qua mạng hay nhích lên xuống vài phần trăm giây mỗi lần báo:
