@@ -594,6 +594,7 @@ function AuroraRibbons() {
 const DRIP_EVERY = 2.6; // giây
 const DRIP_DUR = 4.2;
 const FLASH_EVERY = 21;
+const GUST_EVERY = 3.4; // giây giữa các cơn gió
 function RainOnGlass() {
   const { width, height } = useScreenSize();
   const clock = useAmbientClock();
@@ -601,6 +602,12 @@ function RainOnGlass() {
   const streaks = useMemo(() => {
     const out: number[] = [];
     for (let i = 0; i < scaled(70, width, height); i++) out.push(rnd(i, 51), 700 + rnd(i, 52) * 500, 14 + rnd(i, 53) * 26, 0.08 + rnd(i, 54) * 0.18, rnd(i, 55));
+    return out;
+  }, [width, height]);
+  // Giọt to đọng trên kính: x, y (phần màn hình), bán kính, độ "nhạy gió", nhịp rung
+  const big = useMemo(() => {
+    const out: number[] = [];
+    for (let i = 0; i < scaled(55, width, height); i++) out.push(rnd(i, 131), rnd(i, 132), 3.2 + rnd(i, 133) * 4, 0.5 + rnd(i, 134) * 0.5, rnd(i, 135));
     return out;
   }, [width, height]);
   const picture = useDerivedValue(() => {
@@ -621,6 +628,48 @@ function RainOnGlass() {
         const x = streaks[i] * (width + 60) - 30 + y * 0.12;
         rain.setAlphaf(streaks[i + 3]);
         canvas.drawLine(x, y, x + len * 0.12, y + len, rain);
+      }
+
+      // Giọt to đọng trên kính (trong suốt): khi có gió lùa qua thì rung rinh rồi lặng dần
+      const drop = Skia.Paint();
+      drop.setAntiAlias(true);
+      const rim = Skia.Paint();
+      rim.setAntiAlias(true);
+      rim.setStyle(1);
+      rim.setStrokeWidth(0.8);
+      const g = Math.floor(t / GUST_EVERY);
+      for (let i = 0; i < big.length; i += 5) {
+        const x = big[i] * width;
+        const y = big[i + 1] * height;
+        const r = big[i + 2];
+        // Cơn gió: quét từ trái sang phải trong 0,9s; giọt nào bị gió chạm thì rung (dao động tắt dần)
+        let sx = 1;
+        let sy = 1;
+        let ox = 0;
+        for (let k = g - 1; k <= g; k++) {
+          if (k < 0 || rnd(k, 141) > 0.75) continue; // thỉnh thoảng mới có gió
+          const local = t - (k * GUST_EVERY + rnd(k, 142) * 1.5) - big[i] * 0.9;
+          if (local < 0 || local > 1.6) continue;
+          const amp = big[i + 3] * 0.16 * Math.exp(-local * 3.2);
+          const w = Math.sin(local * (20 + big[i + 4] * 10));
+          sx += amp * w;
+          sy -= amp * w * 0.8;
+          ox += amp * 6 * Math.exp(-local * 2);
+        }
+        canvas.save();
+        canvas.translate(x + ox, y);
+        canvas.scale(sx, sy);
+        const ry = r * 1.12;
+        // thân giọt gần như trong suốt, vành dưới sáng, mép trên tối, một chấm sáng
+        drop.setColor(Skia.Color('rgba(255,255,255,0.05)'));
+        canvas.drawOval(Skia.XYWHRect(-r, -ry, r * 2, ry * 2), drop);
+        rim.setColor(Skia.Color('rgba(255,255,255,0.28)'));
+        canvas.drawArc(Skia.XYWHRect(-r * 0.92, -ry * 0.92, r * 1.84, ry * 1.84), 20, 140, false, rim);
+        rim.setColor(Skia.Color('rgba(0,0,0,0.25)'));
+        canvas.drawArc(Skia.XYWHRect(-r, -ry, r * 2, ry * 2), 200, 140, false, rim);
+        drop.setColor(Skia.Color('rgba(255,255,255,0.65)'));
+        canvas.drawCircle(-r * 0.32, -ry * 0.42, Math.max(0.7, r * 0.2), drop);
+        canvas.restore();
       }
 
       // Giọt nước chảy trên kính: nhanh dần, hơi lắc, để lại vệt ướt phía sau
@@ -649,9 +698,11 @@ function RainOnGlass() {
           Skia.Shader.MakeLinearGradient({ x, y: y0 }, { x, y }, [Skia.Color('rgba(255,255,255,0)'), Skia.Color(`rgba(255,255,255,${(0.16 * fade).toFixed(3)})`)], null, 0)
         );
         canvas.drawLine(x0, y0, x, y, trail);
-        head.setAlphaf(0.2 * fade);
+        head.setAlphaf(0.06 * fade);
         canvas.drawOval(Skia.XYWHRect(x - r, y - r * 1.15, r * 2, r * 2.3), head);
-        head.setAlphaf(0.55 * fade);
+        rim.setColor(Skia.Color(`rgba(255,255,255,${(0.3 * fade).toFixed(3)})`));
+        canvas.drawArc(Skia.XYWHRect(x - r * 0.92, y - r * 1.06, r * 1.84, r * 2.12), 20, 140, false, rim);
+        head.setAlphaf(0.6 * fade);
         canvas.drawCircle(x - r * 0.35, y - r * 0.45, Math.max(0.6, r * 0.28), head);
       }
 

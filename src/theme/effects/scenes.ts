@@ -50,24 +50,25 @@ export function auroraSkySvg(W: number, H: number): string {
   return s + '</svg>';
 }
 
-// ---------- Mưa trên kính: nền xám, rất nhiều giọt nước đọng lốm đốm (có viền sáng / tối như giọt thật) ----------
+// ---------- Mưa trên kính: nền xám + rất nhiều giọt nước nhỏ đọng lốm đốm, TRONG SUỐT (thấy nền xuyên qua):
+// mép trên tối, vành dưới sáng (ánh sáng khúc xạ qua giọt), một chấm sáng nhỏ phía trên. Giọt to (rung khi có gió) vẽ riêng
 export function rainGlassSvg(W: number, H: number): string {
   const rnd = seeded(47);
   let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
   s += `<defs>
     <linearGradient id="rbg" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#3A4048"/><stop offset="0.6" stop-color="#2C3137"/><stop offset="1" stop-color="#23272C"/></linearGradient>
-    <radialGradient id="drop" cx="0.42" cy="0.38" r="0.62"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.26"/><stop offset="0.65" stop-color="#FFFFFF" stop-opacity="0.08"/><stop offset="1" stop-color="#000000" stop-opacity="0.32"/></radialGradient>
+    <radialGradient id="drop" cx="0.5" cy="0.62" r="0.6"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.03"/><stop offset="0.72" stop-color="#FFFFFF" stop-opacity="0.04"/><stop offset="0.9" stop-color="#FFFFFF" stop-opacity="0.2"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0.05"/></radialGradient>
   </defs>`;
   s += `<rect width="${W}" height="${H}" fill="url(#rbg)"/>`;
-  const n = Math.round(460 * Math.min(1.6, (W * H) / (390 * 844)));
+  const n = Math.round(420 * Math.min(1.6, (W * H) / (390 * 844)));
   for (let i = 0; i < n; i++) {
-    const big = rnd() < 0.16;
-    const r = big ? 3.5 + rnd() * 4.5 : 1 + rnd() * 2.2;
+    const r = 0.9 + rnd() * 2.4;
     const x = rnd() * W;
     const y = rnd() * H;
-    const ry = r * (1 + rnd() * 0.25); // hơi dẹt theo chiều dọc
+    const ry = r * (1 + rnd() * 0.25);
     s += `<ellipse cx="${f(x)}" cy="${f(y)}" rx="${f(r)}" ry="${f(ry)}" fill="url(#drop)"/>`;
-    if (r > 1.6) s += `<circle cx="${f(x - r * 0.35)}" cy="${f(y - ry * 0.4)}" r="${f(Math.max(0.5, r * 0.22))}" fill="#FFFFFF" opacity="0.6"/>`;
+    s += `<path d="M${f(x - r * 0.8)} ${f(y - ry * 0.35)}A${f(r)} ${f(ry)} 0 0 1 ${f(x + r * 0.8)} ${f(y - ry * 0.35)}" stroke="#000000" stroke-opacity="0.22" stroke-width="0.6" fill="none"/>`;
+    if (r > 1.5) s += `<circle cx="${f(x - r * 0.3)}" cy="${f(y - ry * 0.4)}" r="${f(Math.max(0.45, r * 0.2))}" fill="#FFFFFF" opacity="0.55"/>`;
   }
   return s + '</svg>';
 }
