@@ -30,7 +30,7 @@ const TransitionContext = createContext<Ctx>({ reportCover: () => {}, panHandler
 export const usePlayerTransition = () => useContext(TransitionContext);
 
 // Nở ra như bong bóng cửa sổ nổi (Xiaomi / OPPO): lò xo hơi nảy nhẹ ở cuối
-const SPRING = { damping: 24, stiffness: 210, mass: 1 };
+const SPRING = { damping: 24, stiffness: 210, mass: 1, overshootClamping: true }; // không nảy quá đích
 
 // Mở player như mở app trên iPhone: một ô bo góc từ ảnh album phóng to dần ra tràn màn hình.
 // Cả màn player được thu nhỏ đồng đều bên trong ô đó (không bị méo), ô chỉ cắt phần thừa ở dưới.

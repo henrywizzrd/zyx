@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import { Animated, Easing, PanResponder, Platform } from 'react-native';
+import { Animated, Easing, LayoutAnimation, PanResponder, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { useDrag, usePlayerPick } from '../player/PlayerProvider';
 import { Edge, MiniAnchor, Position } from '../theme/types';
-import { targetAnchor, targetPosition, useFrame } from './layout';
+import { DOCK_GAP, DOCK_PADDING, dockCell, targetAnchor, targetPosition, useFrame } from './layout';
+import { log } from '../data/applog';
 
 const USE_NATIVE = Platform.OS !== 'web';
 const MERGE_PAD = 12; // ngón tay cách khối kia bao nhiêu px thì tính là chạm để hợp nhất
@@ -30,6 +31,25 @@ export interface LiveAnchor {
   anchor: MiniAnchor;
   origin: () => { cx: number; cy: number };
   drop: (a: MiniAnchor, dx: number, dy: number) => void;
+}
+
+// Dock giãn ra / co lại êm khi thêm / bớt mục Player (không nảy)
+export const DOCK_RESIZE = {
+  duration: 280,
+  create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+  update: { type: LayoutAnimation.Types.easeInEaseOut },
+  delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+};
+
+// Tâm của ô cuối dock SAU khi dock đã giãn thêm một ô (dock căn giữa thì giãn đều hai đầu,
+// dính góc trên thì giãn xuống, dính góc dưới thì giãn lên)
+function mergeSlot(r: { x: number; y: number; w: number; h: number }, pos: Position, labels: boolean) {
+  const cell = dockCell(pos, labels);
+  const step = cell.main + DOCK_GAP;
+  const endOff = DOCK_PADDING + cell.main / 2;
+  if (pos === 'top' || pos === 'bottom') return { x: r.x + r.w + step / 2 - endOff, y: r.y + r.h / 2 };
+  const grow = pos === 'left' || pos === 'right' ? step / 2 : pos.startsWith('top') ? step : 0;
+  return { x: r.x + r.w / 2, y: r.y + r.h + grow - endOff };
 }
 
 export function useDraggable(kind: 'dock' | 'player', live?: LiveAnchor) {
@@ -62,15 +82,15 @@ export function useDraggable(kind: 'dock' | 'player', live?: LiveAnchor) {
   const landFrom = useRef<{ cx: number; cy: number } | null>(null);
 
   // PanResponder chỉ tạo một lần nên cần đọc giá trị mới nhất qua ref
-  const latest = useRef({ width, height, left, position, posKey, insets, margin: theme.dock.style.margin, live, akey });
-  latest.current = { width, height, left, position, posKey, insets, margin: theme.dock.style.margin, live, akey };
+  const latest = useRef({ width, height, left, position, posKey, insets, margin: theme.dock.style.margin, live, akey, dockPos: theme.dock.position, dockLabels: theme.dock.labels });
+  latest.current = { width, height, left, position, posKey, insets, margin: theme.dock.style.margin, live, akey, dockPos: theme.dock.position, dockLabels: theme.dock.labels };
 
   const active = drag?.kind === kind;
   const merging = !!drag && drag.kind !== kind && drag.target === 'merge';
 
   // Nổi lên và phóng nhẹ khi đang giữ/kéo, hoặc khi khối kia đang kéo tới để hợp nhất
   useEffect(() => {
-    Animated.spring(scale, { toValue: active || merging ? 1.08 : 1, friction: 6, useNativeDriver: USE_NATIVE }).start();
+    Animated.timing(scale, { toValue: active || merging ? 1.06 : 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE }).start();
   }, [active, merging, scale]);
 
   const snapBack = () => {
@@ -79,7 +99,7 @@ export function useDraggable(kind: 'dock' | 'player', live?: LiveAnchor) {
       Animated.timing(pan, { toValue: { x: 0, y: 0 }, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE }).start();
       return;
     }
-    Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: USE_NATIVE }).start();
+    Animated.timing(pan, { toValue: { x: 0, y: 0 }, duration: 240, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE }).start();
   };
 
   const reset = () => {
@@ -97,19 +117,25 @@ export function useDraggable(kind: 'dock' | 'player', live?: LiveAnchor) {
     if (t === 'merge') {
       const r = otherRect.current;
       if (kind === 'player' && r) {
-        // Bay vào giữa dock, nhỏ dần rồi hợp nhất
-        const tx = r.x + r.w / 2 - start.current.cx;
-        const ty = r.y + r.h / 2 - start.current.cy;
+        // Bay thẳng vào đúng ô cuối của dock (chỗ mục Player sẽ hiện ra), nhỏ dần và mờ ở đoạn cuối,
+        // rồi dock giãn ra êm (LayoutAnimation) và mục Player hiện dần đúng tại chỗ bong bóng vừa đáp xuống
+        const { x: cx, y: cy } = mergeSlot(r, latest.current.dockPos, latest.current.dockLabels);
+        const tx = cx - start.current.cx;
+        const ty = cy - start.current.cy;
+        log('ui', 'thả mini player vào dock');
+        const ease = Easing.inOut(Easing.cubic);
         Animated.parallel([
-          Animated.timing(pan, { toValue: { x: tx, y: ty }, duration: 200, useNativeDriver: USE_NATIVE }),
-          Animated.timing(scale, { toValue: 0.3, duration: 200, useNativeDriver: USE_NATIVE }),
-          Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: USE_NATIVE }),
+          Animated.timing(pan, { toValue: { x: tx, y: ty }, duration: 280, easing: ease, useNativeDriver: USE_NATIVE }),
+          Animated.timing(scale, { toValue: 0.55, duration: 280, easing: ease, useNativeDriver: USE_NATIVE }),
+          Animated.timing(opacity, { toValue: 0, duration: 280, easing: Easing.in(Easing.quad), useNativeDriver: USE_NATIVE }),
         ]).start(() => {
+          if (Platform.OS !== 'web') LayoutAnimation.configureNext(DOCK_RESIZE);
           setMerged(true);
           setDrag(null);
         });
       } else {
         // Dock thả lên mini player: mini player được nhập vào dock
+        if (Platform.OS !== 'web') LayoutAnimation.configureNext(DOCK_RESIZE);
         setMerged(true);
         setDrag(null);
         snapBack();
@@ -223,7 +249,7 @@ export function useDraggable(kind: 'dock' | 'player', live?: LiveAnchor) {
     selfRef.current?.measureInWindow((x, y, w, h) => {
       pan.setValue({ x: from.cx - (x + w / 2), y: from.cy - (y + h / 2) });
       opacity.setValue(1);
-      Animated.spring(pan, { toValue: { x: 0, y: 0 }, friction: 7, tension: 90, useNativeDriver: USE_NATIVE }).start();
+      Animated.timing(pan, { toValue: { x: 0, y: 0 }, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE }).start();
     });
   }, [posKey]);
 

@@ -368,10 +368,11 @@ function Recent({ list }: { list?: boolean }) {
       title={t('home.section.recent')}
       right={
         items.length ? (
-          <Pressable onPress={reload} hitSlop={10} style={[styles.reloadBtn, { backgroundColor: stale ? theme.colors.accent : theme.colors.surface }]}>
+          <Pressable onPress={reload} hitSlop={10} style={[styles.editBtn, { backgroundColor: theme.colors.surface }]}>
             <Animated.View style={spinStyle}>
-              <Ionicons name="refresh" size={18} color={stale ? theme.colors.onAccent : theme.colors.text} />
+              <Ionicons name="refresh" size={20} color={theme.colors.text} />
             </Animated.View>
+            {stale && <View style={[styles.staleDot, { backgroundColor: theme.colors.accent }]} />}
           </Pressable>
         ) : undefined
       }
@@ -795,7 +796,7 @@ const styles = StyleSheet.create({
   chipTitle: { flex: 1, marginHorizontal: 10, fontSize: 13, fontWeight: '700' },
   cardTitle: { marginTop: 8, fontSize: 14, fontWeight: '700' },
   pill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14 },
-  reloadBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  staleDot: { position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: 4 },
   regionBox: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
   regionList: { marginTop: 6, minWidth: 190, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', paddingVertical: 4 },
   regionRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, height: 42 },

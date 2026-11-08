@@ -109,7 +109,7 @@ function RepeatIcon({ mode, color: forced }: { mode: 'off' | 'all' | 'one'; colo
 }
 
 // Chuyển bài: ảnh bìa và tên bài trượt vào từ phía bài mới (bấm tới / tự sang bài: từ phải; bấm lùi: từ trái),
-// mờ dần lên và nảy nhẹ về đúng cỡ
+// mờ dần lên và về đúng cỡ (êm, không nảy)
 let swapDir = 1;
 function TrackSwap({ id, children, dist = 36, style }: { id: string; children: React.ReactNode; dist?: number; style?: any }) {
   const x = useSharedValue(0);
@@ -123,17 +123,18 @@ function TrackSwap({ id, children, dist = 36, style }: { id: string; children: R
     }
     x.value = swapDir * dist;
     o.value = 0.2;
-    sc.value = 0.94;
-    x.value = withSpring(0, { damping: 18, stiffness: 180 });
+    sc.value = 0.96;
+    const ease = { duration: 320, easing: REasing.out(REasing.cubic) };
+    x.value = withTiming(0, ease);
     o.value = withTiming(1, { duration: 280 });
-    sc.value = withSpring(1, { damping: 14, stiffness: 200 });
+    sc.value = withTiming(1, ease);
     swapDir = 1;
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   const st = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateX: x.value }, { scale: sc.value }] }));
   return <RAnimated.View style={[style, st]}>{children}</RAnimated.View>;
 }
 
-// Nút trong hàng điều khiển: thu nhỏ khi nhấn, nảy lại khi thả
+// Nút trong hàng điều khiển: thu nhỏ nhẹ khi nhấn, trở lại êm khi thả
 function CtlBtn({ onPress, style, children }: { onPress: () => void; style?: any; children: React.ReactNode }) {
   const b = useBounce();
   return (
@@ -143,7 +144,7 @@ function CtlBtn({ onPress, style, children }: { onPress: () => void; style?: any
   );
 }
 
-// Thả tim: biểu tượng nảy to rồi về, 6 hạt nhỏ toả ra xung quanh rồi tan (chỉ lúc bật, tắt thì chỉ nảy nhẹ)
+// Thả tim: biểu tượng phồng lên êm, 6 hạt nhỏ toả ra xung quanh rồi tan (chỉ lúc bật)
 function LikePop({ on, color, children }: { on: boolean; color: string; children: React.ReactNode }) {
   const pop = useSharedValue(1);
   const burst = useSharedValue(0);
@@ -153,8 +154,8 @@ function LikePop({ on, color, children }: { on: boolean; color: string; children
       first.current = false;
       return;
     }
-    pop.value = 0.6;
-    pop.value = withSpring(1, { damping: 7, stiffness: 320 });
+    pop.value = 0.75;
+    pop.value = withTiming(1, { duration: 260, easing: REasing.out(REasing.cubic) });
     if (on) {
       burst.value = 0;
       burst.value = withTiming(1, { duration: 520, easing: REasing.out(REasing.cubic) });
@@ -473,13 +474,13 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         }}
         style={[styles.skipSlot, { width: 52 * k }]}
       >
-        <SkipGlyph dir="back" size={Math.round(46 * k)} />
+        <SkipGlyph dir="back" size={Math.round(31 * k)} />
       </CtlBtn>
       <CtlBtn onPress={togglePlay} style={{ width: PLAY * k, height: PLAY * k, alignItems: 'center', justifyContent: 'center' }}>
-        {loading ? <ActivityIndicator size="large" color="#FFFFFF" /> : <PlayPauseGlyph playing={isPlaying} size={Math.round(56 * k)} />}
+        {loading ? <ActivityIndicator size="large" color="#FFFFFF" /> : <PlayPauseGlyph playing={isPlaying} size={Math.round(38 * k)} />}
       </CtlBtn>
       <CtlBtn onPress={next} style={[styles.skipSlot, { width: 52 * k }]}>
-        <SkipGlyph dir="forward" size={Math.round(46 * k)} />
+        <SkipGlyph dir="forward" size={Math.round(31 * k)} />
       </CtlBtn>
       <CtlBtn onPress={cycleRepeat} style={styles.sideBtn}>
         <RepeatIcon mode={repeat} color={repeat !== 'off' ? ON : '#FFFFFF'} />

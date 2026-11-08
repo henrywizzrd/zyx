@@ -72,7 +72,7 @@ export function CommentsSheet({ postId, postMine, visible, onClose, onOpenUser }
   // Lớp tối phía sau mờ dần tại chỗ, chỉ bảng trượt lên (trước đây cả khối trượt lên nên lớp tối lộ một mép ngang)
   const show = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (visible) Animated.spring(show, { toValue: 1, friction: 9, tension: 70, useNativeDriver: true }).start();
+    if (visible) Animated.spring(show, { toValue: 1, friction: 9, tension: 70, overshootClamping: true, useNativeDriver: true }).start();
   }, [visible, show]);
   const close = () =>
     Animated.timing(show, { toValue: 0, duration: 200, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => onClose());

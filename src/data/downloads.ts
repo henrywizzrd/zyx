@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Platform } from 'react-native';
 import type { Track } from './mock';
-import { getDownloads, setDownload } from './db';
+import { getDownloads, kvGet, kvSet, setDownload } from './db';
 import { ytmusic } from '../music/lazy';
 
 // Tải bài về máy để nghe không cần mạng.
@@ -92,3 +92,36 @@ export function useDownloads() {
   }, []);
   return downloadState;
 }
+
+// ---- Chỉ hiện bài đã tải (nút "Đã tải" ở Thư viện) ----
+// Bật: Thư viện chỉ còn các playlist có bài đã tải (Bài hát đã thích + playlist của mình), mở playlist / album nào
+// cũng chỉ thấy bài đã tải. Tắt là hiện lại đủ. Nhớ giữa các lần mở app
+let onlyDownloaded: boolean | null = null; // đọc lần đầu khi cần (lúc nạp file này cơ sở dữ liệu có thể chưa sẵn)
+const onlyListeners = new Set<() => void>();
+export function getOnlyDownloaded(): boolean {
+  if (onlyDownloaded === null) {
+    try {
+      onlyDownloaded = kvGet<boolean>('lib:onlyDownloaded') === true;
+    } catch {
+      onlyDownloaded = false;
+    }
+  }
+  return onlyDownloaded;
+}
+export function setOnlyDownloaded(v: boolean) {
+  onlyDownloaded = v;
+  kvSet('lib:onlyDownloaded', v);
+  onlyListeners.forEach((l) => l());
+}
+export function useOnlyDownloaded(): boolean {
+  return useSyncExternalStore(
+    (l) => {
+      onlyListeners.add(l);
+      return () => {
+        onlyListeners.delete(l);
+      };
+    },
+    getOnlyDownloaded
+  );
+}
+export const isDownloaded = (id: string) => known().has(id);

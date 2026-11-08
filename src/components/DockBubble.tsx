@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { TabIcon } from './TabIcon';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,7 +22,7 @@ import { DOCK_BUBBLE } from './layout';
 
 const S = DOCK_BUBBLE;
 const ITEM = 54;
-const SPRING = { damping: 16, stiffness: 220, mass: 0.8 };
+const SPRING = { damping: 16, stiffness: 220, mass: 0.8, overshootClamping: true }; // không nảy
 
 export function DockBubble({ active, onChange, hidden = false }: { active: TabId; onChange: (t: TabId) => void; hidden?: boolean }) {
   const { theme } = useTheme();
@@ -194,7 +195,7 @@ export function DockBubble({ active, onChange, hidden = false }: { active: TabId
                   <Ionicons name="musical-notes" size={14} color="#FFFFFF" />
                 </Cover>
               ) : (
-                <Ionicons name={ICONS[id]} size={24} color={id === active ? accent : text} />
+                <TabIcon id={id} size={24} color={id === active ? accent : text} />
               )}
             </RingItem>
           ))}
@@ -213,7 +214,7 @@ export function DockBubble({ active, onChange, hidden = false }: { active: TabId
             {open ? (
               <Ionicons name="close" size={26} color={text} />
             ) : activeId ? (
-              <Ionicons name={ICONS[activeId]} size={26} color={accent} />
+              <TabIcon id={activeId} size={26} color={accent} />
             ) : (
               <Ionicons name="apps" size={24} color={text} />
             )}

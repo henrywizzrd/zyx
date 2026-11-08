@@ -1,0 +1,176 @@
+import { useSyncExternalStore } from 'react';
+import { AppState, Platform } from 'react-native';
+import { cacheGet, cacheSet } from './db';
+
+// Nhật ký của app (Cài đặt → Nhật ký): ghi mọi thứ để dò lỗi khi đang dùng
+//  - music: trình phát chính (trạng thái, đứng im, hết bài, tải lại link)
+//  - fx: chế độ âm thanh 8D / hội trường
+//  - error: lỗi JS, console.error / console.warn
+//  - jank: luồng JS hoặc luồng giao diện bị khựng
+//  - swipe: vuốt quay lại từ cạnh trái
+//  - ui: mở / đóng trang, đổi tab, app vào nền / quay lại
+// Giữ 1000 dòng gần nhất, lưu xuống máy vài giây một lần (và ngay khi có lỗi / app vào nền) nên còn sau khi tắt app.
+export type LogTag = 'music' | 'fx' | 'error' | 'jank' | 'swipe' | 'ui';
+export interface LogLine { t: number; tag: LogTag; msg: string; bg?: boolean }
+
+const KEY = 'applog:v1';
+const MAX = 1000;
+let lines: LogLine[] | null = null;
+let dirty = false;
+let ver = 0;
+const subs = new Set<() => void>();
+
+function load(): LogLine[] {
+  if (!lines) {
+    try {
+      lines = cacheGet<LogLine[]>(KEY)?.value ?? [];
+    } catch {
+      lines = [];
+    }
+  }
+  return lines;
+}
+
+export function flushLog() {
+  if (!dirty || !lines) return;
+  dirty = false;
+  try {
+    cacheSet(KEY, lines); // ghi thẳng, không báo màn hình vẽ lại như kvSet
+  } catch {}
+}
+
+let notifyQueued = false;
+function notify() {
+  ver++;
+  if (notifyQueued) return;
+  notifyQueued = true;
+  // gộp nhiều dòng liền nhau thành một lần vẽ lại màn hình Nhật ký
+  setTimeout(() => {
+    notifyQueued = false;
+    subs.forEach((f) => f());
+  }, 250);
+}
+
+export function log(tag: LogTag, msg: string) {
+  const arr = load();
+  arr.push({ t: Date.now(), tag, msg, bg: AppState.currentState !== 'active' || undefined });
+  if (arr.length > MAX) arr.splice(0, arr.length - MAX);
+  dirty = true;
+  if (tag === 'error') flushLog();
+  notify();
+}
+
+export function clearLog() {
+  lines = [];
+  dirty = true;
+  flushLog();
+  notify();
+}
+
+export function getLog(): LogLine[] {
+  return load();
+}
+
+export function useLog(): LogLine[] {
+  useSyncExternalStore(
+    (f) => {
+      subs.add(f);
+      return () => subs.delete(f);
+    },
+    () => ver
+  );
+  return load();
+}
+
+const pad = (n: number, w = 2) => `${n}`.padStart(w, '0');
+export function fmtTime(t: number) {
+  const d = new Date(t);
+  return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
+}
+export function logToText(arr: LogLine[]) {
+  return arr.map((l) => `${fmtTime(l.t)} [${l.tag}]${l.bg ? ' (nền)' : ''} ${l.msg}`).join('\n');
+}
+
+// ---------- Tự bắt lỗi, cảnh báo, khựng ----------
+let installed = false;
+export function installAppLog() {
+  if (installed || Platform.OS === 'web') return;
+  installed = true;
+  const ver0 = (() => {
+    try {
+      const U = require('expo-updates') as typeof import('expo-updates');
+      return U.updateId ? `bản ${U.updateId.slice(0, 8)}` : 'bản gốc';
+    } catch {
+      return '';
+    }
+  })();
+  log('ui', `— mở app ${ver0} (${Platform.OS} ${Platform.Version}) —`);
+
+  // Lưu định kỳ
+  setInterval(flushLog, 6000);
+
+  // App vào nền / quay lại
+  AppState.addEventListener('change', (st) => {
+    log('ui', `app → ${st}`);
+    if (st !== 'active') flushLog();
+  });
+
+  // Lỗi JS chưa bắt (kể cả lỗi làm app tắt): ghi + lưu ngay rồi để RN xử lý như cũ
+  const EU = (globalThis as any).ErrorUtils;
+  if (EU?.getGlobalHandler) {
+    const prev = EU.getGlobalHandler();
+    EU.setGlobalHandler((e: any, fatal?: boolean) => {
+      try {
+        log('error', `${fatal ? 'LỖI NẶNG (app tắt)' : 'lỗi'}: ${e?.message ?? e}\n${String(e?.stack ?? '').split('\n').slice(0, 6).join('\n')}`);
+        flushLog();
+      } catch {}
+      prev?.(e, fatal);
+    });
+  }
+
+  // console.error / console.warn
+  const wrap = (k: 'error' | 'warn') => {
+    const orig = console[k].bind(console);
+    console[k] = (...a: any[]) => {
+      try {
+        const msg = a.map((x) => (x instanceof Error ? `${x.message}` : typeof x === 'string' ? x : safeJson(x))).join(' ');
+        log('error', `${k === 'warn' ? 'cảnh báo' : 'console.error'}: ${msg.slice(0, 500)}`);
+      } catch {}
+      orig(...a);
+    };
+  };
+  wrap('error');
+  wrap('warn');
+
+  // Khựng luồng JS: đo khoảng cách giữa các khung hình (requestAnimationFrame), chỉ khi app đang mở
+  let last = 0;
+  const loop = (now: number) => {
+    if (last && AppState.currentState === 'active') {
+      const gap = now - last;
+      if (gap > 150) log('jank', `luồng JS khựng ${Math.round(gap)}ms${ctx ? ` · ${ctx}` : ''}`);
+    }
+    last = now;
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+  AppState.addEventListener('change', () => {
+    last = 0;
+  });
+}
+
+function safeJson(x: unknown) {
+  try {
+    return JSON.stringify(x)?.slice(0, 300) ?? String(x);
+  } catch {
+    return String(x);
+  }
+}
+
+// Đang ở đâu (tab / trang) — gắn kèm dòng khựng để biết khựng ở màn hình nào
+let ctx = '';
+export function setLogContext(c: string) {
+  if (c === ctx) return;
+  ctx = c;
+  log('ui', `đang ở: ${c}`);
+}
+export const getLogContext = () => ctx;

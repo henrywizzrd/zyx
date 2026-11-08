@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { AppState, StyleSheet, View } from 'react-native';
+import { AppState, Platform, StyleSheet, View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 
 // Nền chung của cả app, nằm sau mọi màn hình (trừ Player):
@@ -46,4 +46,23 @@ function VideoBg({ uri }: { uri: string }) {
     return () => sub.remove();
   }, [player]);
   return <VideoView player={player} contentFit="cover" nativeControls={false} style={StyleSheet.absoluteFill} />;
+}
+
+// Bản sao đứng yên của nền chung, đặt bên trong trang đang được vuốt quay lại: trang trượt đi nhưng nền vẫn
+// giữ nguyên chỗ (màu nền, ảnh, cảnh trời sao), không còn bị thay bằng một mảng màu trơn.
+// Video thì không phát bản thứ hai (tốn pin): dùng lớp phủ tối / sáng như trước.
+const scene = Platform.OS === 'web' ? null : (require('../theme/effects/Ambient') as typeof import('../theme/effects/Ambient'));
+export function PageBackdrop() {
+  const { theme } = useTheme();
+  const { type, uri, dim } = theme.background;
+  const media = type !== 'preset' && !!uri;
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.background.color }]}>
+      {media && type === 'image' && <AppBackground />}
+      {media && type === 'video' && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.bg, opacity: Math.max(0.85, 1 - dim * 0.2) }]} />
+      )}
+      {scene && !media && <scene.ThemeScene />}
+    </View>
+  );
 }

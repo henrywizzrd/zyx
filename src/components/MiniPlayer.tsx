@@ -120,7 +120,7 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
   // Bong bóng lún nhẹ khi ngón tay chạm vào
   const press = useRef(new Animated.Value(1)).current;
   const pressIn = () => Animated.timing(press, { toValue: 0.9, duration: 70, useNativeDriver: USE_NATIVE }).start();
-  const pressOut = () => Animated.spring(press, { toValue: 1, friction: 5, tension: 160, useNativeDriver: USE_NATIVE }).start();
+  const pressOut = () => Animated.timing(press, { toValue: 1, duration: 160, easing: Easing.out(Easing.quad), useNativeDriver: USE_NATIVE }).start();
 
   // Hiệu ứng tách ra: bay từ mục Player trên dock về vị trí của bong bóng.
   // Chạy bằng layout effect để bong bóng được ẩn trước khi kịp hiện ra ở chỗ cuối.
@@ -147,8 +147,8 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
     const g = geomRef.current;
     d.pan.setValue({ x: origin.cx - (g.x + half), y: origin.cy - (g.y + half) });
     Animated.parallel([
-      Animated.spring(d.pan, { toValue: { x: 0, y: 0 }, friction: 6, tension: 80, useNativeDriver: USE_NATIVE }),
-      Animated.spring(d.scale, { toValue: 1, friction: 6, useNativeDriver: USE_NATIVE }),
+      Animated.timing(d.pan, { toValue: { x: 0, y: 0 }, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE }),
+      Animated.timing(d.scale, { toValue: 1, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE }),
       Animated.timing(d.opacity, { toValue: 1, duration: 160, useNativeDriver: USE_NATIVE }),
     ]).start();
     setEmergeFrom(null);

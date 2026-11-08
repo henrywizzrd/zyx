@@ -1,25 +1,18 @@
 import React, { useEffect, useRef } from 'react';
+import { TabIcon } from './TabIcon';
 import { Cover } from './Cover';
 import { playerOrigin } from './PlayerTransition';
 import { Animated, Easing, LayoutAnimation, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import RAnimated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import RAnimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
-// Biểu tượng tab: vừa được chọn thì nhún xuống rồi nảy lên (kèm nhảy nhẹ lên trên) rồi về chỗ
+// Biểu tượng tab: tab đang chọn phóng to hơn một chút, chuyển tab khác thì thu về cỡ thường (êm, không nảy)
 function DockIcon({ active, children }: { active: boolean; children: React.ReactNode }) {
-  const sc = useSharedValue(1);
-  const y = useSharedValue(0);
-  const first = useRef(true);
+  const sc = useSharedValue(active ? 1.16 : 1);
   useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
-    if (!active) return;
-    sc.value = withSequence(withTiming(0.78, { duration: 90 }), withSpring(1, { damping: 6, stiffness: 300 }));
-    y.value = withSequence(withTiming(-5, { duration: 120 }), withSpring(0, { damping: 8, stiffness: 260 }));
+    sc.value = withTiming(active ? 1.16 : 1, { duration: 220 });
   }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
-  const st = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }, { scale: sc.value }] }));
+  const st = useAnimatedStyle(() => ({ transform: [{ scale: sc.value }] }));
   return <RAnimated.View style={[{ alignItems: 'center' }, st]}>{children}</RAnimated.View>;
 }
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,7 +21,7 @@ import { GlassFill } from './Glass';
 import { useT } from '../i18n';
 import { usePlayerPick, ViewRef } from '../player/PlayerProvider';
 import { TabId } from '../theme/types';
-import { useDraggable } from './useDraggable';
+import { DOCK_RESIZE, useDraggable } from './useDraggable';
 import {
   computeLayout, DOCK_GAP, DOCK_PADDING, DOCK_THICKNESS, DOCK_BUBBLE, dockCell,
   isVertical, MP_THICKNESS, STACK_GAP,
@@ -95,7 +88,7 @@ function PlayerItem({
   const ref = useRef<ViewRef>(null);
 
   useEffect(() => {
-    Animated.spring(appear, { toValue: 1, friction: 5, useNativeDriver: USE_NATIVE }).start();
+    Animated.timing(appear, { toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE }).start();
   }, [appear]);
 
   // Đo vị trí của mục này để mini player bay ra từ đúng chỗ đó
@@ -123,7 +116,8 @@ function PlayerItem({
     >
       <Animated.View
         style={{
-          transform: [{ scale: appear }],
+          opacity: appear,
+          transform: [{ scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
           width: 40,
           height: 40,
           borderRadius: 12,
@@ -159,7 +153,7 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
     if (hidden) {
       Animated.timing(slide, { toValue: 1, duration: 260, easing: Easing.bezier(0.4, 0, 0.2, 1), useNativeDriver: USE_NATIVE }).start();
     } else {
-      Animated.spring(slide, { toValue: 0, friction: 8, tension: 70, useNativeDriver: USE_NATIVE }).start();
+      Animated.timing(slide, { toValue: 0, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE }).start();
     }
   }, [hidden, slide]);
   const OUT = 180; // đủ xa để dock ra khỏi màn hình hoàn toàn
@@ -168,23 +162,12 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
   const slideX = slide.interpolate({ inputRange: [0, 1], outputRange: [0, toX] });
   const slideY = slide.interpolate({ inputRange: [0, 1], outputRange: [0, toY] });
 
-  // Hiệu ứng co lại khi dock mất một mục (mini player được tách ra)
-  const squash = useRef(new Animated.Value(1)).current;
-  const prevCount = useRef(ids.length);
-  useEffect(() => {
-    if (ids.length < prevCount.current) {
-      squash.setValue(1.12);
-      Animated.spring(squash, { toValue: 1, friction: 4, useNativeDriver: USE_NATIVE }).start();
-    }
-    prevCount.current = ids.length;
-  }, [ids.length, squash]);
-
   // Ô sáng phía sau tab đang mở: trượt mượt sang tab mới khi đổi tab
   const activeIndex = ids.indexOf(active);
   const hi = useRef(new Animated.Value(Math.max(0, activeIndex))).current;
   useEffect(() => {
     if (activeIndex < 0) return;
-    Animated.spring(hi, { toValue: activeIndex, friction: 8, tension: 90, useNativeDriver: USE_NATIVE }).start();
+    Animated.timing(hi, { toValue: activeIndex, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE }).start();
   }, [activeIndex, hi]);
   const cell = dockCell(position, labels);
   const cellW = vertical ? cell.cross : cell.main;
@@ -196,7 +179,7 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
 
   const detachPlayer = (origin: Origin | null) => {
     setEmergeFrom(origin);
-    if (Platform.OS !== 'web') LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
+    if (Platform.OS !== 'web') LayoutAnimation.configureNext(DOCK_RESIZE);
     setMerged(false);
   };
 
@@ -219,7 +202,6 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
               { translateX: d.pan.x },
               { translateY: d.pan.y },
               { scale: d.scale },
-              { scale: squash },
             ],
             ...glow,
           }}
@@ -269,7 +251,7 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
                   style={{ width: cellW, height: cellH, alignItems: 'center', justifyContent: 'center' }}
                 >
                   <DockIcon active={isActive}>
-                    <Ionicons name={ICONS[id]} size={labels ? 25 : 27} color={color} />
+                    <TabIcon id={id} size={labels ? 25 : 27} color={color} />
                   </DockIcon>
                   {labels && <Text numberOfLines={1} style={{ color, fontSize: 11, fontWeight: '600', marginTop: 3 }}>{t(LABELS[id])}</Text>}
                 </Pressable>

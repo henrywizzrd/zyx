@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { installAppLog, setLogContext } from './src/data/applog';
+import { JankMonitor } from './src/components/JankMonitor';
+import { LogScreen } from './src/screens/LogScreen';
+import { ActivityIndicator, Animated, Platform, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ScreenSizeProvider } from './src/components/ScreenSize';
@@ -206,6 +209,10 @@ function Root() {
     setTab(t);
   };
   const page = nav.stack[nav.stack.length - 1];
+  // Ghi vào nhật ký đang ở tab / trang nào (để biết chỗ khựng, chỗ lỗi)
+  useEffect(() => {
+    setLogContext(tab === 'player' ? 'player' : page ? `${tab} › ${page.type}${'title' in page ? ` "${page.title}"` : 'name' in page ? ` "${page.name}"` : ''}` : tab);
+  }, [tab, page]);
   const shown = tab === 'player' ? lastTab : tab; // đang mở player thì vẫn vẽ tab phía sau
   // Tab đã mở thì giữ lại (chỉ ẩn đi), không dựng lại từ đầu mỗi lần bấm dock.
   // Trước đây mỗi lần đổi tab là dựng lại cả màn hình (Home, Thư viện...), luồng JS bận một lúc nên bấm dock tiếp bị "đơ"
@@ -223,6 +230,7 @@ function Root() {
       <AppBackground />
       {/* Hiệu ứng nền (tuyết, lá, cá, hạt cà phê): chạy liên tục sau mọi trang, chỉ dừng khi mở Player */}
       <AmbientEffect paused={ambientOff} />
+      {Platform.OS !== 'web' && <JankMonitor />}
       <View style={{ flex: 1 }}>
         <ContentArea>
         {/* Tab hiện tại. Có trang mở chồng thì tab mờ dần đi theo vị trí trang (vuốt quay lại thì hiện lại dần),
@@ -252,6 +260,8 @@ function Root() {
                   <UserScreen page={pg} />
                 ) : pg.type === 'feed' ? (
                   <FeedScreen />
+                ) : pg.type === 'log' ? (
+                  <LogScreen />
                 ) : (
                   <ThemeStudioScreen />
                 )}
@@ -357,6 +367,9 @@ function Boot({ children }: { children: React.ReactNode }) {
   }
   return <>{children}</>;
 }
+
+// Nhật ký dò lỗi: bật sớm nhất có thể để bắt cả lỗi lúc khởi động
+installAppLog();
 
 export default function App() {
   return (

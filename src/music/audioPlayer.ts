@@ -140,9 +140,3 @@ export function showNowPlaying(meta: AudioMetadata) {
   }
 }
 
-// Trình phát riêng cho trang thử nghiệm phát nhạc (Playback lab trong Cài đặt), tách khỏi trình phát chính
-let lab: AudioPlayer | null = null;
-export function getLabPlayer(): AudioPlayer {
-  if (!lab) lab = createAudioPlayer(null);
-  return lab;
-}

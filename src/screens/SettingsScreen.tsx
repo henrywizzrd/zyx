@@ -10,8 +10,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNav } from '../nav/Nav';
 import { signOut, useSession } from '../data/auth';
 
-const PlaybackLab: React.ComponentType | null =
-  Platform.OS === 'web' ? null : require('../components/PlaybackLab').PlaybackLab;
 const VARIANTS: MiniPlayerVariant[] = ['pill', 'rect'];
 
 // labels: chữ hiển thị cho từng lựa chọn (bỏ trống thì hiện chính giá trị)
@@ -151,7 +149,17 @@ export function SettingsScreen() {
       >
         <Text style={{ color: theme.colors.text, fontWeight: '600' }}>{t('settings.reset')}</Text>
       </Pressable>
-      {PlaybackLab && <PlaybackLab />}
+      {/* Nhật ký dò lỗi (thay cho Playback lab) */}
+      <Pressable onPress={() => push({ type: 'log' })} style={[styles.row, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <View style={[styles.rowIcon, { backgroundColor: theme.colors.surface }]}>
+          <Ionicons name="document-text-outline" size={20} color={theme.colors.text} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: theme.colors.text, fontSize: 16, fontWeight: '700' }}>{t('settings.log')}</Text>
+          <Text style={{ color: theme.colors.textSecondary, fontSize: 13, marginTop: 2 }}>{t('settings.logHint')}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+      </Pressable>
     </>
   );
 

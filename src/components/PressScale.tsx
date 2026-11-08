@@ -1,12 +1,12 @@
 import React from 'react';
 import { Pressable, PressableProps, StyleProp, ViewStyle } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
-// Ô / thẻ bấm được: hơi thu nhỏ khi nhấn giữ, nảy về khi thả (thay cho kiểu mờ đi khi nhấn)
+// Ô / thẻ bấm được: hơi thu nhỏ khi nhấn giữ, trở lại êm khi thả (không nảy)
 export function ScalePressable({
   style,
   children,
-  scaleTo = 0.95,
+  scaleTo = 0.97,
   outerStyle,
   onPressIn,
   onPressOut,
@@ -28,7 +28,7 @@ export function ScalePressable({
         onPressIn?.(e);
       }}
       onPressOut={(e) => {
-        s.value = withSpring(1, { damping: 12, stiffness: 260 });
+        s.value = withTiming(1, { duration: 180 });
         onPressOut?.(e);
       }}
     >

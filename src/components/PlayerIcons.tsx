@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Platform, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 // Biểu tượng hàng điều khiển kiểu mới: tam giác bo tròn góc (phát, lùi, tới), hai thanh bo tròn (dừng).
 // Vẽ bằng Skia: tô kín + viền cùng màu với nét nối tròn → góc tam giác tròn mềm như ảnh mẫu.
@@ -86,15 +86,15 @@ export function PlayPauseGlyph({ playing, size, color = '#FFFFFF' }: { playing: 
   );
 }
 
-// Nảy nhẹ khi bấm (dùng cho nút lùi / tới / trộn / lặp)
+// Thu nhỏ nhẹ khi nhấn, trở lại êm khi thả (không nảy)
 export function useBounce() {
   const s = useSharedValue(1);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: s.value }] }));
   const onPressIn = () => {
-    s.value = withTiming(0.82, { duration: 90 });
+    s.value = withTiming(0.88, { duration: 90 });
   };
   const onPressOut = () => {
-    s.value = withSpring(1, { damping: 9, stiffness: 260 });
+    s.value = withTiming(1, { duration: 160 });
   };
   return { style, onPressIn, onPressOut };
 }

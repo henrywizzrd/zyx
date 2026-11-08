@@ -227,9 +227,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     failedRef.current = false;
     setProgress(0);
     setDuration(t.duration);
+    const t0 = Date.now();
+    flog(`tải bài: ${t.title} — ${t.artist ?? ''}`, 'music');
     try {
       const uri = await resolveUrl(t.id);
       if (id !== reqId.current) return; // đã bấm bài khác
+      flog(`có link sau ${Date.now() - t0}ms${uri.startsWith('file:') ? ' (bài đã tải)' : ''}`, 'music');
       // Bài ngay trước trong hàng đợi (nếu đã có link) cũng được xếp vào trình phát, để nút Bài trước ở màn hình khoá dùng được
       const q = queueRef.current;
       const k = q.findIndex((x) => x.qid === t.qid);
@@ -497,7 +500,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const togglePlay = useCallback(() => {
     if (!musicSupported || queueRef.current.length === 0) return;
-    flog('người dùng bấm phát / dừng trong app');
+    flog('người dùng bấm phát / dừng trong app', 'music');
     // Hàng đợi khôi phục từ lần mở app trước: nạp bài rồi tua tới chỗ đang nghe dở
     if (needsLoad.current) {
       const cur = queueRef.current[indexRef.current];
@@ -545,7 +548,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       // Nhật ký (dò lỗi "nhạc tự dừng"): ghi mỗi lần đổi giữa phát / dừng / đang chờ tải
       const pst = `${s.playing ? 'phát' : 'dừng'}${s.isBuffering ? '+chờ tải' : ''}${s.isLoaded ? '' : '+chưa tải'}`;
       if (pst !== lastPst.current) {
-        flog(`trình phát: ${lastPst.current || '-'} → ${pst} ở ${s.currentTime.toFixed(1)}/${(s.duration ?? 0).toFixed(1)}s (${queueRef.current[indexRef.current]?.title ?? '?'})`);
+        flog(`trình phát: ${lastPst.current || '-'} → ${pst} ở ${s.currentTime.toFixed(1)}/${(s.duration ?? 0).toFixed(1)}s (${queueRef.current[indexRef.current]?.title ?? '?'})`, 'music');
         lastPst.current = pst;
       }
       setIsPlaying(s.playing);
@@ -562,7 +565,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         const cur = queueRef.current[indexRef.current];
         if (cur && !localUri(cur.id)) {
           console.warn('[player] nhạc đứng im, tải lại link', cur.title);
-          flog(`trình phát đứng im 12s → tải lại link (${cur.title})`);
+          flog(`trình phát đứng im 12s → tải lại link (${cur.title})`, 'music');
           urlCache.delete(cur.id);
           pendingSeek.current = { qid: cur.qid, at: s.currentTime };
           load(cur);
@@ -580,7 +583,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         (!audio().hasNext() && s.isLoaded && s.duration > 0 && !s.playing && s.currentTime >= s.duration - 0.3);
       if (ended && !loadingRef.current && endedFor.current !== reqId.current) {
         endedFor.current = reqId.current;
-        flog(`hết bài (${s.didJustFinish ? 'báo hết' : 'tự tính'}) → bài kế`);
+        flog(`hết bài (${s.didJustFinish ? 'báo hết' : 'tự tính'}) → bài kế`, 'music');
         advanceRef.current(true);
       }
     });
@@ -592,7 +595,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!musicSupported) return;
     audio().onTrackChange((key) => {
-      flog('trình phát tự sang bài khác');
+      flog('trình phát tự sang bài khác', 'music');
       const q = queueRef.current;
       const k = q.findIndex((x) => x.qid === key);
       if (k < 0) return;

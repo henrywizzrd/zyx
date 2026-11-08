@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { log as appLog } from '../data/applog';
 import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { audio } from '../music/lazy';
@@ -89,13 +90,14 @@ export function useFxMode(): FxMode {
 // ---------- Nhật ký (để dò lỗi "đang nghe thì mất tiếng") ----------
 // Ghi lại trạng thái bộ hiệu ứng khoảng 2 giây một lần + các sự kiện; người dùng gửi từ bảng Chế độ âm thanh
 const LOG: string[] = [];
-export function flog(msg: string) {
+export function flog(msg: string, tag: 'fx' | 'music' = 'fx') {
   const d = new Date();
   const hh = `${d.getHours()}`.padStart(2, '0');
   const mm = `${d.getMinutes()}`.padStart(2, '0');
   const ss = `${d.getSeconds()}`.padStart(2, '0');
   LOG.push(`${hh}:${mm}:${ss} [${AppState.currentState}] ${msg}`);
   if (LOG.length > 400) LOG.shift();
+  appLog(tag, msg);
 }
 export const fxLogText = () => LOG.join('\n');
 AppState.addEventListener('change', (st) => {

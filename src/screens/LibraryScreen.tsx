@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { isDownloaded, setOnlyDownloaded, useDownloads, useOnlyDownloaded } from '../data/downloads';
+import { getLikedTracks, getPlaylistTracks } from '../data/db';
 import { Alert, Image, PixelRatio, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { holdPortrait, releasePortrait } from '../data/images';
 import RNMaskedView from '@react-native-masked-view/masked-view';
@@ -172,16 +174,26 @@ export function LibraryScreen() {
     push({ type: 'collection', source: 'local', kind: 'playlist', id, title: name });
   };
 
-  const items = useMemo(() => {
+  // Nút "Đã tải": chỉ giữ Bài hát đã thích / playlist của mình có ít nhất một bài đã tải
+  // (album / playlist YouTube đã lưu và nghệ sĩ không có bài nào nằm trong máy nên ẩn đi)
+  const onlyDl = useOnlyDownloaded();
+  useDownloads(); // tải xong / xoá bài thì vẽ lại, danh sách lọc theo trạng thái mới
+  const hasDownloads = (i: Item) => {
+    if (i.kind === 'liked') return getLikedTracks().some((x) => isDownloaded(x.id));
+    if (i.kind === 'local') return getPlaylistTracks(i.id.replace(/^local:/, '')).some((x) => isDownloaded(x.id));
+    return false;
+  };
+  const baseItems = useMemo(() => {
     let list = ordered.filter(matches);
     const q = query.trim().toLowerCase();
     if (q) list = list.filter((i) => titleOf(i).toLowerCase().includes(q));
     if (sort === 'alpha') list = [...list].sort((a, b) => titleOf(a).localeCompare(titleOf(b)));
     return list;
   }, [ordered, filter, query, sort, t]); // eslint-disable-line react-hooks/exhaustive-deps
+  const items = onlyDl ? baseItems.filter(hasDownloads) : baseItems;
 
   // Chỉ cho kéo đổi thứ tự khi đang xem đủ danh sách theo thứ tự của mình
-  const reorderable = filter === 'all' && query.trim() === '' && sort === 'recents';
+  const reorderable = filter === 'all' && query.trim() === '' && sort === 'recents' && !onlyDl;
 
   const cycleLayout = () => {
     const next = LAYOUT_ORDER[(LAYOUT_ORDER.indexOf(layout) + 1) % LAYOUT_ORDER.length];
@@ -320,6 +332,10 @@ export function LibraryScreen() {
           {/* Tạo playlist mới */}
           <Pressable onPress={newPlaylist} hitSlop={8} accessibilityLabel={t('lib.create')}>
             <Ionicons name="add" size={24} color={text} />
+          </Pressable>
+          {/* Chỉ hiện bài đã tải */}
+          <Pressable onPress={() => setOnlyDownloaded(!onlyDl)} hitSlop={8} accessibilityLabel={t('lib.onlyDownloaded')}>
+            <Ionicons name={onlyDl ? 'arrow-down-circle' : 'arrow-down-circle-outline'} size={23} color={onlyDl ? accent : text} />
           </Pressable>
           <Pressable onPress={cycleLayout} hitSlop={8}>
             <Ionicons name={LAYOUT_ICON[layout]} size={20} color={text} />

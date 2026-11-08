@@ -26,8 +26,8 @@ import { useReorderContext } from './ReorderableScrollView';
 
 const LONG_PRESS_MS = 300;
 const CARD_INSET = 8; // thẻ nổi lớn hơn ô gốc mỗi phía bấy nhiêu px
-const MOVE_SPRING = { damping: 20, stiffness: 220, mass: 1 }; // các ô trượt chừa chỗ / thẻ vừa thả bay vào ô
-const LIFT_SPRING = { damping: 14, stiffness: 220, mass: 1 };
+const MOVE_SPRING = { damping: 20, stiffness: 220, mass: 1, overshootClamping: true }; // các ô trượt chừa chỗ / thẻ vừa thả bay vào ô
+const LIFT_SPRING = { damping: 14, stiffness: 220, mass: 1, overshootClamping: true };
 const LIFT_SCALE = 1.05;
 const EPS = 0.5;
 

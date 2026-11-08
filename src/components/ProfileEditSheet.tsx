@@ -52,7 +52,7 @@ export function ProfileEditSheet({
     if (visible) {
       setMounted(true);
       show.setValue(0);
-      Animated.spring(show, { toValue: 1, friction: 7, tension: 70, useNativeDriver: USE_NATIVE }).start();
+      Animated.spring(show, { toValue: 1, friction: 7, tension: 70, overshootClamping: true, useNativeDriver: USE_NATIVE }).start();
     } else if (mounted) {
       Animated.timing(show, { toValue: 0, duration: 200, easing: Easing.in(Easing.cubic), useNativeDriver: USE_NATIVE }).start(({ finished }) => {
         if (finished) setMounted(false);

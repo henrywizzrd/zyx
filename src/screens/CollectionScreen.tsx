@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { isDownloaded, setOnlyDownloaded, useDownloads, useOnlyDownloaded } from '../data/downloads';
 import { Stagger } from '../components/Stagger';
 import { loadTrendingSummed, parseTrendingId } from '../data/trending';
 import { FadeBottom } from '../components/FadeBottom';
@@ -58,7 +59,11 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
   const dbv = useDbVersion();
   const { text, textSecondary, accent, surface, border, bg } = theme.colors;
 
-  const [rows, setRows] = useState<Row[]>([]);
+  const [allRows, setRows] = useState<Row[]>([]);
+  // Nút "Đã tải" ở Thư viện đang bật: chỉ hiện (và chỉ phát) các bài đã tải về máy
+  const onlyDl = useOnlyDownloaded();
+  useDownloads();
+  const rows = onlyDl ? allRows.filter((r) => isDownloaded(r.id)) : allRows;
   const [info, setInfo] = useState<Info>({ title: page.title, subtitle: '', thumb: page.thumb });
   const [status, setStatus] = useState<'loading' | 'done' | 'error'>('loading');
   const [isPublic, setIsPublic] = useState(false);
@@ -315,6 +320,15 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
   );
   const statusBlock = (
     <>
+      {onlyDl && allRows.length > 0 && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, alignSelf: 'center' }}>
+          <Ionicons name="arrow-down-circle" size={18} color={accent} />
+          <Text style={{ color: textSecondary, fontSize: 13 }}>{t('col.onlyDownloaded')}</Text>
+          <Pressable onPress={() => setOnlyDownloaded(false)} hitSlop={8}>
+            <Text style={{ color: accent, fontSize: 13, fontWeight: '700' }}>{t('col.showAll')}</Text>
+          </Pressable>
+        </View>
+      )}
       {status === 'loading' && <ActivityIndicator color={accent} style={{ marginTop: 24 }} />}
       {status === 'error' && (
         <Pressable onPress={() => setRetry((r) => r + 1)} style={{ marginTop: 24, alignItems: 'center' }}>
