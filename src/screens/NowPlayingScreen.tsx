@@ -21,6 +21,7 @@ import RNMaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import RAnimated, { Easing as REasing, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { PlayPauseGlyph, SkipGlyph, useBounce } from '../components/PlayerIcons';
+import { VectorIcon, type VectorOp } from '../components/VectorIcon';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useScreenSize } from '../components/ScreenSize';
 
@@ -64,36 +65,28 @@ const REPEAT_SIZE = ICON;
 // Nút lời bài hát: khung chat bo góc có đuôi, bên trong là hai dấu ngoặc kép (giống Apple Music)
 const BUBBLE_PATH = 'M6 4H18A3.5 3.5 0 0 1 21.5 7.5V14.5A3.5 3.5 0 0 1 18 18H11L7 21.2V18H6A3.5 3.5 0 0 1 2.5 14.5V7.5A3.5 3.5 0 0 1 6 4Z';
 const QUOTE_TAILS = 'M11.25 9.5c0 1.6-.8 2.6-2 3.1M16.25 9.5c0 1.6-.8 2.6-2 3.1';
+const LYRICS_OPS: VectorOp[] = [
+  { d: BUBBLE_PATH, stroke: 1.8 },
+  { circle: [9.75, 9.3, 1.55] },
+  { circle: [14.75, 9.3, 1.55] },
+  { d: QUOTE_TAILS, stroke: 1.4 },
+];
 function LyricsIcon({ on }: { on: boolean }) {
   const color = on ? ON : SOFT;
-  const paths = React.useMemo(
-    () => (skia ? { bubble: skia.Skia.Path.MakeFromSVGString(BUBBLE_PATH), tails: skia.Skia.Path.MakeFromSVGString(QUOTE_TAILS) } : null),
-    []
-  );
-  if (!skia || !paths?.bubble || !paths.tails) return <Ionicons name="chatbox-ellipses-outline" size={ICON} color={color} />;
-  return (
-    <skia.Canvas style={{ width: ICON, height: ICON }}>
-      <skia.Path path={paths.bubble} style="stroke" strokeWidth={1.8} strokeJoin="round" color={color} />
-      <skia.Circle cx={9.75} cy={9.3} r={1.55} color={color} />
-      <skia.Circle cx={14.75} cy={9.3} r={1.55} color={color} />
-      <skia.Path path={paths.tails} style="stroke" strokeWidth={1.4} strokeCap="round" color={color} />
-    </skia.Canvas>
-  );
+  if (!skia) return <Ionicons name="chatbox-ellipses-outline" size={ICON} color={color} />;
+  // Vẽ ra ảnh (không dùng khung Skia sống): khung Skia biến mất lúc player đang phóng to / thu nhỏ
+  return <VectorIcon ops={LYRICS_OPS} size={ICON} color={color} />;
 }
 
+const REPEAT_OPS: VectorOp[] = [{ d: REPEAT_PATH, stroke: 2 }];
 function RepeatIcon({ mode, color: forced }: { mode: 'off' | 'all' | 'one'; color?: string }) {
   const on = mode !== 'off';
   const color = forced ?? (on ? ON : SOFT);
-  const path = React.useMemo(() => skia?.Skia.Path.MakeFromSVGString(REPEAT_PATH) ?? null, []);
   return (
     <View style={{ alignItems: 'center' }}>
       <View style={{ width: REPEAT_SIZE, height: REPEAT_SIZE }}>
-        {skia && path ? (
-          <skia.Canvas style={{ width: REPEAT_SIZE, height: REPEAT_SIZE }}>
-            <skia.Group transform={[{ scale: REPEAT_SIZE / 24 }]}>
-              <skia.Path path={path} style="stroke" strokeWidth={2} strokeCap="round" strokeJoin="round" color={color} />
-            </skia.Group>
-          </skia.Canvas>
+        {skia ? (
+          <VectorIcon ops={REPEAT_OPS} box={24} size={REPEAT_SIZE} color={color} />
         ) : (
           <Ionicons name="repeat" size={REPEAT_SIZE} color={color} />
         )}

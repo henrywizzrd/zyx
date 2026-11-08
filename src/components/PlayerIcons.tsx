@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Platform, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { VectorIcon, type VectorOp } from './VectorIcon';
 
 // Biểu tượng hàng điều khiển kiểu mới: tam giác bo tròn góc (phát, lùi, tới), hai thanh bo tròn (dừng).
 // Vẽ bằng Skia: tô kín + viền cùng màu với nét nối tròn → góc tam giác tròn mềm như ảnh mẫu.
@@ -12,15 +13,10 @@ const skia = Platform.OS === 'web' ? null : (require('@shopify/react-native-skia
 const tri = (x: number, y: number, w: number, h: number, left = false) =>
   left ? `M${x + w} ${y}L${x} ${y + h / 2}L${x + w} ${y + h}Z` : `M${x} ${y}L${x + w} ${y + h / 2}L${x} ${y + h}Z`;
 
+// Vẽ ra ảnh (VectorIcon) thay vì khung Skia sống: khung Skia không hiện được lúc player đang phóng to / thu nhỏ
 function Shape({ d, size, color, round }: { d: string; size: number; color: string; round: number }) {
-  const path = React.useMemo(() => skia?.Skia.Path.MakeFromSVGString(d) ?? null, [d]);
-  if (!skia || !path) return null;
-  return (
-    <skia.Canvas style={{ width: size, height: size }}>
-      <skia.Path path={path} color={color} />
-      <skia.Path path={path} style="stroke" strokeWidth={round} strokeJoin="round" color={color} />
-    </skia.Canvas>
-  );
+  const ops = React.useMemo<VectorOp[]>(() => [{ d, fill: true, stroke: round }], [d, round]);
+  return <VectorIcon ops={ops} size={size} color={color} />;
 }
 
 // ▶ to, không có vòng tròn

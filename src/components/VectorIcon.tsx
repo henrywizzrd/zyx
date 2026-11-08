@@ -1,0 +1,68 @@
+import React, { useMemo } from 'react';
+import { Image, Platform, View } from 'react-native';
+
+// Biểu tượng vẽ bằng Skia nhưng hiện ra như một ẢNH thường (vẽ một lần ra ảnh PNG, nhớ lại để dùng tiếp).
+// Lý do: khung vẽ Skia (<Canvas>) là lớp đồ hoạ riêng của GPU — lúc màn player được "chụp thành ảnh" để phóng to / thu nhỏ
+// cho mượt (shouldRasterizeIOS), các khung Skia KHÔNG được chụp vào → nút phát, tua, lặp, lời bài hát biến mất
+// suốt lúc mở player. Ảnh thường thì được chụp bình thường, nhìn y hệt bản Skia.
+const skia = Platform.OS === 'web' ? null : (require('@shopify/react-native-skia') as typeof import('@shopify/react-native-skia'));
+
+export type VectorOp =
+  | { d: string; fill?: boolean; stroke?: number; round?: boolean } // round: nối / đầu nét bo tròn
+  | { circle: [number, number, number] };
+
+const cache = new Map<string, string>();
+
+function render(ops: VectorOp[], box: number, px: number, color: string): string | null {
+  if (!skia) return null;
+  const key = `${px}|${box}|${color}|${JSON.stringify(ops)}`;
+  const hit = cache.get(key);
+  if (hit) return hit;
+  try {
+    const { Skia, PaintStyle, StrokeJoin, StrokeCap } = skia;
+    const surface = Skia.Surface.Make(px, px);
+    if (!surface) return null;
+    const c = surface.getCanvas();
+    c.scale(px / box, px / box);
+    const col = Skia.Color(color);
+    for (const op of ops) {
+      const paint = Skia.Paint();
+      paint.setAntiAlias(true);
+      paint.setColor(col);
+      if ('circle' in op) {
+        c.drawCircle(op.circle[0], op.circle[1], op.circle[2], paint);
+        continue;
+      }
+      const path = Skia.Path.MakeFromSVGString(op.d);
+      if (!path) continue;
+      if (op.fill) c.drawPath(path, paint);
+      if (op.stroke) {
+        const s = Skia.Paint();
+        s.setAntiAlias(true);
+        s.setColor(col);
+        s.setStyle(PaintStyle.Stroke);
+        s.setStrokeWidth(op.stroke);
+        if (op.round !== false) {
+          s.setStrokeJoin(StrokeJoin.Round);
+          s.setStrokeCap(StrokeCap.Round);
+        }
+        c.drawPath(path, s);
+      }
+    }
+    surface.flush();
+    const uri = `data:image/png;base64,${surface.makeImageSnapshot().encodeToBase64()}`;
+    cache.set(key, uri);
+    return uri;
+  } catch (e) {
+    console.warn('[icon]', e);
+    return null;
+  }
+}
+
+// ops tính theo hệ toạ độ box × box (mặc định = size), hiện ra đúng size × size điểm
+export function VectorIcon({ ops, size, color, box = size, fallback }: { ops: VectorOp[]; size: number; color: string; box?: number; fallback?: React.ReactNode }) {
+  const scale = Platform.OS === 'web' ? 1 : Math.min(3, Math.max(2, Math.ceil((require('react-native').PixelRatio as typeof import('react-native').PixelRatio).get())));
+  const uri = useMemo(() => render(ops, box, Math.round(size * scale), color), [ops, box, size, scale, color]);
+  if (!uri) return <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>{fallback}</View>;
+  return <Image source={{ uri }} style={{ width: size, height: size }} fadeDuration={0} />;
+}
