@@ -50,9 +50,10 @@ function VideoBg({ uri }: { uri: string }) {
 
 // Bản sao đứng yên của nền chung, đặt bên trong trang đang được vuốt quay lại: trang trượt đi nhưng nền vẫn
 // giữ nguyên chỗ (màu nền, ảnh, cảnh trời sao), không còn bị thay bằng một mảng màu trơn.
+// live: chỉ bật lúc trang đang trượt (không chạy hiệu ứng thứ hai suốt lúc trang đứng yên cho đỡ tốn pin).
 // Video thì không phát bản thứ hai (tốn pin): dùng lớp phủ tối / sáng như trước.
 const scene = Platform.OS === 'web' ? null : (require('../theme/effects/Ambient') as typeof import('../theme/effects/Ambient'));
-export function PageBackdrop() {
+export function PageBackdrop({ live = false }: { live?: boolean }) {
   const { theme } = useTheme();
   const { type, uri, dim } = theme.background;
   const media = type !== 'preset' && !!uri;
@@ -63,6 +64,8 @@ export function PageBackdrop() {
         <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.bg, opacity: Math.max(0.85, 1 - dim * 0.2) }]} />
       )}
       {scene && !media && <scene.ThemeScene />}
+      {/* Đang vuốt: chạy cả hiệu ứng (sao băng, hoa rơi...) theo cùng đồng hồ với nền chung nên khớp nhau */}
+      {scene && live && <scene.AmbientEffect />}
     </View>
   );
 }

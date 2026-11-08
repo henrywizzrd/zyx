@@ -249,8 +249,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       stallRef.current = { t: -1, at: loadAtRef.current };
       // Màn hình khoá / thanh thông báo (Android: cần cái này để nhạc chạy nền lâu dài)
       audio().showNowPlaying(nowPlayingMeta(t));
-      // Ghi lịch sử nghe (thêm đủ thông tin bài để Home dựng Recent / Recommend)
-      recordPlay({ ...t, duration: t.duration }, t.ctx);
+      // Ghi lịch sử nghe sau khi bài đã phát được vài giây (bấm lướt qua nhiều bài liên tục thì không ghi:
+      // mỗi lần ghi làm Home / Thư viện tính lại, lướt nhanh 10 bài là khựng cả mấy giây)
+      setTimeout(() => {
+        if (id === reqId.current) recordPlay({ ...t, duration: t.duration }, t.ctx);
+      }, 4000);
     } catch (e) {
       console.warn('Không phát được', t.title, e);
       // Mất mạng: tự chuyển sang bài kế tiếp ĐÃ TẢI VỀ trong hàng đợi (nếu có), không thì báo cho người dùng biết
@@ -280,6 +283,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Bấm Bài sau / Bài trước liên tục: giao diện đổi bài ngay, nhưng chỉ nạp nhạc bài cuối cùng khi ngừng bấm ~0,3s.
+  // (Trước đây mỗi lần bấm đều nạp bài, ghi lịch sử, đổi màn hình khoá... → bấm nhanh là luồng JS khựng tới 8 giây)
+  const lastGo = useRef(0);
+  const goTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const goTo = useCallback(
     (i: number) => {
       const q = queueRef.current;
@@ -287,7 +294,23 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const n = ((i % q.length) + q.length) % q.length;
       indexRef.current = n;
       setIndex(n);
-      load(q[n]);
+      const now = Date.now();
+      const rapid = now - lastGo.current < 400;
+      lastGo.current = now;
+      if (goTimer.current) clearTimeout(goTimer.current);
+      goTimer.current = null;
+      if (!rapid) {
+        load(q[n]);
+        return;
+      }
+      ++reqId.current; // bỏ lần tải đang dở của bài vừa lướt qua
+      loadingRef.current = true;
+      setLoading(true);
+      goTimer.current = setTimeout(() => {
+        goTimer.current = null;
+        const cur = queueRef.current[indexRef.current];
+        if (cur) load(cur);
+      }, 300);
     },
     [load]
   );
@@ -473,7 +496,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     [goTo, extendRadio]
   );
   advanceRef.current = advance;
-  const next = useCallback(() => advance(false), [advance]);
+  const next = useCallback(() => {
+    flog('bấm Bài sau', 'music');
+    advance(false);
+  }, [advance]);
 
   const toggleShuffle = useCallback(() => {
     shuffleRef.current = !shuffleRef.current;
@@ -502,6 +528,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const prev = useCallback(() => {
     if (!musicSupported || queueRef.current.length === 0) return;
     const p = audio().getPlayer();
+    flog('bấm Bài trước', 'music');
     if (p.currentTime > 3) p.seekTo(0);
     else goTo(indexRef.current - 1);
   }, [goTo]);

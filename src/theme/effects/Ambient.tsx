@@ -1,7 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
-import { Canvas, ImageSVG, Picture, Skia, useClock } from '@shopify/react-native-skia';
-import { useDerivedValue } from 'react-native-reanimated';
+import { Canvas, ImageSVG, Picture, Skia } from '@shopify/react-native-skia';
+import { makeMutable, useDerivedValue, useFrameCallback } from 'react-native-reanimated';
+
+// Đồng hồ chung cho mọi lớp hiệu ứng: hạt rơi / sao băng tính hoàn toàn theo thời gian t, nên hai lớp cùng một t
+// vẽ ra y hệt nhau. Nhờ vậy bản sao nền trong trang đang vuốt quay lại khớp đúng với nền chung phía sau
+// (trước đây mỗi lớp có đồng hồ riêng tính từ lúc nó xuất hiện → sao băng lệch nhau)
+const sharedClock = makeMutable(0);
+const clockBase = makeMutable(-1);
+function useAmbientClock() {
+  useFrameCallback((f) => {
+    'worklet';
+    if (clockBase.value < 0) clockBase.value = f.timestamp;
+    sharedClock.value = f.timestamp - clockBase.value;
+  });
+  return sharedClock;
+}
 import { useTheme } from '../ThemeProvider';
 import { drawFlake, FLAKE_SVGS } from './snowflakes';
 import { drawLeaf, LEAF_COLORS, LEAF_SVGS, makeLeafPaths } from './leaves';
@@ -85,7 +99,7 @@ function Layer({ picture }: { picture: ReturnType<typeof useDerivedValue<import(
 
 function SnowCanvas({ color }: { color: string }) {
   const { width, height } = useScreenSize();
-  const clock = useClock();
+  const clock = useAmbientClock();
   const flakeSvgs = FLAKE_SVGS;
   // Mỗi bông 8 số: x, y ban đầu, tốc độ rơi (px/giây), bán kính, độ lắc, tần số lắc, độ đậm, tốc độ xoay.
   // Bông to (gần) rơi nhanh và đậm hơn bông nhỏ (xa) → cảm giác có chiều sâu
@@ -132,7 +146,7 @@ function SnowCanvas({ color }: { color: string }) {
 
 function LeafCanvas() {
   const { width, height } = useScreenSize();
-  const clock = useClock();
+  const clock = useAmbientClock();
   const leafSvgs = LEAF_SVGS;
   const colors = LEAF_COLORS;
   // Mỗi lá 9 số: x, y ban đầu, tốc độ rơi, kích thước, độ đưa ngang, tần số đưa, độ đậm, tốc độ lật, màu.
@@ -183,7 +197,7 @@ function LeafCanvas() {
 // vài bong bóng lẻ nổi chậm, và vài chú cá bơi ngang qua lại, vẫy đuôi, lên xuống nhẹ
 function OceanCanvas({ onMedia }: { onMedia: boolean }) {
   const { width, height } = useScreenSize();
-  const clock = useClock();
+  const clock = useAmbientClock();
   const bubbleColor = onMedia ? '#FFFFFF' : '#5B8FC9';
   const fishColors = FISH_COLORS;
   const svgs = [FISH_BODY, FISH_TAIL, FISH_FIN];
@@ -270,7 +284,7 @@ function OceanCanvas({ onMedia }: { onMedia: boolean }) {
 // Trôi ra khỏi mép này thì vòng lại từ mép đối diện. Vẽ bằng Skia trên UI thread như tuyết / lá
 function CoffeeBeans() {
   const { width, height } = useScreenSize();
-  const clock = useClock();
+  const clock = useAmbientClock();
   // Mỗi hạt 9 số: x, y ban đầu, hướng trôi (rad), tốc độ (px/giây), kích thước, tốc độ xoay, độ nhấp nhô, độ đậm, màu
   const beans = useMemo(() => {
     const out: number[] = [];
@@ -326,7 +340,7 @@ function CoffeeBeans() {
 const PETAL_COLORS = ['#F7A8C0', '#F9C2D3', '#FBD7E2', '#F48FB1'];
 function SakuraPetals() {
   const { width, height } = useScreenSize();
-  const clock = useClock();
+  const clock = useAmbientClock();
   // Mỗi cánh 10 số: x, y ban đầu, tốc độ rơi, kích thước, độ đưa, tần số đưa, độ đậm, tốc độ lật, màu, là bông hoa (1) hay cánh (0)
   const petals = useMemo(() => {
     const out: number[] = [];
@@ -401,7 +415,7 @@ function SakuraPetals() {
 const SHOWER_EVERY = 8;
 function MeteorShower() {
   const { width, height } = useScreenSize();
-  const clock = useClock();
+  const clock = useAmbientClock();
   // Sao lấp lánh: x, y, bán kính, tốc độ nhấp nháy, pha
   const twinkles = useMemo(() => {
     const out: number[] = [];

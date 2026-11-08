@@ -20,6 +20,7 @@ function swipeLog(msg: string) {
   log('swipe', msg);
 }
 
+
 const BackContext = createContext<(() => void) | null>(null);
 export const useAnimatedBack = () => useContext(BackContext);
 // Trang đã trượt vào xong chưa. Trang nặng (danh sách dài, nhiều ảnh) đợi tới lúc này mới dựng phần nặng,
@@ -46,6 +47,9 @@ export function SwipeBack({ onBack, fade, children }: { onBack: () => void; fade
   const cover = useSharedValue(1);
   const leaving = useSharedValue(false);
   const [entered, setEntered] = useState(false);
+  // Lớp nền phủ đang hiện (đang trượt vào / đang vuốt / đang trượt ra): chạy kèm hiệu ứng nền cho khớp
+  const [live, setLive] = useState(true);
+  const coverDone = useCallback(() => setLive(false), []);
 
   const markEntered = useCallback(() => setEntered(true), []);
   const back = useCallback(() => onBack(), [onBack]);
@@ -55,7 +59,9 @@ export function SwipeBack({ onBack, fade, children }: { onBack: () => void; fade
     if (fade) fade.value = withTiming(0, { duration: ENTER_MS });
     x.value = withTiming(0, { duration: ENTER_MS, easing: Easing.out(Easing.cubic) }, (done) => {
       if (!done) return;
-      cover.value = withTiming(0, { duration: 180 });
+      cover.value = withTiming(0, { duration: 180 }, (ok) => {
+        if (ok) scheduleOnRN(coverDone);
+      });
       scheduleOnRN(markEntered);
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -66,6 +72,7 @@ export function SwipeBack({ onBack, fade, children }: { onBack: () => void; fade
     if (leaving.value) return;
     leaving.value = true;
     cover.value = 1;
+    scheduleOnRN(setLive, true);
     if (fade) fade.value = withTiming(1, { duration: LEAVE_MS });
     x.value = withTiming(w.value, { duration: LEAVE_MS, easing: Easing.out(Easing.quad) }, (done) => {
       if (done) scheduleOnRN(back);
@@ -79,6 +86,7 @@ export function SwipeBack({ onBack, fade, children }: { onBack: () => void; fade
   const onActivate = () => {
     'worklet';
     cover.value = 1;
+    scheduleOnRN(setLive, true);
     scheduleOnRN(swipeLog, 'bắt đầu vuốt từ cạnh trái');
   };
   const onUpdate = (e: { translationX: number }) => {
@@ -99,7 +107,10 @@ export function SwipeBack({ onBack, fade, children }: { onBack: () => void; fade
     scheduleOnRN(swipeLog, `thả tay → ở lại trang (kéo ${Math.round(e.translationX)}px)`);
     if (fade) fade.value = withTiming(0, { duration: 200 });
     x.value = withSpring(0, SPRING, (done) => {
-      if (done) cover.value = withTiming(0, { duration: 180 });
+      if (done)
+        cover.value = withTiming(0, { duration: 180 }, (ok) => {
+          if (ok) scheduleOnRN(coverDone);
+        });
     });
   };
   const pan = usePanGesture({
@@ -130,7 +141,7 @@ export function SwipeBack({ onBack, fade, children }: { onBack: () => void; fade
               {/* Trong lúc trượt: phủ một bản sao nền chung (đứng yên, cắt theo khung trang) để che tab / trang phía dưới */}
               <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}>
                 <Animated.View style={[StyleSheet.absoluteFill, coverStyle]}>
-                  <PageBackdrop />
+                  <PageBackdrop live={live} />
                 </Animated.View>
               </View>
               {children}

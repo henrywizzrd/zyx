@@ -14,6 +14,7 @@ export type LogTag = 'music' | 'fx' | 'error' | 'jank' | 'swipe' | 'ui';
 export interface LogLine { t: number; tag: LogTag; msg: string; bg?: boolean }
 
 const KEY = 'applog:v1';
+const ALIVE = 'applog:alive';
 const MAX = 1000;
 let lines: LogLine[] | null = null;
 let dirty = false;
@@ -104,10 +105,21 @@ export function installAppLog() {
       return '';
     }
   })();
-  log('ui', `— mở app ${ver0} (${Platform.OS} ${Platform.Version}) —`);
+  // Lần trước app còn sống tới lúc nào: app bị hệ thống tắt / văng (lỗi native, không kịp ghi gì) thì
+  // dòng này cho biết nó chết lúc nào và khoảng cách tới dòng cuối cùng của lần trước
+  let lastAlive: number | null = null;
+  try {
+    lastAlive = cacheGet<number>(ALIVE)?.value ?? null;
+  } catch {}
+  log('ui', `— mở app ${ver0} (${Platform.OS} ${Platform.Version}) —${lastAlive ? ` lần trước còn chạy tới ${fmtTime(lastAlive)}` : ''}`);
 
-  // Lưu định kỳ
-  setInterval(flushLog, 6000);
+  // Lưu định kỳ + đánh dấu "còn sống" (chạy cả khi app ở nền mà đang phát nhạc)
+  setInterval(() => {
+    flushLog();
+    try {
+      cacheSet(ALIVE, Date.now());
+    } catch {}
+  }, 5000);
 
   // App vào nền / quay lại
   AppState.addEventListener('change', (st) => {
