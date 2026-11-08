@@ -206,6 +206,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (theme.preset !== want) setThemeState((t) => derive({ ...t, preset: want }));
   }, [scheme, theme.followSystem, theme.preset]);
 
+  // Nhật ký: theme đang dùng lúc mở app (để biết theme nào khi dò giật lag)
+  useEffect(() => {
+    if (ready) appLog('ui', `theme: ${theme.preset}${theme.background.type !== 'preset' ? ` + nền ${theme.background.type}` : ''}`);
+  }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Lưu lại mỗi khi theme đổi (chờ 300ms để không ghi liên tục)
   useEffect(() => {
     if (!ready) return;

@@ -764,7 +764,8 @@ let stuck = { p: -1, at: 0 }; // vị trí nguồn hiệu ứng lần cuối cò
 let deadSince = 0;
 let lastLog = 0; // lúc bộ âm thanh bắt đầu không chạy (0 = đang chạy bình thường)
 let last = { playing: false, time: 0, at: 0 };
-let lastSeekAt = 0; // lần báo gần nhất của trình phát chính
+let lastSeekAt = 0;
+let lastLagLog = 0; // lần báo gần nhất của trình phát chính
 
 // Vị trí trong bài lúc này theo trình phát chính (đang đổi tốc độ thì thời gian trong bài chạy nhanh / chậm hơn đồng hồ)
 const expected = () => (last.playing ? last.time + ((Date.now() - last.at) / 1000) * liveRate : last.time);
@@ -924,7 +925,14 @@ function sync(force = false) {
   driftCount = drift > (bg ? 2.5 : 0.35) ? driftCount + 1 : 0;
   // Vừa tua xong thì chờ ~0,6s cho nguồn kịp nhảy tới chỗ mới (trước đây hết bài quay lại đầu là tua liền 4 lần)
   const settling = now - lastSeekAt < 600;
-  if (!src.playing || force || ((drift > (bg ? 4 : 1.5) || driftCount >= 2) && !settling)) {
+  // Nguồn tụt lại phía sau (máy bận, thiếu dữ liệu → tiếng rè / giật): kể cả khi app ở nền, tụt quá 1,5s là kéo lên ngay
+  const lag = want - src.pos();
+  const hard = bg ? drift > 4 || lag > 1.5 : drift > 1.5;
+  if (lag > 0.6 && now - lastLagLog > 3000) {
+    lastLagLog = now;
+    flog(`nguồn chạy chậm hơn nhạc ${lag.toFixed(2)}s (máy bận / thiếu dữ liệu)`);
+  }
+  if (!src.playing || force || ((hard || driftCount >= 2) && !settling)) {
     if (src.playing) flog(`tua lại: lệch ${drift.toFixed(2)}s`);
     driftCount = 0;
     lastSeekAt = now;

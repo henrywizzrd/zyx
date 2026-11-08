@@ -42,8 +42,18 @@ export function AmbientEffect({ paused }: { paused?: boolean }) {
   // (inactive): trước đây cũng tắt hẳn hiệu ứng nên hạt biến mất rồi hiện lại từ đầu → giờ vẫn chạy tiếp
   const [active, setActive] = useState(AppState.currentState !== 'background');
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (s) => setActive(s !== 'background'));
-    return () => sub.remove();
+    // Quay lại app: đợi ~0,8s rồi mới chạy lại hiệu ứng (lúc mở lại app máy đang bận vẽ lại mọi thứ;
+    // chạy hiệu ứng cùng lúc làm nhạc ở chế độ âm thanh bị rè / giật)
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const sub = AppState.addEventListener('change', (s) => {
+      if (timer) clearTimeout(timer);
+      if (s === 'background') setActive(false);
+      else timer = setTimeout(() => setActive(true), 800);
+    });
+    return () => {
+      sub.remove();
+      if (timer) clearTimeout(timer);
+    };
   }, []);
   const running = !paused && active;
   const effect = pickEffect(theme);
