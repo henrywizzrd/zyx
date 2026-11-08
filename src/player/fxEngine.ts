@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { bgStats, log as appLog } from '../data/applog';
+import { bgStats, flushLog, log as appLog } from '../data/applog';
 import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { audio } from '../music/lazy';
@@ -792,7 +792,16 @@ async function loadTrack(id: string) {
       flog(`stream lỗi: ${String(e)}`);
     }
     flog(`mở bài ${id} bằng ${s ? 'stream' : 'buffer'}`);
-    if (!s) s = await bufferSource(c, id, uri);
+    if (!s) {
+      // Giải mã cả bài vào RAM chỉ dùng cho bài ngắn, khi app đang mở. Bài dài (mix 1-2 tiếng) mà giải mã cả bài thì
+      // tốn hàng GB RAM và chặn luồng JS cả phút → iOS tắt app (cpu_resource_fatal). Không được thì nghe tiếng thường
+      const dur = lastDuration;
+      if (AppState.currentState !== 'active' || !(dur > 0) || dur > 600) {
+        throw new Error(`không giải mã cả bài (${AppState.currentState}, dài ${Math.round(dur)}s)`);
+      }
+      flushLog();
+      s = await bufferSource(c, id, uri);
+    }
     if (token !== loadToken) {
       s.close();
       return;
@@ -854,7 +863,29 @@ function applyMode(instant = false) {
 }
 
 // Mở lại nguồn của bài đang phát (tiếng tạm về trình phát chính trong lúc mở)
+// Giới hạn mở lại nguồn: quá 4 lần / phút cho cùng một bài thì thôi, nghe tiếng thường (tránh vòng lặp mở lại tốn CPU)
+let reopenLog: number[] = [];
+let reopenFor: string | null = null;
 function reopen() {
+  const now = Date.now();
+  if (reopenFor !== curId) {
+    reopenFor = curId;
+    reopenLog = [];
+  }
+  reopenLog = reopenLog.filter((t) => now - t < 60000);
+  reopenLog.push(now);
+  if (reopenLog.length > 4 && curId) {
+    flog('mở lại nguồn quá nhiều lần → tạm nghe tiếng thường cho bài này');
+    flushLog();
+    failedId = curId;
+    loadToken++;
+    dropSource();
+    if (wantMix !== 0) {
+      wantMix = 0;
+      setMix(0, 0.2);
+    }
+    return;
+  }
   if (wantMix !== 0) {
     wantMix = 0;
     setMix(0, 0.15);
@@ -968,8 +999,11 @@ function sync(force = false) {
 
 // Gọi mỗi lần trình phát chính báo trạng thái (PlayerProvider)
 let waitId: string | null = null; // bài đang chờ bấm phát mới mở
-export function fxTick(id: string | null, playing: boolean, time: number) {
+let lastDuration = 0; // độ dài bài đang phát (giây), theo trình phát chính
+export function fxTick(id: string | null, playing: boolean, time: number, duration = 0) {
   last = { playing, time, at: Date.now() };
+  if (duration > 0) lastDuration = duration;
+  else if (id !== curId) lastDuration = 0;
   const changed = id !== curId;
   curId = id;
   if (!engineOn() || !fxSupported()) return;

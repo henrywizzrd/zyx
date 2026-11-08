@@ -647,7 +647,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       if (s.isLoaded) loadAtRef.current = 0; // bài đã nạp xong
       checkStallRef.current();
       // Chế độ âm thanh (8D / Phòng hoà nhạc) bám theo trình phát chính
-      fxTick(queueRef.current[indexRef.current]?.id ?? null, s.playing, s.currentTime);
+      fxTick(queueRef.current[indexRef.current]?.id ?? null, s.playing, s.currentTime, s.duration ?? 0);
       // Độ dài bài khi phát qua mạng hay nhích lên xuống vài phần trăm giây mỗi lần báo:
       // chỉ cập nhật khi lệch thật (> 0,5s), không thì cả app vẽ lại liên tục chỉ vì con số lẻ
       if (s.isLoaded && s.duration > 0) setDuration((d) => (Math.abs(d - s.duration) > 0.5 ? s.duration : d));
