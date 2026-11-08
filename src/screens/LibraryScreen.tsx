@@ -110,7 +110,7 @@ export function LibraryScreen() {
   const { width, height } = useFrame();
   const scrollY = useSharedValue(0); // để ảnh bìa giãn ra khi kéo quá đầu trang
 
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<Filter>('playlist'); // mở Thư viện: mặc định ở mục Playlists (chip sáng)
   const [sort, setSort] = useState<Sort>('recents');
   const library = useLibrary();
   const { push } = useNav();
@@ -193,13 +193,21 @@ export function LibraryScreen() {
   const items = onlyDl ? baseItems.filter(hasDownloads) : baseItems;
 
   // Chỉ cho kéo đổi thứ tự khi đang xem đủ danh sách theo thứ tự của mình
-  const reorderable = filter === 'all' && query.trim() === '' && sort === 'recents' && !onlyDl;
+  const reorderable = (filter === 'all' || filter === 'playlist') && query.trim() === '' && sort === 'recents' && !onlyDl;
 
   const cycleLayout = () => {
     const next = LAYOUT_ORDER[(LAYOUT_ORDER.indexOf(layout) + 1) % LAYOUT_ORDER.length];
     setLibraryLayout(next);
   };
 
+  // Kéo đổi thứ tự khi đang lọc (vd chỉ Playlists): đặt lại thứ tự các mục đang hiện vào đúng các chỗ của chúng
+  // trong thứ tự chung, các mục bị ẩn (album, nghệ sĩ) giữ nguyên chỗ cũ
+  const reorderSubset = (ids: string[]) => {
+    const full = ordered.map((x) => x.id);
+    const shown = new Set(ids);
+    let k = 0;
+    setLibraryOrder(full.map((id) => (shown.has(id) ? ids[k++] : id)));
+  };
   const toggleFilter = (f: Exclude<Filter, 'all'>) => setFilter((cur) => (cur === f ? 'all' : f));
 
   const chip = (label: string, on: boolean, onPress: () => void) => (
@@ -287,7 +295,7 @@ export function LibraryScreen() {
         gapX={grid.gapX}
         gapY={grid.gapY}
         renderItem={renderItem}
-        onReorder={setLibraryOrder}
+        onReorder={reorderSubset}
       />
     );
   };

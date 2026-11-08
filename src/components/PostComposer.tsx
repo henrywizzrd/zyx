@@ -187,15 +187,29 @@ function AttachPicker({ onPick }: { onPick: (a: Attachment) => void }) {
     let dead = false;
     const id = setTimeout(() => {
       setSearching(true);
-      ytmusic()
-        .searchMusic(q.trim(), 'all')
-        .then((r) => {
+      // Giống trang Search: bài hát + video ca nhạc (nhiều bài chỉ có dạng video), album, nghệ sĩ.
+      // (Trước đây chỉ dùng kiểu tìm "tổng hợp" rồi lấy mục bài hát → nhiều bài nằm ở kết quả nổi bật / video nên ra "No results")
+      const term = q.trim();
+      Promise.all([
+        ytmusic().searchMusic(term, 'song').catch(() => null),
+        ytmusic().searchMusic(term, 'all').catch(() => null),
+      ])
+        .then(([songs, all]) => {
           if (dead) return;
+          const seen = new Set<string>();
+          const uniq = (a: Attachment) => {
+            const k = `${a.kind}:${a.id}`;
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
+          };
+          const tracks = [...(songs?.songs ?? []), ...(songs?.videos ?? []), ...(all?.songs ?? []), ...(all?.videos ?? [])];
           const out: Attachment[] = [
-            ...r.songs.slice(0, 8).map((s) => trackToAttach(toTrack(s))),
-            ...r.albums.slice(0, 4).map((c) => ({ kind: 'album' as const, id: c.id, title: c.title, subtitle: c.subtitle, thumb: c.thumb, source: 'yt' as const })),
-            ...r.artists.slice(0, 4).map((c) => ({ kind: 'artist' as const, id: c.id, title: c.title, subtitle: c.subtitle, thumb: c.thumb, source: 'yt' as const })),
-          ];
+            ...tracks.map((s) => trackToAttach(toTrack(s))).filter(uniq).slice(0, 12),
+            ...(all?.albums ?? []).slice(0, 4).map((c) => ({ kind: 'album' as const, id: c.id, title: c.title, subtitle: c.subtitle, thumb: c.thumb, source: 'yt' as const })),
+            ...(all?.artists ?? []).slice(0, 4).map((c) => ({ kind: 'artist' as const, id: c.id, title: c.title, subtitle: c.subtitle, thumb: c.thumb, source: 'yt' as const })),
+          ].filter((a) => a.kind === 'song' || uniq(a));
+          if (!out.length && !songs && !all) console.warn('[attach] tìm không được', term);
           setOnline(out);
         })
         .catch(() => !dead && setOnline([]))
