@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { log as appLog } from '../data/applog';
+import { bgStats, log as appLog } from '../data/applog';
 import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { audio } from '../music/lazy';
@@ -863,6 +863,7 @@ function reopen() {
 
 // Đồng bộ với trình phát chính. force: chạy lại ngay cả khi không lệch
 function sync(force = false) {
+  bgStats.sync++;
   if (!engineOn()) return;
   const c = ctx;
   if (!c || !chain) return;

@@ -43,7 +43,8 @@ export function flushLog() {
 let notifyQueued = false;
 function notify() {
   ver++;
-  if (notifyQueued) return;
+  // App ở nền: màn Nhật ký không cần vẽ lại (quay lại app sẽ vẽ một lần)
+  if (notifyQueued || AppState.currentState !== 'active') return;
   notifyQueued = true;
   // gộp nhiều dòng liền nhau thành một lần vẽ lại màn hình Nhật ký
   setTimeout(() => {
@@ -52,7 +53,11 @@ function notify() {
   }, 250);
 }
 
+// Đếm việc app làm (để dò "tốn CPU khi ở nền")
+export const bgStats = { status: 0, sync: 0, raf: 0, logs: 0, renders: 0 };
+
 export function log(tag: LogTag, msg: string) {
+  bgStats.logs++;
   const arr = load();
   arr.push({ t: Date.now(), tag, msg, bg: AppState.currentState !== 'active' || undefined });
   if (arr.length > MAX) arr.splice(0, arr.length - MAX);
@@ -154,20 +159,57 @@ export function installAppLog() {
   wrap('error');
   wrap('warn');
 
-  // Khựng luồng JS: đo khoảng cách giữa các khung hình (requestAnimationFrame), chỉ khi app đang mở
+  // Khựng luồng JS: đo khoảng cách giữa các khung hình (requestAnimationFrame). CHỈ chạy khi app đang mở:
+  // ở nền, React Native vẫn gọi requestAnimationFrame liên tục bằng bộ hẹn giờ → tốn CPU vô ích
   let last = 0;
+  let rafOn = false;
   const loop = (now: number) => {
-    if (last && AppState.currentState === 'active') {
+    if (AppState.currentState !== 'active') {
+      rafOn = false;
+      last = 0;
+      return;
+    }
+    bgStats.raf++;
+    if (last) {
       const gap = now - last;
       if (gap > 150 && !justResumed()) log('jank', `luồng JS khựng ${Math.round(gap)}ms${ctx ? ` · ${ctx}` : ''}`);
     }
     last = now;
     requestAnimationFrame(loop);
   };
-  requestAnimationFrame(loop);
-  AppState.addEventListener('change', () => {
+  const startRaf = () => {
+    if (rafOn) return;
+    rafOn = true;
     last = 0;
+    requestAnimationFrame(loop);
+  };
+  startRaf();
+  AppState.addEventListener('change', (st) => {
+    if (st === 'active') {
+      startRaf();
+      // quay lại app: vẽ lại màn Nhật ký một lần
+      ver++;
+      subs.forEach((f) => f());
+    }
   });
+
+  // Ở nền: cứ 20 giây ghi một dòng thống kê việc app đang làm + độ trễ bộ hẹn giờ (trễ nhiều = luồng JS đang bận)
+  let lastTick = Date.now();
+  let lateSum = 0;
+  let ticks = 0;
+  setInterval(() => {
+    const now = Date.now();
+    lateSum += Math.max(0, now - lastTick - 1000);
+    lastTick = now;
+    ticks++;
+    if (ticks < 20) return;
+    if (AppState.currentState !== 'active') {
+      log('ui', `nền 20s: trễ hẹn giờ ${lateSum}ms, trạng thái nhạc ${bgStats.status}, đồng bộ fx ${bgStats.sync}, khung JS ${bgStats.raf}, ghi log ${bgStats.logs}, vẽ lại player ${bgStats.renders}`);
+    }
+    ticks = 0;
+    lateSum = 0;
+    bgStats.status = bgStats.sync = bgStats.raf = bgStats.logs = bgStats.renders = 0;
+  }, 1000);
 }
 
 function safeJson(x: unknown) {

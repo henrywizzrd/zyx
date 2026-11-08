@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Platform, Pressable, ScrollView, ScrollViewInstance, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Platform, Pressable, ScrollView, ScrollViewInstance, StyleSheet, Text, View, AppState } from 'react-native';
 import type { Lyrics } from '../music/lyrics';
 import { audio, musicSupported } from '../music/lazy';
 import { usePlayerPick } from '../player/PlayerProvider';
@@ -171,6 +171,7 @@ export function LyricsView({
       return;
     }
     const tick = () => {
+      if (AppState.currentState !== 'active') return; // ở nền / tắt màn hình: không đọc thời gian, không vẽ lại lời
       const i = currentIndex(rows, readTime() + offsetRef.current);
       setCur((c) => (c === i ? c : i));
     };

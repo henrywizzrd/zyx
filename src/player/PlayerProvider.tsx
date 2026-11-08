@@ -10,6 +10,7 @@ import { localUri } from '../data/downloads';
 import { Image as ExpoImage } from 'expo-image';
 import { showToast } from '../components/toastBridge';
 import { flog, fxPrefetch, fxTick, setFxResolver } from './fxEngine';
+import { bgStats } from '../data/applog';
 
 // ---- Link phát của từng bài, lấy sẵn trước khi cần
 // Ở chế độ nền (tắt màn hình), iPhone chỉ cho app chạy tiếp khi đang PHÁT âm thanh. Hết bài mà phải đợi vài giây lấy link
@@ -154,6 +155,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [index, setIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
+  bgStats.renders++; // đếm số lần vẽ lại (nhật ký nền)
   const [duration, setDuration] = useState(0);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -628,8 +630,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         flog(`trình phát: ${lastPst.current || '-'} → ${pst} ở ${s.currentTime.toFixed(1)}/${(s.duration ?? 0).toFixed(1)}s (${queueRef.current[indexRef.current]?.title ?? '?'})`, 'music');
         lastPst.current = pst;
       }
+      bgStats.status++;
       setIsPlaying(s.playing);
-      setProgress(s.currentTime);
+      // App ở nền: không cập nhật thanh thời gian / lời bài hát (không ai thấy) — trước đây cả player vẽ lại mỗi 0,5 giây
+      // ngay cả khi tắt màn hình, cộng dồn làm iOS tắt app vì dùng CPU quá mức (cpu_resource_fatal)
+      progressRef.current = s.currentTime;
+      if (AppState.currentState === 'active') setProgress(s.currentTime);
       lastStatus.current = { playing: s.playing, isBuffering: s.isBuffering, isLoaded: s.isLoaded, currentTime: s.currentTime };
       if (s.isLoaded) loadAtRef.current = 0; // bài đã nạp xong
       checkStallRef.current();
@@ -682,7 +688,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   // ---- Nhớ phiên nghe để mở lại app nghe tiếp
   const restored = useRef(false);
   const progressRef = useRef(0);
-  progressRef.current = progress;
+  if (AppState.currentState === 'active') progressRef.current = progress;
+  // Quay lại app: thanh thời gian nhảy tới đúng chỗ đang phát
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st === 'active') setProgress(progressRef.current);
+    });
+    return () => sub.remove();
+  }, []);
   const saveSession = useCallback(() => {
     if (!restored.current) return; // chưa đọc xong phiên cũ thì đừng ghi đè
     const q = queueRef.current;
