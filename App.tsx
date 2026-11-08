@@ -4,6 +4,7 @@ import { JankMonitor } from './src/components/JankMonitor';
 import { updateCoverTint } from './src/theme/coverTint';
 import { LogScreen } from './src/screens/LogScreen';
 import { StatsScreen } from './src/screens/StatsScreen';
+import { AppleDock } from './src/components/AppleDock';
 import { ActivityIndicator, Animated, Platform, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -176,7 +177,7 @@ function CoverTintSync() {
 }
 
 function Root() {
-  const { theme } = useTheme();
+  const { theme, landscape } = useTheme();
   const [tab, setTab] = useState<TabId>('home');
   const [lastTab, setLastTab] = useState<TabId>('home');
   // Player đang hiện (kể cả lúc đang thu nhỏ về bong bóng)
@@ -297,7 +298,9 @@ function Root() {
         <BackdropBlur />
         <MiniPlayer hidden={tab === 'player' || playerUp} onOpen={() => setTab('player')} />
           {/* Dock: dạng thanh (kéo đổi chỗ được) hoặc dạng bubble ở góc dưới (Cài đặt → Kiểu dock) */}
-          {theme.dock.mode === 'bubble' ? (
+          {theme.dock.mode === 'apple' && !landscape ? (
+            <AppleDock active={tab} onChange={go} onOpenPlayer={() => setTab('player')} hidden={tab === 'player' || playerUp} />
+          ) : theme.dock.mode === 'bubble' ? (
             <DockBubble active={tab} onChange={go} hidden={tab === 'player'} />
           ) : (
             <FloatingDock active={tab} onChange={go} hidden={tab === 'player'} />
@@ -317,7 +320,7 @@ function Root() {
 function ContentArea({ children }: { children: React.ReactNode }) {
   const { theme, landscape } = useTheme();
   const insets = useSafeAreaInsets();
-  const side = landscape && theme.dock.mode === 'bar';
+  const side = landscape && theme.dock.mode !== 'bubble';
   const padL = landscape ? insets.left : 0;
   const padR = landscape ? insets.right + (side ? DOCK_THICKNESS + theme.dock.style.margin * 2 : 0) : 0;
   return (

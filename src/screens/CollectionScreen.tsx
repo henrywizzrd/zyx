@@ -24,6 +24,7 @@ import {
 } from '../data/db';
 import { useScreenSize } from '../components/ScreenSize';
 import Animated from 'react-native-reanimated';
+import { useDockCollapse } from '../components/dockCollapse';
 import { StretchyBg, useStretchScroll } from '../components/Stretchy';
 import { deleteAppFile, pickSquareImage } from '../data/images';
 import { openComposer } from '../components/PostComposer';
@@ -267,6 +268,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
   // ---- Phần đầu trang
   const heroH = Math.min(Math.round(width * 1.05), 480);
   const { scrollY, onScroll } = useStretchScroll(); // ảnh bìa giãn ra khi kéo quá đầu trang
+  useDockCollapse(scrollY); // dock Apple Music: cuộn xuống thì thu dock
   const imgSize = Math.round(width * PixelRatio.get());
   const meta = [info.subtitle].filter(Boolean).join(' • ');
 

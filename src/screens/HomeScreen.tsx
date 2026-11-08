@@ -11,7 +11,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, PixelRatio, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { FadeInDown, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { useDockCollapse } from '../components/dockCollapse';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useContentInsets } from '../components/FloatingDock';
@@ -686,6 +687,12 @@ export function HomeScreen() {
   const pad = useContentInsets();
   const { push } = useNav();
   const [editing, setEditing] = useState(false);
+  // dock Apple Music: cuộn xuống thì thu dock, cuộn lên thì mở lại
+  const homeY = useSharedValue(0);
+  const dockScroll = useAnimatedScrollHandler((e) => {
+    homeY.value = e.contentOffset.y;
+  });
+  useDockCollapse(homeY);
   const visible = theme.home.sections.filter((s) => !theme.home.hidden.includes(s));
 
   const render = (s: HomeSection) => {
@@ -760,7 +767,9 @@ export function HomeScreen() {
   }
 
   return (
-    <ScrollView
+    <Animated.ScrollView
+      onScroll={dockScroll}
+      scrollEventThrottle={16}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{
         paddingTop: pad.top + 16,
@@ -779,7 +788,7 @@ export function HomeScreen() {
       {visible.length === 0 && (
         <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>{t('home.allHidden')}</Text>
       )}
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 

@@ -3,6 +3,8 @@ import { ScalePressable } from '../components/PressScale';
 import { Stagger } from '../components/Stagger';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import RAnimated, { useAnimatedScrollHandler, useSharedValue as useRShared } from 'react-native-reanimated';
+import { useDockCollapse } from '../components/dockCollapse';
 import { BlurView } from 'expo-blur';
 import { useGlass, GlassFill, glassShadow } from '../components/Glass';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -118,6 +120,12 @@ function warmUp() {
 }
 
 export function SearchScreen() {
+  // dock Apple Music: cuộn xuống thì thu dock, cuộn lên thì mở lại
+  const searchY = useRShared(0);
+  const dockScroll = useAnimatedScrollHandler((e) => {
+    searchY.value = e.contentOffset.y;
+  });
+  useDockCollapse(searchY);
   const { theme, landscape } = useTheme();
   useEffect(() => {
     const id = setTimeout(warmUp, 250); // để màn hình Tìm kiếm hiện ra trước rồi mới làm
@@ -709,7 +717,9 @@ export function SearchScreen() {
   }
 
   return (
-    <ScrollView
+    <RAnimated.ScrollView
+      onScroll={dockScroll}
+      scrollEventThrottle={16}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
@@ -727,7 +737,7 @@ export function SearchScreen() {
           </View>
         )}
       </View>
-    </ScrollView>
+    </RAnimated.ScrollView>
   );
 }
 

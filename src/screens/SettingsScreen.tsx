@@ -71,10 +71,10 @@ export function SettingsScreen() {
       {/* Kiểu dock: thanh (kiểu Apple Music) hoặc bubble ở góc dưới */}
       <Text style={label}>{t('settings.dockMode')}</Text>
       <Chips
-        options={['bar', 'bubble'] as const}
+        options={['bar', 'bubble', 'apple'] as const}
         value={theme.dock.mode}
         onSelect={setDockMode}
-        labels={{ bar: t('settings.dockBar'), bubble: t('settings.dockBubble') }}
+        labels={{ bar: t('settings.dockBar'), bubble: t('settings.dockBubble'), apple: 'Apple Music' }}
       />
       {theme.dock.mode === 'bubble' ? (
         <>
@@ -107,13 +107,17 @@ export function SettingsScreen() {
         labels={{ on: t('common.on'), off: t('common.off') }}
       />
 
-      <Text style={label}>{t('settings.merge')}</Text>
-      <Chips
-        options={['on', 'off'] as const}
-        value={theme.miniPlayer.merged ? 'on' : 'off'}
-        onSelect={(v) => setMerged(v === 'on')}
-        labels={{ on: t('common.on'), off: t('common.off') }}
-      />
+      {theme.dock.mode === 'bar' && (
+        <>
+          <Text style={label}>{t('settings.merge')}</Text>
+          <Chips
+            options={['on', 'off'] as const}
+            value={theme.miniPlayer.merged ? 'on' : 'off'}
+            onSelect={(v) => setMerged(v === 'on')}
+            labels={{ on: t('common.on'), off: t('common.off') }}
+          />
+        </>
+      )}
 
       {/* Chuyển bài mượt: bài cũ nhỏ dần, bài mới to dần trong 6 giây */}
       <Text style={[label, { marginBottom: 4 }]}>{t('settings.crossfade')}</Text>

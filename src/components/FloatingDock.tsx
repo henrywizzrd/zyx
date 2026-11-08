@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { TabIcon } from './TabIcon';
+import { amEndPadding } from './AppleDock';
 import { Cover } from './Cover';
 import { playerOrigin } from './PlayerTransition';
 import { Animated, Easing, LayoutAnimation, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -57,9 +58,10 @@ export function useContentInsets() {
       // vùng nội dung đã chừa sẵn tai thỏ và dock (ContentArea trong App.tsx), các màn hình không phải chừa thêm
       left: 0,
       right: 0,
-      endPadding: theme.dock.mode === 'bar' ? MP_THICKNESS + 16 : DOCK_BUBBLE + theme.dock.style.margin * 2 + insets.bottom,
+      endPadding: theme.dock.mode !== 'bubble' ? MP_THICKNESS + 16 : DOCK_BUBBLE + theme.dock.style.margin * 2 + insets.bottom,
     };
   }
+  if (theme.dock.mode === 'apple') return { top: insets.top, bottom: insets.bottom, left: insets.left, right: insets.right, endPadding: amEndPadding(insets.bottom) };
   return {
     top: insets.top,
     bottom: insets.bottom,

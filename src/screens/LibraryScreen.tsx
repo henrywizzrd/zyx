@@ -26,6 +26,7 @@ import { ReorderableScrollView } from '../components/ReorderableScrollView';
 import { ProfileFeed } from '../components/ProfileFeed';
 import { StretchyBg } from '../components/Stretchy';
 import { useSharedValue } from 'react-native-reanimated';
+import { useDockCollapse } from '../components/dockCollapse';
 
 const H_PAD = 16;
 const COVER_H = 520; // chiều cao vùng ảnh bìa: phủ phần đầu trang rồi mờ dần xuống tận danh sách
@@ -109,6 +110,7 @@ export function LibraryScreen() {
   const pad = useContentInsets();
   const { width, height } = useFrame();
   const scrollY = useSharedValue(0); // để ảnh bìa giãn ra khi kéo quá đầu trang
+  useDockCollapse(scrollY); // dock Apple Music: cuộn xuống thì thu dock
 
   const [filter, setFilter] = useState<Filter>('playlist'); // mở Thư viện: mặc định ở mục Playlists (chip sáng)
   const [sort, setSort] = useState<Sort>('recents');

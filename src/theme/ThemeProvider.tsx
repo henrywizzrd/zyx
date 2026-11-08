@@ -110,7 +110,7 @@ function sanitize(t: Theme): Theme {
       ...t.dock,
       position: POSITIONS.includes(t.dock.position) ? t.dock.position : d.dock.position,
       items: items.length ? items : d.dock.items,
-      mode: t.dock.mode === 'bubble' ? 'bubble' : 'bar',
+      mode: t.dock.mode === 'bubble' || t.dock.mode === 'apple' ? t.dock.mode : 'bar',
       bubbleSide: t.dock.bubbleSide === 'left' ? 'left' : 'right',
     },
     miniPlayer: {
@@ -250,7 +250,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setDockLabels: (labels) => setThemeState((t) => ({ ...t, dock: { ...t.dock, labels } })),
       setDockRimLight: (rimLight) => setThemeState((t) => ({ ...t, dock: { ...t.dock, rimLight } })),
       // Đổi sang bubble: mini player tách khỏi dock (nếu đang gộp) để nằm ở góc đối diện
-      setDockMode: (mode) => setThemeState((t) => ({ ...t, dock: { ...t.dock, mode }, miniPlayer: mode === 'bubble' ? { ...t.miniPlayer, merged: false } : t.miniPlayer })),
+      setDockMode: (mode) => setThemeState((t) => ({ ...t, dock: { ...t.dock, mode }, miniPlayer: mode !== 'bar' ? { ...t.miniPlayer, merged: false } : t.miniPlayer })),
       setLyricLook: (lyricLook) => setThemeState((t) => ({ ...t, player: { ...t.player, lyricLook } })),
       setDockBubbleSide: (bubbleSide) => setThemeState((t) => ({ ...t, dock: { ...t.dock, bubbleSide } })),
       setMiniPlayerAnchor: (anchor) => patchMini({ anchor }),
