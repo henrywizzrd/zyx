@@ -3,9 +3,12 @@ import { Image, PanResponder, PanResponderInstance, StyleSheet, View } from 'rea
 import Animated, { Easing, interpolate, makeMutable, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { usePlayerPick } from '../player/PlayerProvider';
 import { SmartImage } from './Cover';
+import { ArtSlab, glassShadow as liftShadow } from './Glass';
+import { Freeze } from './Freeze';
+import { useTheme } from '../theme/ThemeProvider';
 import { useScreenSize } from './ScreenSize';
 
-export type Rect = { x: number; y: number; w: number; h: number; r: number };
+export type Rect = { x: number; y: number; w: number; h: number; r: number; slab?: boolean }; // slab: điểm xuất phát là bong bóng kiểu khối kính
 
 // Nơi bấm để mở player (ảnh album ở mini player hoặc mục Player trên dock).
 // Nơi bấm ghi vào đây trước khi đổi tab, hiệu ứng đọc ra để biết phải phóng to từ đâu.
@@ -38,6 +41,7 @@ const SPRING = { damping: 24, stiffness: 210, mass: 1, overshootClamping: true }
 export function PlayerTransition({ open, onClose, onClosed, onOpened, children }: { open: boolean; onClose: () => void; onClosed?: () => void; onOpened?: () => void; children: React.ReactNode }) {
   const { width: W, height: H } = useScreenSize();
   const { track } = usePlayerPick('track');
+  const light = useTheme().theme.colors.glassTint !== 'dark';
   const [mounted, setMountedState] = useState(open);
   const mountedRef = useRef(open);
   const openRef = useRef(open);
@@ -228,6 +232,13 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
     return { borderRadius: r / sw };
   });
 
+  // Mép kính trên ảnh bay: cùng cỡ với ảnh bay (A), bo góc = bo góc bong bóng phóng theo tỉ lệ A / cạnh bong bóng
+  const o0 = playerOrigin.current;
+  const slabRadius = o0?.slab && o0.w > 0 ? (o0.r * A) / o0.w : 0;
+  const slabFade = useAnimatedStyle(() => ({ opacity: interpolate(p.value, [0, 0.3], [1, 0], 'clamp') }));
+  // Bóng đổ của bong bóng cũng hiện dần theo (bong bóng thật có bóng, ảnh bay trước đây không có → bóng "bụp" ra)
+  const shadowFade = useAnimatedStyle(() => ({ opacity: interpolate(p.value, [0, 0.25], [1, 0], 'clamp') }));
+
   const art = useAnimatedStyle(() => {
     const sw = interpolate(p.value, [0, 1], [ow.value / A, 1]);
     const r = radiusAt(p.value);
@@ -242,23 +253,38 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
     };
   });
 
-  if (!mounted) return null;
-
+  // Player đã mở một lần thì giữ lại (ẩn + đóng băng khi đóng), không gỡ ra rồi dựng lại mỗi lần:
+  // dựng cả màn player tốn ~0,3–0,6 giây luồng JS (mở player bị khựng), gỡ ra cũng khựng ~0,3 giây lúc vừa thu về bong bóng
+  const everRef = useRef(false);
+  if (mounted) everRef.current = true;
+  // Đóng băng sau một nhịp: để màn player kịp nhận active = false (dừng xoay nền, dừng đồng hồ lời...) rồi mới đứng im
+  const [frozen, setFrozen] = useState(false);
+  useEffect(() => {
+    if (mounted) return setFrozen(false);
+    const id = setTimeout(() => setFrozen(true), 60);
+    return () => clearTimeout(id);
+  }, [mounted]);
+  if (!everRef.current) return null;
 
   return (
-    <View style={[StyleSheet.absoluteFill, { zIndex: 50 }]} pointerEvents={open ? 'auto' : 'none'}>
+    <View style={[StyleSheet.absoluteFill, { zIndex: 50 }, !mounted && styles.gone]} pointerEvents={open ? 'auto' : 'none'}>
       {/* Không tô nền cho khung: nền của khung bị kéo méo theo hai chiều nên ở cuối hiệu ứng thu về thành hình vuông vuông
           (đó là cái ô vuông thấy được trước khi thành hình tròn). Màn player đã có nền riêng bên trong */}
       <Animated.View style={[styles.frame, { width: W, height: H }, win]}>
         <Animated.View style={[styles.innerFrame, { width: W, height: H }, inner]}>
           <TransitionContext.Provider value={ctx}>
             <Animated.View style={[{ width: W, height: H }, screen]} shouldRasterizeIOS={moving} renderToHardwareTextureAndroid={moving}>
-              {children}
+              <Freeze freeze={frozen && !mounted}>{children}</Freeze>
             </Animated.View>
           </TransitionContext.Provider>
         </Animated.View>
       </Animated.View>
       <Animated.View pointerEvents="none" style={[styles.artShadow, { width: A, height: A }, art]}>
+        {slabRadius > 0 && (
+          <Animated.View
+            style={[StyleSheet.absoluteFill, { borderRadius: slabRadius, borderCurve: 'continuous' }, liftShadow(1.15 * (A / (o0?.w || A)), light), shadowFade]}
+          />
+        )}
         <Animated.View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }, artClip]}>
           {track.thumb ? (
             <>
@@ -267,6 +293,13 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
             </>
           ) : (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: track.color }]} />
+          )}
+          {/* Gần về tới bong bóng: mép kính (viền, mép vát, vành khúc xạ) hiện dần trên ảnh bay, đúng tỉ lệ với bong bóng,
+              nên lúc đổi sang bong bóng thật không còn nhịp "ảnh trơn rồi mới có viền" */}
+          {slabRadius > 0 && (
+            <Animated.View style={[StyleSheet.absoluteFill, slabFade]}>
+              <ArtSlab track={track} size={A} radius={slabRadius} />
+            </Animated.View>
           )}
         </Animated.View>
       </Animated.View>
@@ -279,4 +312,6 @@ const styles = StyleSheet.create({
   innerFrame: { position: 'absolute', left: 0, top: 0, transformOrigin: 'left top' },
   // Ảnh album bay: lớp ngoài lo vị trí / co giãn, lớp trong cắt bo góc. Không đổ bóng (giống bong bóng)
   artShadow: { position: 'absolute', left: 0, top: 0, transformOrigin: 'left top' },
+  // Player đã đóng: ẩn hẳn (vẫn giữ trong bộ nhớ)
+  gone: { display: 'none' },
 });

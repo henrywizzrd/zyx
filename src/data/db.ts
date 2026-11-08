@@ -539,10 +539,13 @@ export function importLibrary(dump: LibraryDump): boolean {
       for (const r of dump.liked ?? []) d.runSync('INSERT OR IGNORE INTO liked (track_id, liked_at) VALUES (?, ?)', r);
       for (const r of dump.saved ?? [])
         d.runSync('INSERT OR IGNORE INTO saved (kind, id, title, subtitle, thumb, saved_at) VALUES (?, ?, ?, ?, ?, ?)', r);
-      const hasHistory = !!d.getFirstSync('SELECT 1 FROM play_history LIMIT 1');
-      if (!hasHistory)
-        for (const r of [...(dump.history ?? [])].reverse())
-          d.runSync('INSERT INTO play_history (track_id, played_at, ctx_kind, ctx_id, ctx_title, ctx_thumb, secs) VALUES (?, ?, ?, ?, ?, ?, ?)', r);
+      // Lịch sử: gộp với những gì đang có trong máy (lượt nào đã có — cùng bài, cùng thời điểm — thì bỏ qua)
+      for (const r of [...(dump.history ?? [])].reverse())
+        d.runSync(
+          `INSERT INTO play_history (track_id, played_at, ctx_kind, ctx_id, ctx_title, ctx_thumb, secs)
+           SELECT ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM play_history WHERE track_id = ? AND played_at = ?)`,
+          [...r, r[0], r[1]]
+        );
     });
     return true;
   });

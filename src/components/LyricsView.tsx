@@ -125,7 +125,9 @@ export function LyricsView({
   fade?: boolean; // mép trên / dưới mờ dần (tắt khi bên ngoài đã tự làm mép mờ)
 }) {
   const { track, duration } = usePlayerPick('track', 'duration');
-  const { moving } = usePlayerTransition();
+  const { moving, active } = usePlayerTransition();
+  const activeRef = useRef(active);
+  activeRef.current = active;
   const t = useT();
   // Không còn chỉnh lệch tay: lời được chọn theo đúng videoId / độ dài thật nên khớp sẵn
   const offset = 0;
@@ -172,6 +174,7 @@ export function LyricsView({
     }
     const tick = () => {
       if (AppState.currentState !== 'active') return; // ở nền / tắt màn hình: không đọc thời gian, không vẽ lại lời
+      if (!activeRef.current) return; // player đang đóng (ẩn): không cần theo lời
       const i = currentIndex(rows, readTime() + offsetRef.current);
       setCur((c) => (c === i ? c : i));
     };

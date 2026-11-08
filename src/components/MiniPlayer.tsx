@@ -83,7 +83,7 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
   useLayoutEffect(() => {
     // Vẫn cập nhật khi đang ẩn (player đang mở): xoay màn hình thì player biết chỗ mới để thu về
     if (theme.miniPlayer.merged) return;
-    playerOrigin.current = { x: geom.x + INSET, y: geom.y + INSET, w: S - INSET * 2, h: S - INSET * 2, r: artRadius };
+    playerOrigin.current = { x: geom.x + INSET, y: geom.y + INSET, w: S - INSET * 2, h: S - INSET * 2, r: artRadius, slab: true };
   }, [geom.x, geom.y, S, bubbleRadius, hidden, theme.miniPlayer.merged]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- Thả ở chỗ mới: trượt bong bóng từ chỗ ngón tay nhả tới chỗ mới
@@ -156,17 +156,19 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
     setEmergeFrom(null);
   }, [theme.miniPlayer.merged, hidden]);
 
-  if (theme.miniPlayer.merged || hidden) return null;
+  if (theme.miniPlayer.merged) return null;
+  // Lúc player đang mở: bong bóng vẫn nằm đó (ẩn đi), không gỡ ra. Đóng player thì chỉ việc hiện lại — ảnh bìa, viền kính
+  // đã vẽ sẵn. Trước đây gỡ ra rồi dựng lại nên ảnh hiện trước, viền kính hiện sau một nhịp (thấy "giật" lúc đóng)
 
   // Bấm 1 lần: mở player ngay (không còn chờ xem có bấm đúp không)
   const openPlayer = () => {
     const g = geomRef.current;
-    playerOrigin.current = { x: g.x + INSET, y: g.y + INSET, w: S - INSET * 2, h: S - INSET * 2, r: artRadius };
+    playerOrigin.current = { x: g.x + INSET, y: g.y + INSET, w: S - INSET * 2, h: S - INSET * 2, r: artRadius, slab: true };
     onOpen();
   };
 
   return (
-    <View pointerEvents="box-none" style={[styles.layer, { left: rect.x, top: rect.y, zIndex: d.zIndex }]}>
+    <View pointerEvents={hidden ? 'none' : 'box-none'} style={[styles.layer, { left: rect.x, top: rect.y, zIndex: d.zIndex, opacity: hidden ? 0 : 1 }]}>
       <View ref={playerRef} collapsable={false} pointerEvents="box-none" style={{ width: S, height: S }}>
         <Animated.View {...d.panHandlers} style={{ width: S, height: S, transform: [{ translateX: d.pan.x }, { translateY: d.pan.y }] }}>
           <Animated.View

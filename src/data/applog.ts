@@ -151,6 +151,8 @@ export function installAppLog() {
     console[k] = (...a: any[]) => {
       try {
         const msg = a.map((x) => (x instanceof Error ? `${x.message}` : typeof x === 'string' ? x : safeJson(x))).join(' ');
+        // youtubei.js báo "gặp loại dữ liệu mới của YouTube" (vô hại, nó tự xử lý) — không ghi, đỡ rối nhật ký
+        if (msg.includes('[YOUTUBEJS][Parser]')) return orig(...a);
         log('error', `${k === 'warn' ? 'cảnh báo' : 'console.error'}: ${msg.slice(0, 500)}`);
       } catch {}
       orig(...a);

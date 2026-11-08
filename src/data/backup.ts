@@ -7,13 +7,13 @@
 // thì kéo về những playlist từng để Công khai.
 // Một máy chỉ sao lưu cho tài khoản đầu tiên dùng nó (đăng nhập tài khoản khác trên cùng máy thì không ghi đè bản của người kia).
 import { AppState, Platform } from 'react-native';
-import { cacheGet, cacheSet, exportLibrary, importLibrary, isLibraryEmpty, subscribeDb, type LibraryDump } from './db';
+import { cacheGet, cacheSet, exportLibrary, importLibrary, subscribeDb, type LibraryDump } from './db';
 import { log } from './applog';
 
 const sb = () => (require('../backend/supabase') as typeof import('../backend/supabase')).supabase;
 
 const OWNER = 'backup:owner';
-const CHECKED = (uid: string) => `backup:checked:${uid}`;
+const CHECKED = (uid: string) => `backup:checked2:${uid}`;
 const HASH = (uid: string) => `backup:hash:${uid}`;
 const MIN_GAP = 90_000;
 
@@ -26,6 +26,7 @@ let dirty = false;
 let busy = false;
 let lastAt = 0;
 let timer: ReturnType<typeof setTimeout> | null = null;
+let noTable = false; // server chưa có bảng library_backups (chưa chạy file SQL 008): thôi thử lại tới lần mở app sau
 
 const hashOf = (s: string) => {
   let h = 5381;
@@ -39,7 +40,7 @@ export function markBackupDirty() {
 }
 
 function schedule(now = false) {
-  if (!uid || !ready || !dirty) return;
+  if (!uid || !ready || !dirty || noTable) return;
   if (timer) {
     if (!now) return;
     clearTimeout(timer);
@@ -74,7 +75,9 @@ async function upload() {
     log('ui', `sao lưu thư viện: ${dump.playlists.length} playlist, ${dump.liked.length} bài thích, ${dump.history.length} lượt nghe (${Math.round(json.length / 1024)}KB)`);
   } catch (e: any) {
     dirty = true;
-    log('error', `sao lưu thư viện lỗi: ${e?.message ?? e}`);
+    const m = String(e?.message ?? e);
+    if (m.includes('library_backups')) noTable = true;
+    log('error', `sao lưu thư viện lỗi: ${noTable ? 'server chưa có bảng library_backups (chạy file supabase/008_library_backup.sql)' : m}`);
   } finally {
     lastAt = Date.now();
     busy = false;
@@ -84,7 +87,11 @@ async function upload() {
 
 async function restore(me: string) {
   const { data, error } = await sb().from('library_backups').select('data, updated_at').eq('user_id', me).maybeSingle();
-  if (error) throw error;
+  if (error) {
+    // Chưa có bảng sao lưu: vẫn lấy lại playlist Công khai, rồi báo lỗi để lần mở app sau thử lại phần sao lưu
+    await restoreShared(me).catch(() => {});
+    throw error;
+  }
   if (data?.data) {
     const dump = data.data as LibraryDump & { theme?: unknown };
     importLibrary(dump);
@@ -92,7 +99,11 @@ async function restore(me: string) {
     log('ui', `khôi phục thư viện từ bản sao ${String(data.updated_at).slice(0, 16)}: ${dump.playlists?.length ?? 0} playlist, ${dump.liked?.length ?? 0} bài thích`);
     return;
   }
-  // Chưa có bản sao: lấy lại các playlist từng để Công khai
+  await restoreShared(me);
+}
+
+// Lấy lại các playlist từng để Công khai (bản trên server). Gộp vào máy, cái nào đã có thì giữ nguyên
+async function restoreShared(me: string) {
   const { data: rows, error: e2 } = await sb()
     .from('shared_playlists')
     .select('local_id, title, description, cover_url, tracks, updated_at')
@@ -133,7 +144,8 @@ export async function startBackup(id: string | null) {
     return;
   }
   try {
-    if (!cacheGet<boolean>(CHECKED(id))?.value && isLibraryEmpty()) await restore(id);
+    // Khôi phục là GỘP (không xoá, không ghi đè gì trong máy) nên chạy được cả khi máy đã có chút dữ liệu
+    if (!cacheGet<boolean>(CHECKED(id))?.value) await restore(id);
     cacheSet(CHECKED(id), true);
     cacheSet(OWNER, id);
     if (uid !== id) return;

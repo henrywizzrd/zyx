@@ -293,7 +293,8 @@ function Root() {
         <SharedSyncer />
         {/* Bong bóng ẩn từ lúc bấm mở player tới khi player thu hẳn về (playerUp), để không thấy hai ảnh cùng lúc */}
         {/* Bấm mở player: nền phía sau (tab + hiệu ứng) mờ dần theo độ mở; đóng thì từ mờ trở lại rõ dần */}
-        {(tab === 'player' || playerUp) && <BackdropBlur />}
+        {/* Luôn nằm sẵn (trong suốt khi player đóng): không phải dựng / gỡ lớp kính mờ mỗi lần mở, đóng player */}
+        <BackdropBlur />
         <MiniPlayer hidden={tab === 'player' || playerUp} onOpen={() => setTab('player')} />
           {/* Dock: dạng thanh (kéo đổi chỗ được) hoặc dạng bubble ở góc dưới (Cài đặt → Kiểu dock) */}
           {theme.dock.mode === 'bubble' ? (
