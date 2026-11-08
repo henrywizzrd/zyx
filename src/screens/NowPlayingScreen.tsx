@@ -510,7 +510,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         {/* Lời | chế độ âm thanh | hàng chờ: ba ô cùng cỡ, cách đều nhau */}
         <View style={{ alignItems: 'center', gap: 6, marginTop: 4 }}>
           <Pressable onPress={() => setLandLyrics((v) => !v)} hitSlop={8} style={styles.sideBtn}>
-            <Ionicons name={landLyrics ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} size={24} color={landLyrics ? '#FFFFFF' : SOFT} />
+            <LyricsIcon on={landLyrics} />
           </Pressable>
           {FxButton}
           <Pressable onPress={() => setQueueOpen(true)} hitSlop={8} style={styles.sideBtn}>

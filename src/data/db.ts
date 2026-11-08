@@ -92,6 +92,15 @@ function changed() {
   version++;
   listeners.forEach((l) => l());
 }
+// Cho hook tự viết (useSyncExternalStore): đăng ký nghe thay đổi + đọc số phiên bản
+export function subscribeDb(l: () => void) {
+  listeners.add(l);
+  return () => {
+    listeners.delete(l);
+  };
+}
+export const dbVersion = () => version;
+
 export function useDbVersion() {
   const [v, setV] = useState(version);
   useEffect(() => {

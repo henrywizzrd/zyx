@@ -591,7 +591,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const ps = pendingSeek.current;
       if (ps && s.isLoaded && s.duration > 0 && queueRef.current[indexRef.current]?.qid === ps.qid) {
         pendingSeek.current = null;
-        p.seekTo(Math.min(ps.at, Math.max(0, s.duration - 2))).catch(() => {});
+        // Lần trước nghe gần hết bài (còn < 8s) thì nghe lại từ đầu, không tua tới sát cuối rồi hết bài ngay
+        if (ps.at > 0.5 && ps.at < s.duration - 8) p.seekTo(ps.at).catch(() => {});
+        else if (ps.at >= s.duration - 8) flog(`nghe dở ở ${ps.at.toFixed(1)}s (gần hết bài) → phát lại từ đầu`, 'music');
       }
       // Nhật ký (dò lỗi "nhạc tự dừng"): ghi mỗi lần đổi giữa phát / dừng / đang chờ tải
       const pst = `${s.playing ? 'phát' : 'dừng'}${s.isBuffering ? '+chờ tải' : ''}${s.isLoaded ? '' : '+chưa tải'}`;

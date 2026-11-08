@@ -147,7 +147,7 @@ export function installAppLog() {
   const loop = (now: number) => {
     if (last && AppState.currentState === 'active') {
       const gap = now - last;
-      if (gap > 150) log('jank', `luồng JS khựng ${Math.round(gap)}ms${ctx ? ` · ${ctx}` : ''}`);
+      if (gap > 150 && !justResumed()) log('jank', `luồng JS khựng ${Math.round(gap)}ms${ctx ? ` · ${ctx}` : ''}`);
     }
     last = now;
     requestAnimationFrame(loop);
@@ -165,6 +165,13 @@ function safeJson(x: unknown) {
     return String(x);
   }
 }
+
+// Vừa mở app / vừa quay lại từ nền: khung hình đầu tiên luôn cách xa khung trước → không phải giật
+let activeAt = Date.now();
+AppState.addEventListener('change', (st) => {
+  if (st === 'active') activeAt = Date.now();
+});
+export const justResumed = () => Date.now() - activeAt < 1200;
 
 // Đang ở đâu (tab / trang) — gắn kèm dòng khựng để biết khựng ở màn hình nào
 let ctx = '';

@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { getLikedTracks, getPlaylists, getSaved, useDbVersion } from './db';
+import { useSyncExternalStore } from 'react';
+import { dbVersion, getLikedIds, getPlaylists, getSaved, subscribeDb } from './db';
 
 // Mọi thứ trong Thư viện, gom từ SQLite:
 //  - Liked Songs
@@ -17,9 +17,8 @@ export interface LibraryEntry {
 }
 
 export function getLibrary(): LibraryEntry[] {
-  const liked = getLikedTracks();
   const out: LibraryEntry[] = [
-    { key: 'liked', id: 'liked', kind: 'liked', title: 'Liked Songs', subtitle: String(liked.length), addedAt: Number.MAX_SAFE_INTEGER },
+    { key: 'liked', id: 'liked', kind: 'liked', title: 'Liked Songs', subtitle: String(getLikedIds().size), addedAt: Number.MAX_SAFE_INTEGER },
   ];
   for (const p of getPlaylists()) {
     out.push({ key: `local:${p.id}`, id: p.id, kind: 'local', title: p.title, subtitle: String(p.count), thumb: p.thumb, addedAt: p.updatedAt });
@@ -31,7 +30,21 @@ export function getLibrary(): LibraryEntry[] {
 }
 
 // Tự đọc lại khi dữ liệu đổi (thích bài, tạo playlist, lưu album...)
+// Chỉ báo vẽ lại khi nội dung Thư viện thật sự đổi. Trước đây MỌI thay đổi trong SQLite (nghe một bài → ghi lịch sử,
+// đổi một cài đặt...) đều làm cả trang Thư viện dựng lại; tab đang ẩn thì dồn lại tới lúc mở tab → khựng 400-600ms
+let snap: { v: number; data: LibraryEntry[]; json: string } | null = null;
+function librarySnapshot(): LibraryEntry[] {
+  const v = dbVersion();
+  if (snap && snap.v === v) return snap.data;
+  const data = getLibrary();
+  const json = JSON.stringify(data);
+  if (snap && snap.json === json) {
+    snap.v = v;
+    return snap.data;
+  }
+  snap = { v, data, json };
+  return data;
+}
 export function useLibrary(): LibraryEntry[] {
-  const v = useDbVersion();
-  return useMemo(() => getLibrary(), [v]);
+  return useSyncExternalStore(subscribeDb, librarySnapshot);
 }

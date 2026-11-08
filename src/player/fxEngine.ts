@@ -701,13 +701,20 @@ function sync(force = false) {
 }
 
 // Gọi mỗi lần trình phát chính báo trạng thái (PlayerProvider)
+let waitId: string | null = null; // bài đang chờ bấm phát mới mở
 export function fxTick(id: string | null, playing: boolean, time: number) {
   last = { playing, time, at: Date.now() };
   const changed = id !== curId;
   curId = id;
   if (mode === 'off' || !fxSupported()) return;
-  if (changed && id && source?.id !== id) {
-    dropSource(); // bỏ bài cũ trước khi mở bài mới
+  if (changed && id && source?.id !== id) dropSource(); // bỏ bài cũ trước khi mở bài mới
+  // Chưa phát thì chưa mở file / dựng bộ hiệu ứng (vừa mở app mà đã mở stream → khựng ~1s lúc khởi động)
+  if (!playing && !chain) {
+    if (id && source?.id !== id) waitId = id;
+    return;
+  }
+  if (id && source?.id !== id && (changed || waitId === id)) {
+    waitId = null;
     loadTrack(id);
   }
   if (!chain) applyMode();

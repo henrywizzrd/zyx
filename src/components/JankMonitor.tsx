@@ -1,11 +1,12 @@
 import React from 'react';
 import { useFrameCallback } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
-import { getLogContext, log } from '../data/applog';
+import { getLogContext, justResumed, log } from '../data/applog';
 
 // Khựng ở luồng giao diện (UI thread: hiệu ứng, cuộn, kéo thả): khung hình cách nhau quá lâu thì ghi vào nhật ký.
 // Bỏ qua khoảng cách rất dài (> 3s) vì đó là lúc app vào nền / màn hình tắt chứ không phải giật.
 function report(ms: number) {
+  if (justResumed()) return;
   const c = getLogContext();
   log('jank', `giao diện khựng ${ms}ms${c ? ` · ${c}` : ''}`);
 }
