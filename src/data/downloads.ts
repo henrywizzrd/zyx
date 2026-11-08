@@ -51,7 +51,8 @@ export async function download(t: Track): Promise<boolean> {
   busy.add(t.id);
   emit();
   try {
-    const info = await ytmusic().getAudio(t.id, undefined, true);
+    // Chỉ tải âm thanh (mp4a), không tải hình: nhẹ hơn 3-4 lần so với bản video 360p, tiếng cũng tốt hơn
+    const info = await ytmusic().getAudio(t.id);
     const name = `${t.id.replace(/[^a-zA-Z0-9_-]/g, '_')}.mp4`;
     const target = new (fs().File)(dir(), name);
     await fs().File.downloadFileAsync(info.url, target, { idempotent: true });

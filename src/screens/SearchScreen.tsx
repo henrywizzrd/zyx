@@ -38,7 +38,14 @@ const SUGGEST_DELAY = 120; // ms sau lần gõ cuối thì lấy gợi ý
 const PREFETCH_DELAY = 450; // ms ngừng gõ thì tải sẵn kết quả đầy đủ, để bấm Search là hiện ngay
 const CACHE_MAX = 60;
 
-const KINDS: SearchKind[] = ['all', 'song', 'album', 'artist'];
+// Độ dài kiểu YouTube: 3:25, 1:02:15
+const fmtLong = (sec: number) => {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s2 = `${Math.floor(sec % 60)}`.padStart(2, '0');
+  return h ? `${h}:${`${m}`.padStart(2, '0')}:${s2}` : `${m}:${s2}`;
+};
+const KINDS: SearchKind[] = ['all', 'song', 'album', 'artist', 'youtube'];
 
 // Thể loại & tâm trạng thật của YouTube Music (lưu lại trên máy, mỗi ngày làm mới một lần)
 const GENRES_KEY = 'genres:v1';
@@ -177,8 +184,10 @@ export function SearchScreen() {
   }, [query, mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // music = true: luôn tìm nhạc (bấm một mục nhạc khi đang ở mục Người dùng)
-  const runSearch = (raw: string, k: SearchKind = kind, music = false) => {
+  const runSearch = (raw: string, k0: SearchKind = kind, music = false) => {
     const q = raw.trim();
+    // Dán link YouTube: tìm thẳng video đó ở thẻ YouTube
+    const k: SearchKind = musicSupported && ytmusic().youtubeId(q) ? 'youtube' : k0;
     const key = `${k}:${q}`;
     if (!q) return;
     if (userMode && !music) return runUsers(q); // đang ở mục Người dùng: bấm Tìm là tìm người dùng
@@ -551,7 +560,29 @@ export function SearchScreen() {
                   </View>
                 </View>
               ))}
-            {resultsReady && results && (() => {
+            {resultsReady && results && kind === 'youtube' && (() => {
+              // Thẻ YouTube: video thường (mix, remix tổng hợp...). Phát chỉ lấy tiếng + ảnh, không lấy hình
+              const vids = results.videos.map(toTrack);
+              if (!vids.length) return <Text style={{ color: textSecondary }}>{tr('search.nothing', { q: query.trim() })}</Text>;
+              return vids.map((t, i) => (
+                <Stagger key={`ytv-${t.id}`} i={i}>
+                  <Pressable onPress={() => playTrack(t, vids)} onLongPress={() => songMenu(t)} style={styles.row}>
+                    <Image source={{ uri: t.thumb }} style={[styles.ytThumb, { backgroundColor: theme.colors.surface }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text numberOfLines={2} style={{ color: t.id === track.id ? accent : text, fontSize: 15, fontWeight: '600' }}>{t.title}</Text>
+                      <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>
+                        {t.duration ? `${fmtLong(t.duration)} • ` : ''}
+                        {t.artist}
+                      </Text>
+                    </View>
+                    <Pressable onPress={() => songMenu(t)} hitSlop={12} style={{ paddingLeft: 6 }}>
+                      <Ionicons name="ellipsis-horizontal" size={20} color={textSecondary} />
+                    </Pressable>
+                  </Pressable>
+                </Stagger>
+              ));
+            })()}
+            {resultsReady && results && kind !== 'youtube' && (() => {
               const all = kind === 'all';
               // Tất cả: vài nghệ sĩ, vài bài, vài album. Lọc theo loại: chỉ loại đó, hiện hết
               const withSongs = kind === 'all' || kind === 'song';
@@ -749,6 +780,7 @@ function GenreTile({ title, color, width, height, onPress }: { title: string; co
 }
 
 const styles = StyleSheet.create({
+  ytThumb: { width: 96, height: 54, borderRadius: 6 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',

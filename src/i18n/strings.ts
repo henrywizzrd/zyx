@@ -426,6 +426,7 @@ export const vi = {
   'studio.ambient.rain': "Mưa rơi sau tấm kính đọng nước, giọt nước chảy xuống và thỉnh thoảng có sấm chớp.",
   'studio.ambient.neon': "Lưới neon chạy về phía chân trời, thỉnh thoảng nháy glitch.",
   'studio.coverHint': "Nền và màu nhấn đổi theo ảnh bìa bài đang nghe.",
+  'search.filter.youtube': "YouTube",
 };
 
 export type StringKey = keyof typeof vi;
@@ -835,4 +836,5 @@ export const en: Record<StringKey, string> = {
   'studio.ambient.rain': "Rain falling behind a wet window, drops trickling down and the odd flash of lightning.",
   'studio.ambient.neon': "A neon grid racing to the horizon with the occasional glitch.",
   'studio.coverHint': "Background and accent follow the cover of the song that's playing.",
+  'search.filter.youtube': "YouTube",
 };

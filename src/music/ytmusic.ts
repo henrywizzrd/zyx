@@ -542,7 +542,7 @@ export async function getCollection(kind: 'playlist' | 'album', id: string): Pro
 }
 
 // ---------- Tìm kiếm theo loại: Tất cả / Bài hát / Album / Nghệ sĩ ----------
-export type SearchKind = 'all' | 'song' | 'album' | 'artist';
+export type SearchKind = 'all' | 'song' | 'album' | 'artist' | 'youtube'; // youtube: video thường trên YouTube (mix, remix tổng hợp...)
 export interface SearchResults {
   top?: Card; // "Kết quả hàng đầu" của YouTube Music (thường đúng nhất)
   songs: Song[]; // bài hát chính thức
@@ -627,9 +627,71 @@ async function searchFiltered(yt: Innertube, query: string, type: 'song' | 'vide
   }
 }
 
+// Mã video trong link YouTube (youtube.com/watch?v=, youtu.be/, /shorts/, music.youtube.com...) hoặc mã 11 ký tự
+export function youtubeId(text: string): string | null {
+  const q = text.trim();
+  const m = q.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|live\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+// Một video YouTube thường → Song (chỉ lấy tiếng + ảnh khi phát, không lấy hình)
+function videoSong(v: any): Song | null {
+  // Video (kiểu cũ) có video_id; LockupView (kiểu mới của YouTube) có content_id + metadata.title
+  const id: string | undefined = v?.video_id ?? v?.content_id ?? v?.id;
+  if (!id || typeof id !== 'string' || id.length !== 11) return null;
+  if (v?.content_type && v.content_type !== 'VIDEO') return null;
+  const title = v.title?.toString?.() ?? v.title?.text ?? v.metadata?.title?.toString?.() ?? '';
+  if (!title) return null;
+  const secs = Number(v.duration?.seconds ?? 0);
+  return {
+    id,
+    title,
+    artist: v.author?.name ?? v.short_byline_text?.toString?.() ?? 'YouTube',
+    duration: Number.isFinite(secs) && secs > 0 ? secs : undefined,
+    thumb: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+  };
+}
+
+// Tìm video trên YouTube thường (không phải YouTube Music). Dán link thì trả về đúng video đó (đứng đầu)
+async function searchYouTube(yt: Innertube, query: string, out: SearchResults) {
+  const id = youtubeId(query);
+  const seen = new Set<string>();
+  const add = (list: any[]) => {
+    for (const v of list) {
+      const sng = videoSong(v);
+      if (sng && !seen.has(sng.id)) {
+        seen.add(sng.id);
+        out.videos.push(sng);
+      }
+    }
+  };
+  let res: any = await yt.search(id ?? query, { type: 'video' });
+  add(res.videos ?? []);
+  if (id) {
+    // Video của link lên đầu; tìm không ra thì vẫn cho phát bằng mã video
+    const k = out.videos.findIndex((x) => x.id === id);
+    if (k > 0) out.videos.unshift(out.videos.splice(k, 1)[0]);
+    else if (k < 0) out.videos.unshift({ id, title: 'YouTube video', artist: 'YouTube', thumb: `https://i.ytimg.com/vi/${id}/mqdefault.jpg` });
+    return;
+  }
+  for (let i = 0; i < 2 && res?.has_continuation; i++) {
+    try {
+      res = await res.getContinuation();
+      add(res.videos ?? []);
+    } catch {
+      break;
+    }
+  }
+  if (!out.videos.length) throw new Error('Không tìm được');
+}
+
 export async function searchMusic(query: string, kind: SearchKind): Promise<SearchResults> {
   const out: SearchResults = { songs: [], videos: [], albums: [], artists: [] };
   const yt = await getBrowseSession();
+  if (kind === 'youtube') {
+    await searchYouTube(yt, query, out);
+    return out;
+  }
   if (kind === 'song') {
     // Bài hát và video ca nhạc tìm song song: nhiều bài chỉ có trên YouTube dưới dạng video
     await Promise.all([

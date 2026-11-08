@@ -948,7 +948,7 @@ function sync(force = false) {
     reopen();
     return;
   }
-  if (now - lastLog > 2000) {
+  if (now - lastLog > (bg ? 10000 : 2000)) { // app ở nền: ghi thưa hơn cho nhẹ máy
     lastLog = now;
     flog(`ctx=${c.state} t=${c.currentTime.toFixed(1)} pos=${p.toFixed(1)} want=${want.toFixed(1)} mix=${mix.toFixed(2)} duck=${duck.toFixed(2)} vol=${audio().getUserVolume().toFixed(2)}`);
   }
