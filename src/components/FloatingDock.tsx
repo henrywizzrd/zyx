@@ -17,7 +17,7 @@ function DockIcon({ active, children }: { active: boolean; children: React.React
 }
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
-import { GlassFill } from './Glass';
+import { GlassFill, glassShadow } from './Glass';
 import { useT } from '../i18n';
 import { usePlayerPick, ViewRef } from '../player/PlayerProvider';
 import { TabId } from '../theme/types';
@@ -174,7 +174,8 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
   const cellH = vertical ? cell.main : cell.cross;
   const step = cell.main + DOCK_GAP;
   const hiMove = hi.interpolate({ inputRange: [0, 10], outputRange: [0, step * 10] });
-  const radius = (cell.cross + DOCK_PADDING * 2) / 2; // dạng viên thuốc bo tròn hẳn hai đầu
+  // Tấm kính chữ nhật bo góc liền (squircle) như tấm kính mài cạnh, không còn dạng viên thuốc
+  const radius = Math.round((cell.cross + DOCK_PADDING * 2) * 0.36);
   const hiColor = withAlpha(theme.colors.text, theme.colors.glassTint === 'dark' ? 0.16 : 0.1);
 
   const detachPlayer = (origin: Origin | null) => {
@@ -186,11 +187,10 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
   // Bóng đổ nhẹ để dock tách khỏi nội dung phía sau; đang kéo thì nổi cao hơn
   // Bộ Neon: dock phát sáng hồng neon thay cho bóng đen
   const neon = theme.preset === 'neon';
+  // Kính đặt nổi trên mặt bàn: bóng hai lớp (sát chân + lan); cầm lên để kéo thì nổi cao hơn
   const glow = neon
     ? { shadowColor: theme.colors.accent, shadowOpacity: lit ? 0.85 : 0.6, shadowRadius: lit ? 24 : 18, shadowOffset: { width: 0, height: 0 }, elevation: 12 }
-    : lit
-    ? { shadowColor: '#000', shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 14 }
-    : { shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 22, shadowOffset: { width: 0, height: 10 }, elevation: 10 };
+    : glassShadow(lit ? 1.7 : 1, theme.colors.glassTint !== 'dark');
 
   return (
     <View pointerEvents={hidden ? 'none' : 'box-none'} style={[styles.layer, dockStyle, { zIndex: d.zIndex }]}>
@@ -199,6 +199,7 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
           {...d.panHandlers}
           style={{
             borderRadius: radius,
+            borderCurve: 'continuous',
             opacity: d.opacity,
             transform: [
               { translateX: slideX },
@@ -226,7 +227,8 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
                 top: DOCK_PADDING,
                 width: cellW,
                 height: cellH,
-                borderRadius: Math.min(cellW, cellH) / 2,
+                borderRadius: Math.max(8, radius - DOCK_PADDING),
+                borderCurve: 'continuous',
                 backgroundColor: hiColor,
                 opacity: activeIndex < 0 ? 0 : 1,
                 transform: vertical ? [{ translateY: hiMove }] : [{ translateX: hiMove }],

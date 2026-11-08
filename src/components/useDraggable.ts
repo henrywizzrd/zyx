@@ -204,7 +204,22 @@ export function useDraggable(kind: 'dock' | 'player', live?: LiveAnchor) {
           setDrag({ kind, target: next });
         }
       },
-      onPanResponderRelease: (_, g) => finish(g.dx, g.dy),
+      onPanResponderRelease: (_, g) => {
+        // Ném có quán tính (như tấm kính trượt trên mặt bàn): đoán chỗ nó sẽ trượt tới theo vận tốc lúc buông tay,
+        // rồi chọn vị trí theo chỗ đó thay vì chỗ ngón tay đang đứng
+        if (kind === 'player' && target.current !== 'merge') {
+          const K = 240; // ms — quãng trượt ≈ vận tốc × K (ma sát mặt bàn)
+          const { width: W, height: H, left: L, insets: ins, margin } = latest.current;
+          const px = Math.max(0, Math.min(W, g.moveX - L + g.vx * K));
+          const py = Math.max(0, Math.min(H, g.moveY + g.vy * K));
+          if (Math.hypot(g.vx, g.vy) > 0.25 && !isOver(otherRect.current, px + L, py)) {
+            const next = targetAnchor(px, py, W, H, ins, margin, lastEdge.current);
+            target.current = next;
+            lastKey.current = targetKey(next);
+          }
+        }
+        finish(g.dx, g.dy);
+      },
       onPanResponderTerminate: () => cancel(),
     })
   ).current;
@@ -249,7 +264,8 @@ export function useDraggable(kind: 'dock' | 'player', live?: LiveAnchor) {
     selfRef.current?.measureInWindow((x, y, w, h) => {
       pan.setValue({ x: from.cx - (x + w / 2), y: from.cy - (y + h / 2) });
       opacity.setValue(1);
-      Animated.timing(pan, { toValue: { x: 0, y: 0 }, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE }).start();
+      // Trượt về chỗ mới như vật có khối lượng: lò xo giảm chấn tới hạn, tới nơi là dừng (không vượt, không nảy)
+      Animated.spring(pan, { toValue: { x: 0, y: 0 }, stiffness: 140, damping: 24, mass: 1, overshootClamping: true, useNativeDriver: USE_NATIVE }).start();
     });
   }, [posKey]);
 

@@ -9,7 +9,7 @@ export const defaultTheme: Theme = {
   followSystem: true, // người dùng mới: theo sáng/tối của điện thoại
   background: { type: 'preset', color: PRESETS.dark.bg, uri: '', dim: 0.25 },
   colors: PRESETS.dark,
-  glass: { blur: 40 },
+  glass: { blur: 40, material: 'clear' },
   effects: { ambient: { snow: true, green: true, ocean: true, latte: true, sakura: true, meteor: true, aurora: true, rain: true, neon: true } },
   dock: {
     position: 'bottom',

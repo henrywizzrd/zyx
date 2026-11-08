@@ -1,4 +1,5 @@
 import { SplitPane } from '../components/SplitPane';
+import { GlassFill } from '../components/Glass';
 import { ScalePressable } from '../components/PressScale';
 import { Stagger } from '../components/Stagger';
 import { loadTrendingSummed, trendingId } from '../data/trending';
@@ -268,7 +269,8 @@ function MyPlaylists() {
   const dbv = useDbVersion();
   const lists = useMemo(() => getPlaylists().slice(0, 7), [dbv]);
   const chip = (key: string, title: string, onPress: () => void, cover: React.ReactNode) => (
-    <ScalePressable key={key} onPress={onPress} outerStyle={{ width: '48.8%' }} style={[styles.chip, { width: '100%', backgroundColor: theme.colors.surface }]}>
+    <ScalePressable key={key} onPress={onPress} outerStyle={{ width: '48.8%' }} style={[styles.chip, { width: '100%' }]}>
+      <GlassFill radius={12} solid={0.35} slab />
       {cover}
       <Text numberOfLines={2} style={[styles.chipTitle, { color: theme.colors.text }]}>{title}</Text>
     </ScalePressable>
@@ -368,7 +370,8 @@ function Recent({ list }: { list?: boolean }) {
       title={t('home.section.recent')}
       right={
         items.length ? (
-          <Pressable onPress={reload} hitSlop={10} style={[styles.editBtn, { backgroundColor: theme.colors.surface }]}>
+          <Pressable onPress={reload} hitSlop={10} style={styles.editBtn}>
+            <GlassFill radius={19} solid={0.35} slab />
             <Animated.View style={spinStyle}>
               <Ionicons name="refresh" size={20} color={theme.colors.text} />
             </Animated.View>
@@ -715,7 +718,8 @@ export function HomeScreen() {
     <>
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
         <Text style={[styles.greeting, { color: theme.colors.text }]}>{t(greetingKey())}</Text>
-        <Pressable onPress={() => setEditing((v) => !v)} hitSlop={10} style={[styles.editBtn, { backgroundColor: theme.colors.surface }]}>
+        <Pressable onPress={() => setEditing((v) => !v)} hitSlop={10} style={styles.editBtn}>
+            <GlassFill radius={19} solid={0.35} slab />
           <Ionicons name="options-outline" size={20} color={theme.colors.text} />
         </Pressable>
       </View>
@@ -761,7 +765,8 @@ export function HomeScreen() {
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
         <Text style={[styles.greeting, { color: theme.colors.text }]}>{t(greetingKey())}</Text>
-        <Pressable onPress={() => setEditing((v) => !v)} hitSlop={10} style={[styles.editBtn, { backgroundColor: theme.colors.surface }]}>
+        <Pressable onPress={() => setEditing((v) => !v)} hitSlop={10} style={styles.editBtn}>
+            <GlassFill radius={19} solid={0.35} slab />
           <Ionicons name="options-outline" size={20} color={theme.colors.text} />
         </Pressable>
       </View>
@@ -791,7 +796,7 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 8 },
   bigItem: { width: '48.4%', marginBottom: 14 },
   bigCover: { width: '100%', aspectRatio: 1, borderRadius: 8 },
-  chip: { width: '48.8%', height: 56, borderRadius: 6, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
+  chip: { width: '48.8%', height: 56, borderRadius: 12, borderCurve: 'continuous', flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
   chipCover: { width: 56, height: 56 },
   chipTitle: { flex: 1, marginHorizontal: 10, fontSize: 13, fontWeight: '700' },
   cardTitle: { marginTop: 8, fontSize: 14, fontWeight: '700' },

@@ -4,7 +4,7 @@ import { Stagger } from '../components/Stagger';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { useGlass } from '../components/Glass';
+import { useGlass, GlassFill, glassShadow } from '../components/Glass';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { usePlayerPick } from '../player/PlayerProvider';
@@ -347,8 +347,10 @@ export function SearchScreen() {
   const searchBox = (
     <>
         {/* Ô tìm kiếm: kính mờ, viền màu nhấn của theme, chữ theo màu theme (hợp với mọi nền: trời sao, hoa rơi, ảnh...) */}
-        <View style={[styles.searchBox, { borderColor: focused ? accent : accent.slice(0, 7) + '99', backgroundColor: `rgba(${theme.colors.glassRgb},${glass.alpha(Platform.OS === 'ios' ? 0.08 : 0.35, Platform.OS === 'ios' ? 0.5 : 0.86).toFixed(2)})` }]}>
-          {Platform.OS === 'ios' && glass.intensity > 0 && <BlurView intensity={glass.intensity} tint={theme.colors.glassTint} style={StyleSheet.absoluteFill} />}
+        <View style={[styles.searchBox, glassShadow(0.6, theme.colors.glassTint !== 'dark')]}>
+          {/* tấm kính + viền màu nhấn của theme */}
+          <GlassFill radius={16} solid={0.3} slab />
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: 16, borderCurve: 'continuous', borderWidth: 1.4, borderColor: focused ? accent : accent.slice(0, 7) + '88' }]} />
           <Ionicons name="search" size={20} color={text} />
           <TextInput
             value={query}
@@ -765,9 +767,11 @@ function GenreTile({ title, color, width, height, onPress }: { title: string; co
   const rgb = rgbOf(color);
   const dark = theme.colors.glassTint === 'dark';
   return (
-    <ScalePressable onPress={onPress} style={[styles.tile, { width, height, borderWidth: 1.2, borderColor: `rgba(${rgb},0.8)` }]}>
-      {Platform.OS === 'ios' && glass.intensity > 0 && <BlurView intensity={glass.intensity} tint={theme.colors.glassTint} style={StyleSheet.absoluteFill} />}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(${rgb},${glass.alpha(dark ? 0.3 : 0.4, dark ? 0.55 : 0.7).toFixed(2)})` }]} />
+    <ScalePressable onPress={onPress} style={[styles.tile, { width, height }]}>
+      {/* tấm kính pha màu thể loại, viền sáng cùng màu */}
+      <GlassFill radius={16} slab />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(${rgb},${glass.alpha(dark ? 0.26 : 0.36, dark ? 0.5 : 0.65).toFixed(2)})` }]} />
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: 16, borderCurve: 'continuous', borderWidth: 1.2, borderColor: `rgba(${rgb},0.75)` }]} />
       <Text numberOfLines={2} style={[styles.tileTitle, { color: dark ? '#FFFFFF' : theme.colors.text }]}>{title}</Text>
       <Ionicons
         name={iconFor(title)}
@@ -786,14 +790,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     height: 48,
-    borderRadius: 12,
-    borderWidth: 1.4,
-    overflow: 'hidden',
+    borderRadius: 16,
+    borderCurve: 'continuous',
     paddingHorizontal: 14,
     marginTop: 16,
   },
   input: { flex: 1, fontSize: 15, fontWeight: '500', paddingVertical: 0 },
-  tile: { height: 96, borderRadius: 12, padding: 12, overflow: 'hidden' },
+  tile: { height: 96, borderRadius: 16, borderCurve: 'continuous', padding: 12, overflow: 'hidden' },
   tileTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
   tileDeco: {
     position: 'absolute',

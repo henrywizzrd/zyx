@@ -150,7 +150,7 @@ function PresetCard({ id, selected, width, onPress }: {
 
 // Trang Giao diện: bộ màu, nền (màu / ảnh / GIF / video), độ tối nền, độ mờ kính
 export function ThemeStudioScreen() {
-  const { theme, setBackground, setGlassBlur, setAmbient } = useTheme();
+  const { theme, setBackground, setGlassBlur, setGlassMaterial, setAmbient } = useTheme();
   const { changePreset } = useThemeTransition();
   const scheme = useColorScheme();
   const t = useT();
@@ -290,6 +290,23 @@ export function ThemeStudioScreen() {
             <Slider value={bg.dim / 0.8} thickness={6} fill={accent} track={border} onChange={dimS.change} onCommit={dimS.commit} />
           </>
         )}
+
+        {/* Loại kính: Trong / Mờ / Khói (dock, mini player, bảng bật lên, thẻ...) */}
+        <Text style={[styles.label, { color: text, marginTop: 18 }]}>{t('studio.material')}</Text>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+          {(['clear', 'frost', 'smoke'] as const).map((m) => {
+            const on = (theme.glass.material ?? 'clear') === m;
+            return (
+              <Pressable
+                key={m}
+                onPress={() => setGlassMaterial(m)}
+                style={{ flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 14, borderCurve: 'continuous', backgroundColor: on ? accent : theme.colors.surface }}
+              >
+                <Text style={{ color: on ? theme.colors.onAccent : text, fontWeight: '700' }}>{t(`studio.material.${m}` as const)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
         {/* Kính mờ */}
         <View style={styles.sliderHead}>

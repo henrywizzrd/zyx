@@ -1,4 +1,5 @@
 import React, { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { GlassFill, glassShadow } from './Glass';
 import { Animated, Easing, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -63,8 +64,10 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
   // không nút. Bấm vào thì bong bóng nở ra thành màn player (kiểu bong bóng cửa sổ nổi của Xiaomi / OPPO).
   // Giữ lâu rồi kéo: đổi chỗ, hoặc thả vào dock để gộp (như cũ)
   const S = MP_THICKNESS; // cỡ bong bóng
-  const round = theme.miniPlayer.variant === 'pill';
-  const bubbleRadius = round ? S / 2 : 16;
+  // Tấm kính vuông bo góc liền (squircle), ảnh bìa nằm bên trong tấm kính, cách mép một khoảng = độ dày kính
+  const bubbleRadius = Math.round(S * 0.3);
+  const INSET = 6;
+  const artRadius = bubbleRadius - INSET + 1;
 
   // Dock đang ở dạng bubble (một góc dưới): mini player luôn nằm ở góc dưới đối diện
   const bubbleDock = theme.dock.mode === 'bubble';
@@ -81,7 +84,7 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
   useLayoutEffect(() => {
     // Vẫn cập nhật khi đang ẩn (player đang mở): xoay màn hình thì player biết chỗ mới để thu về
     if (theme.miniPlayer.merged) return;
-    playerOrigin.current = { x: geom.x, y: geom.y, w: S, h: S, r: bubbleRadius };
+    playerOrigin.current = { x: geom.x + INSET, y: geom.y + INSET, w: S - INSET * 2, h: S - INSET * 2, r: artRadius };
   }, [geom.x, geom.y, S, bubbleRadius, hidden, theme.miniPlayer.merged]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- Thả ở chỗ mới: trượt bong bóng từ chỗ ngón tay nhả tới chỗ mới
@@ -159,7 +162,7 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
   // Bấm 1 lần: mở player ngay (không còn chờ xem có bấm đúp không)
   const openPlayer = () => {
     const g = geomRef.current;
-    playerOrigin.current = { x: g.x, y: g.y, w: S, h: S, r: bubbleRadius };
+    playerOrigin.current = { x: g.x + INSET, y: g.y + INSET, w: S - INSET * 2, h: S - INSET * 2, r: artRadius };
     onOpen();
   };
 
@@ -169,9 +172,11 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
         <Animated.View {...d.panHandlers} style={{ width: S, height: S, transform: [{ translateX: d.pan.x }, { translateY: d.pan.y }] }}>
           <Animated.View
             style={[
-              { width: S, height: S, borderRadius: bubbleRadius, opacity: d.opacity, transform: [{ scale: d.scale }] },
+              { width: S, height: S, borderRadius: bubbleRadius, borderCurve: 'continuous', opacity: d.opacity, transform: [{ scale: d.scale }] },
+              glassShadow(1, theme.colors.glassTint !== 'dark'),
             ]}
           >
+            <GlassFill radius={bubbleRadius} slab />
             <Pressable
               {...d.pressProps}
               onPressIn={pressIn}
@@ -182,7 +187,7 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
               onPress={openPlayer}
             >
               <Animated.View style={{ transform: [{ scale: press }] }}>
-                <Cover track={track} size={180} style={{ width: S, height: S, borderRadius: bubbleRadius }}>
+                <Cover track={track} size={180} style={{ width: S - INSET * 2, height: S - INSET * 2, margin: INSET, borderRadius: artRadius, borderCurve: 'continuous' }}>
                   <Ionicons name="musical-notes" size={22} color="rgba(255,255,255,0.85)" />
                 </Cover>
               </Animated.View>

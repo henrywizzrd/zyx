@@ -4,7 +4,6 @@ import {
   StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureDetector, GestureHandlerRootView, usePanGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, FadeIn, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
@@ -19,7 +18,7 @@ import { addToPlaylist, createPlaylist, getPlaylists, playlistHas, useDbVersion 
 import { download, removeDownload, useDownloads } from '../data/downloads';
 import { musicSupported, ytmusic } from '../music/lazy';
 import { useScreenSize } from './ScreenSize';
-import { useGlass } from './Glass';
+import { GlassFill } from './Glass';
 import { playerProgress } from './PlayerTransition';
 const ORIENTATIONS = ['portrait', 'landscape-left', 'landscape-right'] as const;
 import { openComposer } from './PostComposer';
@@ -88,7 +87,6 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
   useDbVersion(); // playlist đổi thì vẽ lại (dấu tích, số bài)
   // Mở từ trong player: kính mờ tối giống bảng hàng chờ (chữ trắng), thay vì màu theo theme
   const [dark, setDark] = useState(false);
-  const glass = useGlass();
   const colors = useMemo(
     () =>
       dark
@@ -96,7 +94,7 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
         : theme.colors,
     [dark, theme.colors]
   );
-  const { text, textSecondary, accent, border, surface, glassRgb, glassTint } = colors;
+  const { text, textSecondary, accent, border } = colors;
 
   const [content, setContent] = useState<Content | null>(null);
   const [shown, setShown] = useState(false); // đang mở (khác với content: content còn giữ trong lúc trượt xuống)
@@ -387,24 +385,8 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
               onLayout={(e) => onCardLayout(e.nativeEvent.layout.height)}
               style={[styles.card, { marginBottom: Math.max(8, insets.bottom - 26) }, landscape && { width: Math.min(winW - 32, 560), alignSelf: 'center', marginHorizontal: 0 }, cardStyle]}
             >
-              {/* Kính mờ theo theme */}
-              {dark ? (
-                Platform.OS === 'ios' ? (
-                  <>
-                    <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} />
-                    <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(20,20,20,0.32)' }]} />
-                  </>
-                ) : (
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(22,22,22,0.86)' }]} />
-                )
-              ) : (
-                <>
-                  {/* Kính theo thanh "Độ trong của kính"; bảng chứa chữ nên luôn giữ một lớp màu đủ đọc */}
-                  {Platform.OS === 'ios' && glass.intensity > 0 && <BlurView intensity={Math.max(20, glass.intensity)} tint={glassTint} style={StyleSheet.absoluteFill} />}
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: Platform.OS === 'ios' ? `rgba(${glassRgb},${glass.alpha(0.55, 0.8).toFixed(2)})` : surface }]} />
-                </>
-              )}
-              <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.edge, { borderColor: border }]} />
+              {/* Tấm kính (Liquid Glass trên iOS 26+): mở trong player thì kính tối, chữ trắng; bảng chứa chữ nên giữ lớp màu đủ đọc */}
+              <GlassFill radius={34} solid={0.8} slab dark={dark} />
 
               {/* Phần đầu: thanh kéo + bài / album đang thao tác. Vuốt xuống ở đây để đóng */}
               <GestureDetector gesture={drag}>
@@ -473,7 +455,7 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
 
 const styles = StyleSheet.create({
   kav: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end' },
-  card: { marginHorizontal: 8, borderRadius: 34, overflow: 'hidden', paddingBottom: 10 },
+  card: { marginHorizontal: 8, borderRadius: 34, borderCurve: 'continuous', paddingBottom: 10, boxShadow: '0px 2px 4px rgba(0,0,0,0.35), 0px 14px 36px rgba(0,0,0,0.3)' },
   edge: { borderRadius: 34, borderWidth: StyleSheet.hairlineWidth },
   grab: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, opacity: 0.5, marginTop: 8, marginBottom: 10 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: StyleSheet.hairlineWidth },

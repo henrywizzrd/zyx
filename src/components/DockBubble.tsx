@@ -210,7 +210,7 @@ export function DockBubble({ active, onChange, hidden = false }: { active: TabId
         {/* Bubble */}
         <GestureDetector gesture={gesture}>
           <Animated.View style={[styles.bubble, { position: 'absolute', bottom: 0 }, right ? { right: 0 } : { left: 0 }, bubbleStyle]}>
-            <GlassFill radius={S / 2} solid={0.5} slab />
+            <GlassFill radius={Math.round(S * 0.3)} solid={0.5} slab />
             {open ? (
               <Ionicons name="close" size={26} color={text} />
             ) : activeId ? (
@@ -249,9 +249,9 @@ function RingItem({
   return (
     <Animated.View style={[styles.item, { left: cx - ITEM / 2, top: cy - ITEM / 2 }, style]}>
       <Pressable onPress={onPress} style={styles.itemPress}>
-        <GlassFill radius={ITEM / 2} solid={0.55} slab />
+        <GlassFill radius={Math.round(ITEM * 0.3)} solid={0.55} slab />
         {/* Sáng lên khi ngón tay vuốt tới */}
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: ITEM / 2, backgroundColor: accent + '55', borderWidth: 2, borderColor: accent }, glow]} />
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: Math.round(ITEM * 0.3), borderCurve: 'continuous', backgroundColor: accent + '55', borderWidth: 2, borderColor: accent }, glow]} />
         {active && <View pointerEvents="none" style={[styles.dot, { backgroundColor: accent }]} />}
         {children}
       </Pressable>
@@ -263,14 +263,14 @@ const styles = StyleSheet.create({
   backdrop: { backgroundColor: 'rgba(0,0,0,0.28)' },
   anchor: { position: 'absolute' },
   bubble: {
-    width: S, height: S, borderRadius: S / 2, alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 10,
+    width: S, height: S, borderRadius: Math.round(S * 0.3), borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center',
+    boxShadow: '0px 1.8px 3.5px rgba(0,0,0,0.45), 0px 11px 29px rgba(0,0,0,0.32)', // bóng hai lớp của tấm kính
   },
   item: {
     position: 'absolute', width: ITEM, height: ITEM,
-    shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 8,
+    boxShadow: '0px 1.5px 3px rgba(0,0,0,0.4), 0px 8px 22px rgba(0,0,0,0.28)',
   },
-  itemPress: { width: ITEM, height: ITEM, borderRadius: ITEM / 2, alignItems: 'center', justifyContent: 'center' },
+  itemPress: { width: ITEM, height: ITEM, borderRadius: Math.round(ITEM * 0.3), borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
   dot: { position: 'absolute', bottom: 7, width: 5, height: 5, borderRadius: 2.5 },
   label: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14 },
 });

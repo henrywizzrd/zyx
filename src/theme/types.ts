@@ -35,7 +35,7 @@ export interface Theme {
   // color: màu nền của bộ màu (tính tự động). uri: file ảnh/video ('' = chưa có). dim: độ tối phủ lên ảnh/video cho dễ đọc chữ (0..0.8)
   background: { type: BackgroundType; color: string; uri: string; dim: number };
   colors: Palette; // tính tự động từ preset, không tự sửa
-  glass: { blur: number }; // độ mờ kính của dock, mini player, popup (0..100)
+  glass: { blur: number; material?: 'clear' | 'frost' | 'smoke' }; // độ mờ kính (0..100) + loại kính: Trong / Mờ / Khói
   // Hiệu ứng nền của từng bộ: tuyết rơi (Snow), lá rơi (Green), bong bóng + cá (Ocean), hạt cà phê (Latte)
   effects: { ambient: Record<AmbientPresetId, boolean> };
   dock: {

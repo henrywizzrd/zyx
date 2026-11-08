@@ -29,51 +29,100 @@ export function useGlass() {
   };
 }
 
-export function GlassFill({ radius = 0, solid = 0, slab = false }: { radius?: number; solid?: number; slab?: boolean }) {
+// Liquid Glass thật của iOS (iOS 26 trở lên, cần bản app có module expo-glass-effect).
+// Không có (Android, iOS cũ, bản app cũ chưa build lại) thì dùng kính tự vẽ bên dưới.
+type LGModule = typeof import('expo-glass-effect');
+const LG: LGModule | null = (() => {
+  if (Platform.OS !== 'ios') return null;
+  try {
+    const m = require('expo-glass-effect') as LGModule;
+    return m.isLiquidGlassAvailable() && m.isGlassEffectAPIAvailable() ? m : null;
+  } catch {
+    return null;
+  }
+})();
+export const hasLiquidGlass = !!LG;
+
+// Ba loại kính (Theme Studio): Trong / Mờ / Khói. Thanh "Độ mờ kính" chỉnh độ đậm bên trong loại đó
+export type GlassMaterial = 'clear' | 'frost' | 'smoke';
+
+// Bóng hai lớp của tấm kính đặt nổi trên mặt bàn (công thức chốt từ trang thử kính):
+// một bóng đậm, gọn sát chân + một bóng mềm, rộng. lift: độ nổi (1 = bình thường, cầm lên thì lớn hơn)
+export function glassShadow(lift = 1, light = false) {
+  const k = light ? 0.55 : 1;
+  const e = 7 * lift;
+  return {
+    boxShadow: `0px ${(e * 0.25).toFixed(1)}px ${(e * 0.5).toFixed(1)}px rgba(0,0,0,${(0.45 * k).toFixed(2)}), 0px ${(e * 1.6).toFixed(1)}px ${(e * 4.2).toFixed(1)}px rgba(0,0,0,${(0.32 * k).toFixed(2)})`,
+  } as const;
+}
+
+// Góc bo liền mạch kiểu icon iPhone (squircle) cho mọi tấm kính
+export const SQUIRCLE = { borderCurve: 'continuous' as const };
+
+// dark: luôn là kính tối (bảng mở từ trong player, chữ trắng) bất kể theme
+export function GlassFill({ radius = 0, solid = 0, slab = false, dark: forceDark = false }: { radius?: number; solid?: number; slab?: boolean; dark?: boolean }) {
   const { theme } = useTheme();
-  const { glassRgb, glassTint, border } = theme.colors;
+  const glassRgb = forceDark ? '22,22,26' : theme.colors.glassRgb;
+  const glassTint = forceDark ? 'dark' : theme.colors.glassTint;
+  const border = forceDark ? 'rgba(255,255,255,0.14)' : theme.colors.border;
   const g = useGlass();
+  const material: GlassMaterial = theme.glass.material ?? 'clear';
+  const dark = glassTint === 'dark';
   const real = Platform.OS !== 'web';
-  // Lớp màu phủ mỏng khi kính trong, đậm dần khi kéo thanh lên (kính mờ đục). Android không làm nhoè thật nên phủ đậm hơn chút
-  const a = Math.max(solid * (0.55 + 0.45 * g.level), g.alpha(Platform.OS === 'android' ? 0.3 : 0.1, Platform.OS === 'android' ? 0.86 : 0.62));
-  const tint = `rgba(${glassRgb},${a.toFixed(2)})`;
+
+  // ---- iOS 26+: Liquid Glass thật (khúc xạ, mép kính, phản chiếu do hệ thống vẽ)
+  if (LG) {
+    const tint =
+      material === 'smoke'
+        ? `rgba(0,0,0,${(0.22 + 0.33 * g.level).toFixed(2)})`
+        : material === 'frost'
+        ? `rgba(${glassRgb},${(0.12 + 0.4 * g.level + solid * 0.15).toFixed(2)})`
+        : g.level > 0.02 || solid > 0
+        ? `rgba(${glassRgb},${(0.22 * g.level + solid * 0.08).toFixed(2)})`
+        : undefined;
+    return (
+      <LG.GlassView
+        pointerEvents="none"
+        glassEffectStyle={material === 'frost' ? 'regular' : 'clear'}
+        tintColor={tint}
+        colorScheme={dark ? 'dark' : 'light'}
+        style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, overflow: 'hidden' }]}
+      />
+    );
+  }
+
+  // ---- Kính tự vẽ: làm mờ + lớp màu + mép dày (vệt sáng trên, tối dưới) + vệt phản chiếu chéo
+  const blurBy = material === 'frost' ? 25 + g.level * 55 : material === 'smoke' ? 8 + g.level * 30 : 4 + g.level * 40;
+  const androidBoost = Platform.OS === 'android' ? 0.2 : 0;
+  const a =
+    material === 'smoke'
+      ? 0
+      : Math.max(solid * (0.55 + 0.45 * g.level), (material === 'frost' ? 0.2 : 0.06) + androidBoost + g.level * (material === 'frost' ? 0.5 : 0.45));
+  const tint = material === 'smoke' ? `rgba(6,8,14,${(0.32 + 0.35 * g.level + androidBoost).toFixed(2)})` : `rgba(${glassRgb},${Math.min(0.92, a).toFixed(2)})`;
   return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius, overflow: 'hidden' }]}>
-      {real && g.intensity > 0 && <BlurView intensity={g.intensity} tint={glassTint} style={StyleSheet.absoluteFill} />}
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, overflow: 'hidden' }]}>
+      {real && <BlurView intensity={Math.round(blurBy)} tint={dark || material === 'smoke' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: real ? tint : theme.colors.surface }]} />
-      {slab ? (
-        <>
-          {/* Vệt sáng mờ dần từ mép trên xuống: ánh sáng chiếu lên mặt kính */}
-          <LinearGradient
-            colors={glassTint === 'dark' ? ['rgba(255,255,255,0.16)', 'rgba(255,255,255,0.03)', 'rgba(255,255,255,0)'] : ['rgba(255,255,255,0.55)', 'rgba(255,255,255,0.12)', 'rgba(255,255,255,0)']}
-            locations={[0, 0.45, 1]}
-            style={StyleSheet.absoluteFill}
-          />
-          {/* Cạnh kính: một đường viền mảnh ĐỀU bốn phía, cộng thêm lớp viền sáng hơn chỉ ở phần trên, mờ dần xuống
-              (ánh đèn chiếu từ trên). Trước đây mỗi cạnh một màu (trên rất sáng, dưới gần như mất) nên ở các góc bo
-              thấy rõ chỗ đổi màu, nhìn như viền trên đậm còn viền dưới bị nhạt hẳn */}
-          <View
-            style={[
-              StyleSheet.absoluteFill,
-              { borderRadius: radius, borderWidth: 1, borderColor: glassTint === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.65)' },
-            ]}
-          />
-          {Platform.OS !== 'web' && (
-            <MaskedView
-              style={StyleSheet.absoluteFill}
-              maskElement={<LinearGradient colors={['#000', 'transparent']} locations={[0, 0.55]} style={{ flex: 1 }} />}
-            >
-              <View
-                style={[
-                  StyleSheet.absoluteFill,
-                  { borderRadius: radius, borderWidth: 1, borderColor: glassTint === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.35)' },
-                ]}
-              />
-            </MaskedView>
-          )}
-        </>
-      ) : (
-        <View style={[StyleSheet.absoluteFill, { borderRadius: radius, borderWidth: StyleSheet.hairlineWidth, borderColor: border }]} />
+      {/* vệt phản chiếu chéo trên mặt kính */}
+      <LinearGradient
+        colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.05)', 'rgba(255,255,255,0)', 'rgba(255,255,255,0)', 'rgba(255,255,255,0.07)']}
+        locations={[0, 0.22, 0.42, 0.72, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0.75 }}
+        style={StyleSheet.absoluteFill}
+      />
+      {/* mép dày: dải sáng mờ ở mép trên, dải tối ở mép dưới */}
+      <LinearGradient
+        colors={[dark ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.5)', 'rgba(255,255,255,0)', 'rgba(0,0,0,0)', dark ? 'rgba(0,0,0,0.22)' : 'rgba(0,0,0,0.08)']}
+        locations={[0, 0.18, 0.82, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+      {/* cạnh kính: viền mảnh đều bốn phía + viền sáng hơn ở nửa trên (ánh đèn từ trên) */}
+      <View style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, borderWidth: slab ? 1 : StyleSheet.hairlineWidth, borderColor: slab ? (dark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.6)') : border }]} />
+      {slab && Platform.OS !== 'web' && (
+        <MaskedView style={StyleSheet.absoluteFill} maskElement={<LinearGradient colors={['#000', 'transparent']} locations={[0, 0.55]} style={{ flex: 1 }} />}>
+          <View style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, borderWidth: 1, borderColor: dark ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.8)' }]} />
+        </MaskedView>
       )}
     </View>
   );

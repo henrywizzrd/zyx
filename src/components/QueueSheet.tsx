@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
+import { GlassFill } from './Glass';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureDetector, GestureHandlerRootView, GestureStateManager, useNativeGesture, usePanGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
@@ -201,15 +201,7 @@ export function QueueSheet({ visible, onClose, inModal }: { visible: boolean; on
       <GestureDetector gesture={bodyPan}>
       <Animated.View style={[styles.sheet, { height: sheetH, width: Math.min(box.width, 520) }, sheetStyle]}>
         {/* Kính trong suốt, mờ nhẹ phần player phía sau */}
-        {Platform.OS === 'ios' ? (
-          <>
-            <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} />
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(20,20,20,0.32)' }]} />
-          </>
-        ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(22,22,22,0.86)' }]} />
-        )}
-        <View pointerEvents="none" style={styles.edge} />
+        <GlassFill radius={24} solid={0.6} slab dark />
         {/* Thanh trên: kéo lên / xuống */}
         <GestureDetector gesture={headerPan}>
         <View collapsable={false} style={{ paddingHorizontal: PAD, paddingBottom: 8 }}>
