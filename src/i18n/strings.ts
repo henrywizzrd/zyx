@@ -412,6 +412,12 @@ export const vi = {
   'social.searchOnline': "Tìm bài hát, album, nghệ sĩ",
   'social.searchHint': "Gõ để tìm trên YouTube Music",
   'social.libraryEmpty': "Thư viện của bạn chưa có gì",
+  'fx.speed': "Tốc độ (đổi cả cao độ)",
+  'fx.speed.slowedReverb': "Slowed + reverb",
+  'fx.speed.slowed': "Slowed",
+  'fx.speed.normal': "Gốc",
+  'fx.speed.spedUp': "Sped up",
+  'fx.speed.nightcore': "Nightcore",
 };
 
 export type StringKey = keyof typeof vi;
@@ -807,4 +813,10 @@ export const en: Record<StringKey, string> = {
   'social.searchOnline': "Search songs, albums, artists",
   'social.searchHint': "Type to search YouTube Music",
   'social.libraryEmpty': "Your library is empty",
+  'fx.speed': "Speed (changes pitch too)",
+  'fx.speed.slowedReverb': "Slowed + reverb",
+  'fx.speed.slowed': "Slowed",
+  'fx.speed.normal': "Original",
+  'fx.speed.spedUp': "Sped up",
+  'fx.speed.nightcore': "Nightcore",
 };

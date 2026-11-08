@@ -15,7 +15,7 @@ import { audio, musicSupported } from '../music/lazy';
 import { QueueSheet } from '../components/QueueSheet';
 import { useSongMenu } from '../components/useSongMenu';
 import { useActionSheet, useSheetOpen } from '../components/ActionSheet';
-import { FxMode, fxLogText, setFxMode, useFxMode } from '../player/fxEngine';
+import { FX_SPEEDS, FxMode, fxLogText, setFxMode, setFxSpeed, useFxMode, useFxSpeed } from '../player/fxEngine';
 import { BlurView } from 'expo-blur';
 import RNMaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -201,6 +201,8 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const t = useT();
   // Chế độ âm thanh: Bình thường / 8D / Phòng hoà nhạc
   const fxMode = useFxMode();
+  const fxSpeed = useFxSpeed();
+  const fxOn = fxMode !== 'off' || fxSpeed !== 'normal';
   const pickFx = () => {
     const opts: { id: FxMode; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
       { id: 'off', label: t('fx.off'), icon: 'musical-note-outline' },
@@ -211,6 +213,14 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
       { title: t('fx.title'), subtitle: t('fx.hint'), icon: 'headset-outline' },
       [
         ...opts.map((o) => ({ label: o.label, icon: fxMode === o.id ? 'checkmark-circle' : o.icon, on: fxMode === o.id, run: () => setFxMode(o.id) })),
+        // Tốc độ: Slowed + reverb / Slowed / Gốc / Sped up / Nightcore (đổi cả cao độ), dùng chung được với 8D / Hội trường
+        {
+          label: t('fx.speed'),
+          icon: 'speedometer-outline' as const,
+          on: fxSpeed !== 'normal',
+          run: () => {},
+          chips: FX_SPEEDS.map((sp) => ({ label: t(`fx.speed.${sp}` as const), on: fxSpeed === sp, run: () => setFxSpeed(sp) })),
+        },
         // Gửi nhật ký bộ hiệu ứng (dò lỗi mất tiếng khi chạy nền)
         { label: t('fx.sendLog'), icon: 'bug-outline' as const, run: () => {
             setTimeout(() => Share.share({ message: fxLogText() || '(trống)' }).catch(() => {}), 300);
@@ -221,8 +231,8 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   };
   const FxButton = (
     <Pressable onPress={pickFx} hitSlop={10} style={styles.sideBtn}>
-      <Ionicons name={fxMode === 'off' ? 'headset-outline' : 'headset'} size={22} color={fxMode === 'off' ? SOFT : ON} />
-      {fxMode !== 'off' && <View style={[styles.dot, { backgroundColor: ON }]} />}
+      <Ionicons name={fxOn ? 'headset' : 'headset-outline'} size={22} color={fxOn ? ON : SOFT} />
+      {fxOn && <View style={[styles.dot, { backgroundColor: ON }]} />}
     </Pressable>
   );
   const pad = useContentInsets();

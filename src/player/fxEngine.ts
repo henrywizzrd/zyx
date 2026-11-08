@@ -17,6 +17,10 @@ import { showToast } from '../components/toastBridge';
 
 export type FxMode = 'off' | '8d' | 'hall';
 export const FX_MODES: FxMode[] = ['off', '8d', 'hall'];
+// Tốc độ: chậm / nhanh đổi luôn cao độ (giống bản slowed / sped up trên mạng). Slowed + reverb thêm tiếng vang dài
+export type FxSpeed = 'slowedReverb' | 'slowed' | 'normal' | 'spedUp' | 'nightcore';
+export const FX_SPEEDS: FxSpeed[] = ['slowedReverb', 'slowed', 'normal', 'spedUp', 'nightcore'];
+const SPEED_RATE: Record<FxSpeed, number> = { slowedReverb: 0.85, slowed: 0.85, normal: 1, spedUp: 1.15, nightcore: 1.25 };
 
 type Api = typeof import('react-native-audio-api');
 type Ctx = InstanceType<Api['AudioContext']>;
@@ -49,6 +53,59 @@ AsyncStorage.getItem(MODE_KEY)
   })
   .catch(() => {});
 
+// ---------- Tốc độ (Slowed / Sped up), áp cho mọi bài tới khi tắt ----------
+const SPEED_KEY = 'zyx:fxSpeed';
+let speed: FxSpeed = 'normal';
+const rate = () => SPEED_RATE[speed];
+const reverbOn = () => speed === 'slowedReverb';
+// Bộ hiệu ứng chạy khi có chế độ âm thanh HOẶC đang đổi tốc độ
+const engineOn = () => mode !== 'off' || speed !== 'normal';
+AsyncStorage.getItem(SPEED_KEY)
+  .then((v) => {
+    if (v && v !== 'normal' && (FX_SPEEDS as string[]).includes(v) && fxSupported()) {
+      speed = v as FxSpeed;
+      audio().setRate(rate());
+      modeListeners.forEach((l) => l());
+    }
+  })
+  .catch(() => {});
+export function getFxSpeed() {
+  return speed;
+}
+export function setFxSpeed(s: FxSpeed) {
+  if (s !== 'normal' && !fxSupported()) {
+    showToast('fx.needBuild');
+    return;
+  }
+  if (s === speed) return;
+  const wasLive = engineOn() && mix > 0.5 && !!source && source.id === curId;
+  speed = s;
+  AsyncStorage.setItem(SPEED_KEY, s).catch(() => {});
+  modeListeners.forEach((l) => l());
+  flog(`đổi tốc độ → ${s} (${rate()}x)`);
+  audio().setRate(rate());
+  if (!wasLive) {
+    swellNext = engineOn();
+    transTok++;
+    if (duck !== 1) rampDuck(1, 0.5);
+    applyMode();
+    return;
+  }
+  // Đang nghe qua bộ hiệu ứng: nhỏ xuống, đổi (nguồn tự mở lại với tốc độ mới), to dần lên
+  transition(() => applyMode(true));
+}
+export function useFxSpeed(): FxSpeed {
+  return useSyncExternalStore(
+    (l) => {
+      modeListeners.add(l);
+      return () => {
+        modeListeners.delete(l);
+      };
+    },
+    () => speed
+  );
+}
+
 export function getFxMode() {
   return mode;
 }
@@ -58,16 +115,16 @@ export function setFxMode(m: FxMode) {
     return;
   }
   if (m === mode) return;
-  const prev = mode;
+  const wasOn = engineOn();
   mode = m;
   AsyncStorage.setItem(MODE_KEY, m).catch(() => {});
   modeListeners.forEach((l) => l());
   // Đổi chế độ do người dùng bấm: nhạc nhỏ xuống một chút, đổi, rồi to dần lên trong ~1,5 giây
   // (vào 8D thì tiếng còn từ từ lan dần ra hai bên tai)
-  const live = prev !== 'off' && mix > 0.5 && !!source && source.id === curId;
+  const live = wasOn && mix > 0.5 && !!source && source.id === curId;
   if (!live) {
     // Đang nghe tiếng thường (chưa có bộ hiệu ứng chạy): bật lên thì đợi bộ hiệu ứng sẵn sàng rồi mới nhỏ xuống - to lên
-    swellNext = m !== 'off';
+    swellNext = engineOn();
     transTok++; // huỷ lần nhỏ xuống - to lên đang dở (nếu có) và trả âm lượng về bình thường
     if (duck !== 1) rampDuck(1, 0.5);
     applyMode();
@@ -102,7 +159,7 @@ export function flog(msg: string, tag: 'fx' | 'music' = 'fx') {
 export const fxLogText = () => LOG.join('\n');
 AppState.addEventListener('change', (st) => {
   flog(`app → ${st}; mode=${mode} ctx=${ctx?.state ?? '-'}`);
-  if (st !== 'active' && mode !== 'off' && ctx && ctx.state !== 'running') ctx.resume().catch(() => {});
+  if (st !== 'active' && engineOn() && ctx && ctx.state !== 'running') ctx.resume().catch(() => {});
 });
 
 // ---------- Lấy file bài để giải mã ----------
@@ -164,12 +221,12 @@ function fileFor(id: string): Promise<string> {
 
 // Tải trước file bài kế tiếp (chỉ khi đang bật chế độ), để sang bài là có hiệu ứng ngay
 export function fxPrefetch(id: string | null) {
-  if (!id || mode === 'off' || !fxSupported()) return;
+  if (!id || !engineOn() || !fxSupported()) return;
   // Đợi file bài đang nghe tải xong rồi mới tải bài sau (tải cùng lúc dễ làm nghẽn mạng của trình phát chính)
   setTimeout(async () => {
     const cur = curId ? filePending.get(curId) : undefined;
     if (cur) await cur.catch(() => {});
-    if (mode !== 'off') fileFor(id).catch(() => {});
+    if (engineOn()) fileFor(id).catch(() => {});
   }, 4000);
 }
 
@@ -178,7 +235,8 @@ let ctx: Ctx | null = null;
 let input: Node | null = null; // nguồn → input → (chuỗi hiệu ứng) → master → duckNode → loa
 let master: Node | null = null;
 let duckNode: Node | null = null;
-let chain: { mode: FxMode; stop: () => void } | null = null;
+let chain: { key: string; stop: () => void } | null = null;
+const chainKey = () => `${mode}|${reverbOn() ? 'reverb' : ''}`;
 
 function context(): Ctx | null {
   const A = lib();
@@ -230,12 +288,36 @@ function impulse(c: Ctx, seconds: number, early: number, damp: number): Buf {
   return buf;
 }
 
-function buildChain(c: Ctx, m: FxMode) {
-  const inp = input!;
+function buildChain(c: Ctx, m: FxMode, reverb: boolean) {
+  let inp: Node = input!;
   const out = master!;
   const nodes: { disconnect: () => void }[] = [];
   const sources: { stop: (when?: number) => void }[] = [];
   const keep = <T extends { disconnect: () => void }>(n: T) => (nodes.push(n), n);
+
+  // Slowed + reverb: tầng vang dài, ấm (đuôi vang tối) đặt trước chế độ âm thanh
+  if (reverb) {
+    const stage = keep(c.createGain());
+    const dry = keep(c.createGain());
+    dry.gain.value = 0.72;
+    input!.connect(dry);
+    dry.connect(stage);
+    const pre = keep(c.createDelay(0.2));
+    pre.delayTime.value = 0.045;
+    const verb = keep(c.createConvolver());
+    verb.buffer = impulse(c, 3.2, 0.35, 0.95);
+    const tone = keep(c.createBiquadFilter());
+    tone.type = 'lowpass';
+    tone.frequency.value = 5200;
+    const wet = keep(c.createGain());
+    wet.gain.value = 0.5;
+    input!.connect(pre);
+    pre.connect(verb);
+    verb.connect(tone);
+    tone.connect(wet);
+    wet.connect(stage);
+    inp = stage;
+  }
 
   if (m === '8d') {
     // Tiếng chạy vòng quanh đầu (khoảng 9 giây một vòng):
@@ -324,7 +406,7 @@ function buildChain(c: Ctx, m: FxMode) {
   }
 
   return {
-    mode: m,
+    key: `${m}|${reverb ? 'reverb' : ''}`,
     stop: () => {
       sources.forEach((s) => {
         try {
@@ -333,6 +415,9 @@ function buildChain(c: Ctx, m: FxMode) {
       });
       try {
         inp.disconnect();
+      } catch {}
+      try {
+        input?.disconnect();
       } catch {}
       nodes.forEach((n) => {
         try {
@@ -430,6 +515,8 @@ async function transition(change: () => void) {
 // → mất nhạc, mất cả trình phát trên Dynamic Island. Máy không đọc dần được định dạng này thì mới giải mã cả bài như cũ
 interface FxSource {
   id: string;
+  rate: number; // tốc độ lúc mở nguồn (đổi tốc độ thì mở lại nguồn)
+  resyncs: number; // số lần phải tua lại cho khớp (nhiều quá khi đang đổi tốc độ → đọc dần không theo được tốc độ)
   playing: boolean;
   pos(): number; // vị trí đang phát trong bài (giây)
   ended(): boolean; // đã phát tới cuối file (nguồn đọc dần hết file thì không tua / phát lại được nữa, phải mở lại)
@@ -445,13 +532,16 @@ function streamSource(c: Ctx, id: string, uri: string): FxSource | null {
   try {
     path = decodeURI(path);
   } catch {}
-  const node: any = (c as any).context?.createFileSource?.({ source: path, loop: false, volume: 1, playbackRate: 1, preservesPitch: false });
+  const r = rate();
+  const node: any = (c as any).context?.createFileSource?.({ source: path, loop: false, volume: 1, playbackRate: r, preservesPitch: false });
   if (!node) return null;
   // Đưa nguồn vào chuỗi hiệu ứng (không thì thư viện tự nối thẳng ra loa)
   const media = new A.MediaElementAudioSourceNode(c as any, { mediaElement: { getFileSourceNode: () => node } as any });
   media.connect(input);
   const src: FxSource = {
     id,
+    rate: r,
+    resyncs: 0,
     playing: false,
     pos: () => (typeof node.currentTime === 'number' ? node.currentTime : -1),
     ended: () => typeof node.duration === 'number' && node.duration > 0 && node.currentTime >= node.duration - 0.3,
@@ -489,6 +579,7 @@ function streamSource(c: Ctx, id: string, uri: string): FxSource | null {
 async function bufferSource(c: Ctx, id: string, uri: string): Promise<FxSource> {
   const A = lib()!;
   const buffer: Buf = await A.decodeAudioData(uri);
+  const r = rate();
   let node: Src | null = null;
   let start = 0; // ctx.currentTime lúc bắt đầu
   let offset = 0; // vị trí trong bài lúc đó
@@ -504,20 +595,23 @@ async function bufferSource(c: Ctx, id: string, uri: string): Promise<FxSource> 
   };
   const src: FxSource = {
     id,
+    rate: r,
+    resyncs: 0,
     playing: false,
-    pos: () => (node ? offset + (c.currentTime - start) : -1),
-    ended: () => !!node && offset + (c.currentTime - start) >= buffer.duration - 0.3,
+    pos: () => (node ? offset + (c.currentTime - start) * r : -1),
+    ended: () => !!node && offset + (c.currentTime - start) * r >= buffer.duration - 0.3,
     play(at) {
       stopNode();
       if (!input || at >= buffer.duration - 0.05) return;
       const n = c.createBufferSource();
       n.buffer = buffer;
+      n.playbackRate.value = r; // đổi cả tốc độ lẫn cao độ
       n.connect(input);
       const when = c.currentTime + 0.03;
-      n.start(when, Math.max(0, at + 0.03));
+      n.start(when, Math.max(0, at + 0.03 * r));
       node = n;
       start = when;
-      offset = Math.max(0, at + 0.03);
+      offset = Math.max(0, at + 0.03 * r);
       src.playing = true;
     },
     pause() {
@@ -541,7 +635,9 @@ let deadSince = 0;
 let lastLog = 0; // lúc bộ âm thanh bắt đầu không chạy (0 = đang chạy bình thường)
 let last = { playing: false, time: 0, at: 0 }; // lần báo gần nhất của trình phát chính
 
-const expected = () => (last.playing ? last.time + (Date.now() - last.at) / 1000 : last.time);
+// Vị trí trong bài lúc này theo trình phát chính (đang đổi tốc độ thì thời gian trong bài chạy nhanh / chậm hơn đồng hồ)
+const expected = () => (last.playing ? last.time + ((Date.now() - last.at) / 1000) * rate() : last.time);
+let preferBuffer: string | null = null; // bài mà nguồn đọc dần không theo được tốc độ → giải mã cả bài
 
 function dropSource() {
   source?.close();
@@ -557,7 +653,7 @@ async function loadTrack(id: string) {
     if (token !== loadToken) return;
     let s: FxSource | null = null;
     try {
-      s = streamSource(c, id, uri);
+      if (preferBuffer !== id) s = streamSource(c, id, uri);
     } catch (e) {
       console.warn('[fx] stream', e);
       flog(`stream lỗi: ${String(e)}`);
@@ -582,12 +678,12 @@ async function loadTrack(id: string) {
 
 // Đặt lại toàn bộ theo chế độ hiện tại
 function applyMode(instant = false) {
-  if (mode === 'off') {
+  if (!engineOn()) {
     wantMix = 0;
     setMix(0, instant ? 0.05 : 0.35);
     const c = ctx;
     setTimeout(() => {
-      if (mode !== 'off') return;
+      if (engineOn()) return;
       dropSource();
       chain?.stop();
       chain = null;
@@ -598,9 +694,9 @@ function applyMode(instant = false) {
   }
   const c = context();
   if (!c) return;
-  if (chain?.mode !== mode) {
+  if (chain?.key !== chainKey()) {
     chain?.stop();
-    chain = buildChain(c, mode);
+    chain = buildChain(c, mode, reverbOn());
   }
   if (curId && source?.id !== curId) loadTrack(curId);
   sync(true);
@@ -618,7 +714,7 @@ function reopen() {
 
 // Đồng bộ với trình phát chính. force: chạy lại ngay cả khi không lệch
 function sync(force = false) {
-  if (mode === 'off') return;
+  if (!engineOn()) return;
   const c = ctx;
   if (!c || !chain) return;
   const src = source && source.id === curId ? source : null;
@@ -656,6 +752,12 @@ function sync(force = false) {
     return;
   }
   deadSince = 0;
+  // Vừa đổi tốc độ: nguồn đang mở với tốc độ cũ → mở lại với tốc độ mới
+  if (src.rate !== rate()) {
+    flog(`nguồn đang ở ${src.rate}x, cần ${rate()}x → mở lại nguồn`);
+    reopen();
+    return;
+  }
   const want = expected();
   const now = Date.now();
   // Nguồn đã phát hết file mà trình phát chính quay lại đầu bài (lặp lại bài, tua lùi sau khi hết...): nguồn đọc dần
@@ -671,7 +773,17 @@ function sync(force = false) {
   const bg = AppState.currentState !== 'active';
   driftCount = drift > (bg ? 2.5 : 0.35) ? driftCount + 1 : 0;
   if (!src.playing || force || drift > (bg ? 4 : 1.5) || driftCount >= 2) {
-    if (src.playing) flog(`tua lại: lệch ${drift.toFixed(2)}s`);
+    if (src.playing) {
+      flog(`tua lại: lệch ${drift.toFixed(2)}s`);
+      src.resyncs++;
+      // Đang đổi tốc độ mà nguồn đọc dần cứ lệch hoài (máy không đổi tốc độ được kiểu này) → giải mã cả bài
+      if (src.rate !== 1 && src.resyncs >= 4 && preferBuffer !== src.id && curId) {
+        flog('nguồn đọc dần không theo được tốc độ → chuyển sang giải mã cả bài');
+        preferBuffer = curId;
+        reopen();
+        return;
+      }
+    }
     driftCount = 0;
     src.play(want);
   }
@@ -706,7 +818,7 @@ export function fxTick(id: string | null, playing: boolean, time: number) {
   last = { playing, time, at: Date.now() };
   const changed = id !== curId;
   curId = id;
-  if (mode === 'off' || !fxSupported()) return;
+  if (!engineOn() || !fxSupported()) return;
   if (changed && id && source?.id !== id) dropSource(); // bỏ bài cũ trước khi mở bài mới
   // Chưa phát thì chưa mở file / dựng bộ hiệu ứng (vừa mở app mà đã mở stream → khựng ~1s lúc khởi động)
   if (!playing && !chain) {

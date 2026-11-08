@@ -49,6 +49,18 @@ export function setFxMix(m: number) {
   applyVolume();
 }
 
+// Tốc độ phát (Slowed / Sped up). Trình phát chính chạy cùng tốc độ để thời gian, màn hình khoá và chuyển bài khớp với
+// bộ hiệu ứng (tiếng thật — đổi cả cao độ — phát ra từ bộ hiệu ứng, xem fxEngine)
+let rate = 1;
+export function setRate(r: number) {
+  rate = r;
+  if (pl) {
+    try {
+      pl.playbackRate = r;
+    } catch {}
+  }
+}
+
 export function getPlayer(): AudioPlaylist {
   if (!pl) {
     // shouldPlayInBackground: tắt màn hình / chuyển sang app khác vẫn phát tiếp
@@ -56,6 +68,11 @@ export function getPlayer(): AudioPlaylist {
     setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' }).catch(() => {});
     pl = createAudioPlaylist({ updateInterval: 500, loop: 'none' });
     applyVolume();
+    if (rate !== 1) {
+      try {
+        pl.playbackRate = rate;
+      } catch {}
+    }
     // Trình phát tự đổi bài (hết bài, hoặc bấm nút ở màn hình khoá): báo cho app
     pl.addListener('trackChanged', ({ currentIndex }) => {
       const key = keys[currentIndex];

@@ -39,6 +39,8 @@ export type SheetAction = {
   busy?: boolean; // đang chạy: hiện vòng xoay thay icon
   destructive?: boolean;
   keepOpen?: boolean; // bấm xong không đóng tấm
+  // Hàng nút chọn nhanh (vd tốc độ Slowed / Sped up): label là tiêu đề nhỏ phía trên, bấm chọn không đóng tấm
+  chips?: { label: string; on: boolean; run: () => void }[];
 };
 // Giữ tương thích với chỗ cũ truyền thêm lựa chọn riêng (ví dụ "Xoá khỏi playlist")
 export type ExtraAction = { label: string; run: () => void; destructive?: boolean; icon?: IconName };
@@ -492,7 +494,38 @@ const styles = StyleSheet.create({
 
 type Colors = ReturnType<typeof useTheme>['theme']['colors'];
 
+function ChipsRow({ a, colors }: { a: SheetAction; colors: Colors }) {
+  const chips = a.chips ?? [];
+  const [sel, setSel] = useState(() => chips.findIndex((c) => c.on));
+  return (
+    <View style={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <Ionicons name={a.icon} size={18} color={a.on ? colors.accent : colors.textSecondary} />
+        <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '700' }}>{a.label}</Text>
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {chips.map((c, i) => {
+          const on = i === sel;
+          return (
+            <Pressable
+              key={c.label}
+              onPress={() => {
+                setSel(i);
+                c.run();
+              }}
+              style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, backgroundColor: on ? colors.accent : colors.surface }}
+            >
+              <Text style={{ color: on ? colors.onAccent : colors.text, fontWeight: '700', fontSize: 13 }}>{c.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 function ActionRow({ a, colors, onClose }: { a: SheetAction; colors: Colors; onClose: () => void }) {
+  if (a.chips) return <ChipsRow a={a} colors={colors} />;
   const color = a.destructive ? DANGER : colors.text;
   return (
     <Pressable
