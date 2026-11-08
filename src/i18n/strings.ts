@@ -406,6 +406,12 @@ export const vi = {
   'log.f.ui': "Giao diện",
   'settings.log': "Nhật ký",
   'settings.logHint': "Xem lỗi, giật lag trong lúc dùng app",
+  'social.tabLibrary': "Thư viện",
+  'social.tabSearch': "Tìm kiếm",
+  'social.filterLibrary': "Lọc trong thư viện của bạn",
+  'social.searchOnline': "Tìm bài hát, album, nghệ sĩ",
+  'social.searchHint': "Gõ để tìm trên YouTube Music",
+  'social.libraryEmpty': "Thư viện của bạn chưa có gì",
 };
 
 export type StringKey = keyof typeof vi;
@@ -795,4 +801,10 @@ export const en: Record<StringKey, string> = {
   'log.f.ui': "UI",
   'settings.log': "Log",
   'settings.logHint': "See errors and lag while using the app",
+  'social.tabLibrary': "Library",
+  'social.tabSearch': "Search",
+  'social.filterLibrary': "Filter your library",
+  'social.searchOnline': "Search songs, albums, artists",
+  'social.searchHint': "Type to search YouTube Music",
+  'social.libraryEmpty': "Your library is empty",
 };

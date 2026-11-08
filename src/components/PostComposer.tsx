@@ -157,13 +157,16 @@ export function PostComposer({ visible, onClose, initial }: { visible: boolean; 
   );
 }
 
-// Chọn thứ để đính kèm: thư viện của mình + bài hát của mình, gõ chữ thì tìm thêm trên YouTube Music
+// Chọn thứ để đính kèm, hai thẻ:
+//  - Thư viện: playlist / album / nghệ sĩ đã lưu + bài hát của mình (gõ chữ để lọc)
+//  - Tìm kiếm: tìm trên YouTube Music
 function AttachPicker({ onPick }: { onPick: (a: Attachment) => void }) {
   const { theme } = useTheme();
   const t = useT();
   const { text, textSecondary, surface, accent } = theme.colors;
   const library = useLibrary();
   const mine = useMemo(() => myTracks(), []);
+  const [tab, setTab] = useState<'library' | 'search'>('library');
   const [q, setQ] = useState('');
   const [online, setOnline] = useState<Attachment[]>([]);
   const [searching, setSearching] = useState(false);
@@ -177,7 +180,7 @@ function AttachPicker({ onPick }: { onPick: (a: Attachment) => void }) {
 
   // Tìm trên YouTube Music (đợi ngừng gõ một chút)
   useEffect(() => {
-    if (!musicSupported || query.length < 2) {
+    if (!musicSupported || tab !== 'search' || query.length < 2) {
       setOnline([]);
       return;
     }
@@ -202,7 +205,7 @@ function AttachPicker({ onPick }: { onPick: (a: Attachment) => void }) {
       dead = true;
       clearTimeout(id);
     };
-  }, [query]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [query, tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const row = (a: Attachment, key: string) => (
     <Pressable key={key} onPress={() => onPick(a)} style={styles.row}>
@@ -219,29 +222,59 @@ function AttachPicker({ onPick }: { onPick: (a: Attachment) => void }) {
   );
   const section = (title: string) => <Text style={[styles.section, { color: text }]}>{title}</Text>;
 
+  const tabBtn = (id: 'library' | 'search', icon: keyof typeof Ionicons.glyphMap, label: string) => {
+    const on = tab === id;
+    return (
+      <Pressable
+        onPress={() => {
+          setTab(id);
+          setQ('');
+        }}
+        style={[styles.tab, on && { backgroundColor: accent }]}
+      >
+        <Ionicons name={icon} size={16} color={on ? theme.colors.onAccent : text} />
+        <Text style={{ color: on ? theme.colors.onAccent : text, fontWeight: '700' }}>{label}</Text>
+      </Pressable>
+    );
+  };
+  const isLib = tab === 'library';
+  const empty = isLib ? libItems.length + songItems.length === 0 : online.length === 0;
+
   return (
     <View style={{ flex: 1 }}>
+      {/* Hai lựa chọn: lấy từ Thư viện hoặc Tìm kiếm */}
+      <View style={[styles.tabs, { backgroundColor: surface }]}>
+        {tabBtn('library', 'library-outline', t('social.tabLibrary'))}
+        {tabBtn('search', 'search', t('social.tabSearch'))}
+      </View>
       <View style={[styles.search, { backgroundColor: surface }]}>
-        <Ionicons name="search" size={16} color={textSecondary} />
+        <Ionicons name={isLib ? 'funnel-outline' : 'search'} size={16} color={textSecondary} />
         <TextInput
+          key={tab}
           value={q}
           onChangeText={setQ}
-          autoFocus
-          placeholder={t('social.searchAttach')}
+          autoFocus={!isLib}
+          placeholder={t(isLib ? 'social.filterLibrary' : 'social.searchOnline')}
           placeholderTextColor={textSecondary}
           style={{ flex: 1, color: text, paddingVertical: 10, marginLeft: 8 }}
         />
-        {searching && <ActivityIndicator size="small" color={textSecondary} />}
+        {searching && !isLib && <ActivityIndicator size="small" color={textSecondary} />}
       </View>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}>
-        {libItems.length > 0 && section(t('social.fromLibrary'))}
-        {libItems.map((a) => row(a, `lib:${a.source}:${a.kind}:${a.id}`))}
-        {songItems.length > 0 && section(t('social.mySongs'))}
-        {songItems.map((a) => row(a, `my:${a.id}`))}
-        {online.length > 0 && section(t('social.onYouTube'))}
-        {online.map((a) => row(a, `yt:${a.kind}:${a.id}`))}
-        {libItems.length + songItems.length + online.length === 0 && !searching && (
-          <Text style={{ color: textSecondary, marginTop: 24, textAlign: 'center' }}>{t(query ? 'lib.noResults' : 'social.attachHint')}</Text>
+        {isLib ? (
+          <>
+            {libItems.length > 0 && section(t('social.fromLibrary'))}
+            {libItems.map((a) => row(a, `lib:${a.source}:${a.kind}:${a.id}`))}
+            {songItems.length > 0 && section(t('social.mySongs'))}
+            {songItems.map((a) => row(a, `my:${a.id}`))}
+          </>
+        ) : (
+          online.map((a) => row(a, `yt:${a.kind}:${a.id}`))
+        )}
+        {empty && !(searching && !isLib) && (
+          <Text style={{ color: textSecondary, marginTop: 24, textAlign: 'center' }}>
+            {t(query ? 'lib.noResults' : isLib ? 'social.libraryEmpty' : 'social.searchHint')}
+          </Text>
         )}
       </ScrollView>
     </View>
@@ -254,7 +287,9 @@ const styles = StyleSheet.create({
   avatar: { width: 38, height: 38, borderRadius: 19, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   attachBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, marginTop: 12 },
   bottom: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
-  search: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 12, margin: 16, marginBottom: 4 },
+  tabs: { flexDirection: 'row', borderRadius: 12, padding: 4, marginHorizontal: 16, marginTop: 14, gap: 4 },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderRadius: 9 },
+  search: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 12, margin: 16, marginTop: 10, marginBottom: 4 },
   section: { fontSize: 15, fontWeight: '800', marginTop: 18, marginBottom: 4 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
 });
