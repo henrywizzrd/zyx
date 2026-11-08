@@ -107,6 +107,7 @@ export function setFxSpeed(s: FxSpeed) {
 // ---------- Trượt tốc độ kiểu đĩa than ----------
 // Tốc độ thật lúc này (đang trượt thì nằm giữa tốc độ cũ và mới). Trình phát chính trượt theo để thời gian vẫn khớp
 let liveRate = 1;
+export const getLiveRate = () => liveRate;
 let glideTimer: ReturnType<typeof setInterval> | null = null;
 let gliding = false;
 function stopGlide() {
@@ -135,7 +136,8 @@ function glideTo(target: number, done?: () => void) {
     const e = x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2; // chậm - nhanh - chậm
     const r = from + (target - from) * e;
     liveRate = r;
-    audio().setRate(r);
+    // Trình phát chính (đang tắt tiếng) chỉ đổi tốc độ một lần lúc trượt xong: đổi 25 lần liên tục làm luồng JS đứng
+    // cả giây (trình phát chính chặn mỗi lần đổi), trượt 0,8 giây thành 12 giây
     const ok = src.setRate(r);
     if (!ok) {
       // Máy không trượt tốc độ được: crossfade sang bản mở lại ở tốc độ mới
@@ -929,7 +931,7 @@ function sync(force = false) {
   // Nguồn tụt lại phía sau (máy bận, thiếu dữ liệu → tiếng rè / giật): kể cả khi app ở nền, tụt quá 1,5s là kéo lên ngay
   const lag = want - src.pos();
   const hard = bg ? drift > 4 || lag > 1.5 : drift > 1.5;
-  if (lag > 0.6 && now - lastLagLog > 3000) {
+  if (src.playing && lag > 0.6 && now - lastLagLog > 3000) {
     lastLagLog = now;
     flog(`nguồn chạy chậm hơn nhạc ${lag.toFixed(2)}s (máy bận / thiếu dữ liệu)`);
   }

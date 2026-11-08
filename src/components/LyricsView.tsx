@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Platform, Pressable, ScrollView, ScrollViewInstance, StyleSheet, Text, View, AppState } from 'react-native';
 import type { Lyrics } from '../music/lyrics';
-import { audio, musicSupported } from '../music/lazy';
-import { usePlayerPick } from '../player/PlayerProvider';
+import { musicSupported } from '../music/lazy';
+import { getLiveRate } from '../player/fxEngine';
+import { usePlayerPick, playClock } from '../player/PlayerProvider';
 import { useT } from '../i18n';
 import { usePlayerTransition } from './PlayerTransition';
 import RNMaskedView from '@react-native-masked-view/masked-view';
@@ -154,10 +155,9 @@ export function LyricsView({
   const offsetRef = useRef(offset);
   offsetRef.current = offset;
   const readTime = () => {
-    if (musicSupported) {
-      try {
-        return audio().getPlayer().currentTime;
-      } catch {}
+    if (musicSupported && playClock.at) {
+      // Nội suy từ lần báo gần nhất của trình phát (không gọi xuống trình phát)
+      return playClock.t + (playClock.playing ? ((Date.now() - playClock.at) / 1000) * getLiveRate() : 0);
     }
     return progressRef.current;
   };

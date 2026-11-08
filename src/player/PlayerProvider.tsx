@@ -125,6 +125,10 @@ const PlayerContext = createContext<PlayerContextValue | null>(null);
 // nên mỗi lần đổi là cả app (mọi màn hình dùng usePlayer) vẽ lại → tụt khung hình khi đang phát nhạc.
 // Giờ chỉ thanh tiến trình đọc nó (useProgress)
 const ProgressContext = createContext(0);
+// Đồng hồ phát nhạc phía JS: lần báo gần nhất của trình phát (thời gian, lúc báo, đang phát?).
+// Lời bài hát nội suy từ đây thay vì hỏi thẳng trình phát 12 lần/giây (hỏi trình phát có lúc bị chặn cả giây
+// khi đang nạp bài dài → luồng JS đứng hình)
+export const playClock = { t: 0, at: 0, playing: false };
 
 // Kho trạng thái phát nhạc để màn hình "chọn" đúng phần mình cần (usePlayerPick).
 // usePlayer() kiểu cũ làm màn hình vẽ lại mỗi khi BẤT KỲ thứ gì đổi (hàng chờ, đang tải, trộn bài...);
@@ -635,6 +639,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       // App ở nền: không cập nhật thanh thời gian / lời bài hát (không ai thấy) — trước đây cả player vẽ lại mỗi 0,5 giây
       // ngay cả khi tắt màn hình, cộng dồn làm iOS tắt app vì dùng CPU quá mức (cpu_resource_fatal)
       progressRef.current = s.currentTime;
+      playClock.t = s.currentTime;
+      playClock.at = Date.now();
+      playClock.playing = s.playing;
       if (AppState.currentState === 'active') setProgress(s.currentTime);
       lastStatus.current = { playing: s.playing, isBuffering: s.isBuffering, isLoaded: s.isLoaded, currentTime: s.currentTime };
       if (s.isLoaded) loadAtRef.current = 0; // bài đã nạp xong
