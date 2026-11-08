@@ -1,11 +1,11 @@
 // Các bộ màu có sẵn. Mọi màn hình (trừ Player) lấy màu từ đây qua theme.colors.
 // Thêm bộ màu mới: thêm id vào ThemePresetId, thêm một mục vào PRESETS và tên vào PRESET_ORDER.
 
-export type ThemePresetId = 'dark' | 'light' | 'green' | 'ocean' | 'latte' | 'snow' | 'sakura' | 'meteor';
+export type ThemePresetId = 'dark' | 'light' | 'green' | 'ocean' | 'latte' | 'snow' | 'sakura' | 'meteor' | 'aurora' | 'rain' | 'neon' | 'cover';
 
 // Các bộ có hiệu ứng nền chạy liên tục (bật/tắt bằng công tắc Hiệu ứng nền, nhớ riêng từng bộ)
-export type AmbientPresetId = 'snow' | 'green' | 'ocean' | 'latte' | 'sakura' | 'meteor';
-export const AMBIENT_PRESETS: AmbientPresetId[] = ['snow', 'green', 'ocean', 'latte', 'sakura', 'meteor'];
+export type AmbientPresetId = 'snow' | 'green' | 'ocean' | 'latte' | 'sakura' | 'meteor' | 'aurora' | 'rain' | 'neon';
+export const AMBIENT_PRESETS: AmbientPresetId[] = ['snow', 'green', 'ocean', 'latte', 'sakura', 'meteor', 'aurora', 'rain', 'neon'];
 
 export interface Palette {
   bg: string; // nền của app
@@ -155,6 +155,74 @@ export const PRESETS: Record<ThemePresetId, Palette> = {
     statusBar: 'light-content',
     switchOff: '#2A3458',
   },
+  // Cực quang: trời đêm xanh đen, nhấn xanh lá ngọc như dải cực quang
+  aurora: {
+    bg: '#04101A',
+    surface: '#0D1D2A',
+    card: 'rgba(13,29,42,0.62)',
+    text: '#E8FBF3',
+    textSecondary: '#8DB3A8',
+    accent: '#5CF2B0',
+    onAccent: '#03140D',
+    border: 'rgba(160,255,220,0.14)',
+    skeleton: 'rgba(160,255,220,0.08)',
+    glass: 'rgba(10,26,36,0.58)',
+    glassRgb: '10,26,36',
+    glassTint: 'dark',
+    statusBar: 'light-content',
+    switchOff: '#1E3A44',
+  },
+  // Mưa trên kính: xám lạnh, nhấn xanh nước mưa
+  rain: {
+    bg: '#2B3036',
+    surface: '#383F47',
+    card: 'rgba(56,63,71,0.6)',
+    text: '#EEF2F5',
+    textSecondary: '#A6B0BA',
+    accent: '#9CCBEA',
+    onAccent: '#0F1A22',
+    border: 'rgba(220,235,245,0.14)',
+    skeleton: 'rgba(220,235,245,0.08)',
+    glass: 'rgba(44,50,57,0.55)',
+    glassRgb: '44,50,57',
+    glassTint: 'dark',
+    statusBar: 'light-content',
+    switchOff: '#4A535D',
+  },
+  // Neon / Cyberpunk: tím đen, nhấn hồng neon, viền xanh cyan
+  neon: {
+    bg: '#0A0514',
+    surface: '#1A0F2E',
+    card: 'rgba(26,15,46,0.62)',
+    text: '#F6EEFF',
+    textSecondary: '#A99BCB',
+    accent: '#FF3DCB',
+    onAccent: '#16001A',
+    border: 'rgba(0,240,255,0.3)',
+    skeleton: 'rgba(0,240,255,0.08)',
+    glass: 'rgba(22,10,40,0.6)',
+    glassRgb: '22,10,40',
+    glassTint: 'dark',
+    statusBar: 'light-content',
+    switchOff: '#33204F',
+  },
+  // Theo màu ảnh bìa: bảng màu gốc (tối); khi đang nghe nhạc, nền + màu nhấn lấy từ ảnh bìa bài đang phát (coverTint.ts)
+  cover: {
+    bg: '#101014',
+    surface: '#1C1C22',
+    card: 'rgba(28,28,34,0.6)',
+    text: '#F5F5F7',
+    textSecondary: '#ABABB5',
+    accent: '#E0E0E6',
+    onAccent: '#101014',
+    border: 'rgba(255,255,255,0.12)',
+    skeleton: 'rgba(255,255,255,0.08)',
+    glass: 'rgba(24,24,30,0.58)',
+    glassRgb: '24,24,30',
+    glassTint: 'dark',
+    statusBar: 'light-content',
+    switchOff: '#3A3A44',
+  },
 };
 
-export const PRESET_ORDER: ThemePresetId[] = ['dark', 'light', 'green', 'ocean', 'latte', 'snow', 'sakura', 'meteor'];
+export const PRESET_ORDER: ThemePresetId[] = ['dark', 'light', 'green', 'ocean', 'latte', 'snow', 'sakura', 'meteor', 'aurora', 'rain', 'neon', 'cover'];

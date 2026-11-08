@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { installAppLog, setLogContext } from './src/data/applog';
 import { JankMonitor } from './src/components/JankMonitor';
+import { updateCoverTint } from './src/theme/coverTint';
 import { LogScreen } from './src/screens/LogScreen';
 import { ActivityIndicator, Animated, Platform, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -9,7 +10,7 @@ import { ScreenSizeProvider } from './src/components/ScreenSize';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DOCK_THICKNESS } from './src/components/layout';
 import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
-import { PlayerProvider } from './src/player/PlayerProvider';
+import { PlayerProvider, usePlayerPick } from './src/player/PlayerProvider';
 import { FloatingDock, useContentInsets } from './src/components/FloatingDock';
 import { MiniPlayer } from './src/components/MiniPlayer';
 import { DockBubble } from './src/components/DockBubble';
@@ -161,6 +162,17 @@ function TabStage({ shown, render }: { shown: PageTab; render: (id: PageTab) => 
   );
 }
 
+// Bộ màu "Theo ảnh bìa": mỗi lần đổi bài thì lấy màu từ ảnh bìa mới
+function CoverTintSync() {
+  const { theme } = useTheme();
+  const { track } = usePlayerPick('track');
+  const on = theme.preset === 'cover';
+  useEffect(() => {
+    if (on && track.id !== 'none') updateCoverTint(track.thumb);
+  }, [on, track.id, track.thumb]);
+  return null;
+}
+
 function Root() {
   const { theme } = useTheme();
   const [tab, setTab] = useState<TabId>('home');
@@ -231,6 +243,7 @@ function Root() {
       {/* Hiệu ứng nền (tuyết, lá, cá, hạt cà phê): chạy liên tục sau mọi trang, chỉ dừng khi mở Player */}
       <AmbientEffect paused={ambientOff} />
       {Platform.OS !== 'web' && <JankMonitor />}
+      <CoverTintSync />
       <View style={{ flex: 1 }}>
         <ContentArea>
         {/* Tab hiện tại. Có trang mở chồng thì tab mờ dần đi theo vị trí trang (vuốt quay lại thì hiện lại dần),

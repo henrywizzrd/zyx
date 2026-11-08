@@ -10,7 +10,7 @@ export const defaultTheme: Theme = {
   background: { type: 'preset', color: PRESETS.dark.bg, uri: '', dim: 0.25 },
   colors: PRESETS.dark,
   glass: { blur: 40 },
-  effects: { ambient: { snow: true, green: true, ocean: true, latte: true, sakura: true, meteor: true } },
+  effects: { ambient: { snow: true, green: true, ocean: true, latte: true, sakura: true, meteor: true, aurora: true, rain: true, neon: true } },
   dock: {
     position: 'bottom',
     items: ['home', 'search', 'library', 'settings'],

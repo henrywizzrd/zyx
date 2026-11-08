@@ -418,6 +418,14 @@ export const vi = {
   'fx.speed.normal': "Gốc",
   'fx.speed.spedUp': "Sped up",
   'fx.speed.nightcore': "Nightcore",
+  'preset.aurora': "Cực quang",
+  'preset.rain': "Mưa",
+  'preset.neon': "Neon",
+  'preset.cover': "Theo ảnh bìa",
+  'studio.ambient.aurora': "Dải cực quang xanh lá, ngọc, tím uốn lượn trên trời đêm đầy sao.",
+  'studio.ambient.rain': "Mưa rơi sau tấm kính đọng nước, giọt nước chảy xuống và thỉnh thoảng có sấm chớp.",
+  'studio.ambient.neon': "Lưới neon chạy về phía chân trời, thỉnh thoảng nháy glitch.",
+  'studio.coverHint': "Nền và màu nhấn đổi theo ảnh bìa bài đang nghe.",
 };
 
 export type StringKey = keyof typeof vi;
@@ -819,4 +827,12 @@ export const en: Record<StringKey, string> = {
   'fx.speed.normal': "Original",
   'fx.speed.spedUp': "Sped up",
   'fx.speed.nightcore': "Nightcore",
+  'preset.aurora': "Aurora",
+  'preset.rain': "Rain",
+  'preset.neon': "Neon",
+  'preset.cover': "Album colors",
+  'studio.ambient.aurora': "Green, teal and violet aurora ribbons over a starry night sky.",
+  'studio.ambient.rain': "Rain falling behind a wet window, drops trickling down and the odd flash of lightning.",
+  'studio.ambient.neon': "A neon grid racing to the horizon with the occasional glitch.",
+  'studio.coverHint': "Background and accent follow the cover of the song that's playing.",
 };

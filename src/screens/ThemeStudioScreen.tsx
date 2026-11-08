@@ -57,6 +57,38 @@ function MiniScreen({ p, id, width, h }: { p: Palette; id: ThemePresetId; width:
           <View style={{ position: 'absolute', left: width * 0.45, top: h * 0.22, width: width * 0.3, height: 1.2, backgroundColor: 'rgba(255,255,255,0.7)', transform: [{ rotate: '-38deg' }] }} />
         </>
       )}
+      {id === 'aurora' && (
+        <>
+          <View style={{ position: 'absolute', left: -width * 0.1, top: h * 0.14, width: width * 1.2, height: h * 0.12, borderRadius: h, backgroundColor: 'rgba(61,245,160,0.35)', transform: [{ rotate: '-8deg' }] }} />
+          <View style={{ position: 'absolute', left: -width * 0.1, top: h * 0.22, width: width * 1.2, height: h * 0.08, borderRadius: h, backgroundColor: 'rgba(155,108,255,0.3)', transform: [{ rotate: '5deg' }] }} />
+          {[[0.15, 0.5], [0.8, 0.08], [0.6, 0.45], [0.35, 0.06]].map(([x, y], i) => (
+            <View key={`a${i}`} style={{ position: 'absolute', left: x * width, top: y * h, width: 2, height: 2, borderRadius: 1, backgroundColor: '#FFFFFF' }} />
+          ))}
+        </>
+      )}
+      {id === 'rain' && (
+        <>
+          {[[0.1, 0.12, 3], [0.3, 0.4, 2], [0.7, 0.1, 4], [0.85, 0.35, 2], [0.5, 0.6, 3], [0.2, 0.7, 2], [0.62, 0.3, 2]].map(([x, y, r], i) => (
+            <View key={`r${i}`} style={{ position: 'absolute', left: x * width, top: y * h, width: r * 2, height: r * 2.3, borderRadius: r, backgroundColor: 'rgba(255,255,255,0.22)' }} />
+          ))}
+          <View style={{ position: 'absolute', left: width * 0.78, top: h * 0.4, width: 2, height: h * 0.28, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.18)' }} />
+        </>
+      )}
+      {id === 'neon' && (
+        <>
+          <View style={{ position: 'absolute', left: 0, right: 0, top: h * 0.62, height: 1.5, backgroundColor: '#FF7AE0' }} />
+          {[0.72, 0.8, 0.9].map((y, i) => (
+            <View key={`n${i}`} style={{ position: 'absolute', left: 0, right: 0, top: y * h, height: 1, backgroundColor: 'rgba(0,240,255,0.6)' }} />
+          ))}
+        </>
+      )}
+      {id === 'cover' && (
+        <View style={{ position: 'absolute', right: 10, top: 10, flexDirection: 'row', gap: 3 }}>
+          {['#E2574C', '#F2B134', '#3E8EDE'].map((c) => (
+            <View key={c} style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: c }} />
+          ))}
+        </View>
+      )}
       {id === 'ocean' &&
         [[0.85, 0.62, 6], [0.8, 0.5, 4], [0.86, 0.4, 3], [0.1, 0.58, 5]].map(([x, y, r], i) => (
           <View key={i} style={{ position: 'absolute', left: x * width, top: y * h, width: r, height: r, borderRadius: r, borderWidth: 1, borderColor: '#5B8FC9' }} />
@@ -237,6 +269,8 @@ export function ThemeStudioScreen() {
             />
           </View>
         )}
+
+        {theme.preset === 'cover' && <Text style={{ color: textSecondary, fontSize: 12, marginTop: 14 }}>{t('studio.coverHint')}</Text>}
 
         {/* Nền */}
         <Text style={[styles.section, { color: text }]}>{t('studio.background')}</Text>

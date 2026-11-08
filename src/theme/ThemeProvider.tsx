@@ -4,6 +4,7 @@ import { useScreenSize } from '../components/ScreenSize';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { defaultTheme } from './defaultTheme';
 import { AmbientPresetId, PRESETS, ThemePresetId } from './presets';
+import { CoverTint, useCoverTint } from './coverTint';
 import { Edge, HomeSection, LibraryLayout, MiniAnchor, MiniPlayerVariant, Position, TabId, Theme, TrendingRange } from './types';
 
 const STORAGE_KEY = 'zyx:theme';
@@ -32,6 +33,14 @@ function derive(t: Theme): Theme {
   const colors = media ? { ...palette, surface: palette.card } : palette;
   return { ...t, preset, colors, background: { ...t.background, color: palette.bg } };
 }
+// Bộ "Theo ảnh bìa": phủ màu lấy từ ảnh bìa bài đang phát lên bảng màu gốc
+function withCover(t: Theme, tint: CoverTint | null): Theme {
+  if (t.preset !== 'cover' || !tint) return t;
+  const media = t.background.type !== 'preset' && !!t.background.uri;
+  const colors = { ...t.colors, ...tint, surface: media ? tint.card : tint.surface };
+  return { ...t, colors, background: { ...t.background, color: tint.bg } };
+}
+
 // Bộ màu ứng với chế độ sáng/tối của điện thoại
 export const systemPreset = (scheme: string | null | undefined): ThemePresetId => (scheme === 'light' ? 'light' : 'dark');
 
@@ -205,12 +214,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(id);
   }, [theme, ready]);
 
+  const coverTint = useCoverTint();
   const value = useMemo<ThemeContextValue>(() => {
     const patchMini = (patch: Partial<Theme['miniPlayer']>) =>
       setThemeState((t) => ({ ...t, miniPlayer: { ...t.miniPlayer, ...patch } }));
 
     return {
-      theme: orient(theme, landscape),
+      theme: orient(withCover(theme, coverTint), landscape),
       landscape,
       setTheme: setThemeState,
       resetTheme: () => setThemeState((t) => ({ ...defaultTheme, language: t.language })), // giữ ngôn ngữ đang chọn
@@ -238,7 +248,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setAmbient: (preset, on) =>
         setThemeState((t) => ({ ...t, effects: { ...t.effects, ambient: { ...t.effects.ambient, [preset]: on } } })),
     };
-  }, [theme, landscape]);
+  }, [theme, landscape, coverTint]);
 
   // Chờ đọc xong để không bị nháy từ giao diện mặc định sang giao diện đã lưu
   if (!ready) {

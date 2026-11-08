@@ -64,6 +64,7 @@ AsyncStorage.getItem(SPEED_KEY)
   .then((v) => {
     if (v && v !== 'normal' && (FX_SPEEDS as string[]).includes(v) && fxSupported()) {
       speed = v as FxSpeed;
+      liveRate = rate();
       audio().setRate(rate());
       modeListeners.forEach((l) => l());
     }
@@ -83,16 +84,111 @@ export function setFxSpeed(s: FxSpeed) {
   AsyncStorage.setItem(SPEED_KEY, s).catch(() => {});
   modeListeners.forEach((l) => l());
   flog(`đổi tốc độ → ${s} (${rate()}x)`);
-  audio().setRate(rate());
   if (!wasLive) {
+    stopGlide();
+    liveRate = rate();
+    audio().setRate(rate());
     swellNext = engineOn();
     transTok++;
     if (duck !== 1) rampDuck(1, 0.5);
     applyMode();
     return;
   }
-  // Đang nghe qua bộ hiệu ứng: nhỏ xuống, đổi (nguồn tự mở lại với tốc độ mới), to dần lên
-  transition(() => applyMode(true));
+  if (!engineOn()) {
+    // Về tốc độ gốc và không còn chế độ nào: trượt tốc độ về 1× rồi trả tiếng về trình phát chính
+    glideTo(1, () => transition(() => applyMode(true)));
+    return;
+  }
+  // Đang nghe qua bộ hiệu ứng: tốc độ (và cao độ) trượt dần như bàn xoay đĩa; bật / tắt vang thì morph
+  glideTo(rate());
+  applyMode();
+}
+
+// ---------- Trượt tốc độ kiểu đĩa than ----------
+// Tốc độ thật lúc này (đang trượt thì nằm giữa tốc độ cũ và mới). Trình phát chính trượt theo để thời gian vẫn khớp
+let liveRate = 1;
+let glideTimer: ReturnType<typeof setInterval> | null = null;
+let gliding = false;
+function stopGlide() {
+  if (glideTimer) clearInterval(glideTimer);
+  glideTimer = null;
+  gliding = false;
+}
+function glideTo(target: number, done?: () => void) {
+  stopGlide();
+  const src = source && source.id === curId ? source : null;
+  const from = liveRate;
+  if (!src || Math.abs(from - target) < 0.001) {
+    liveRate = target;
+    audio().setRate(target);
+    done?.();
+    return;
+  }
+  const MS = 800;
+  const STEP = 32;
+  const steps = Math.max(1, Math.round(MS / STEP));
+  let k = 0;
+  gliding = true;
+  glideTimer = setInterval(() => {
+    k++;
+    const x = k / steps;
+    const e = x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2; // chậm - nhanh - chậm
+    const r = from + (target - from) * e;
+    liveRate = r;
+    audio().setRate(r);
+    const ok = src.setRate(r);
+    if (!ok) {
+      // Máy không trượt tốc độ được: crossfade sang bản mở lại ở tốc độ mới
+      stopGlide();
+      liveRate = target;
+      audio().setRate(target);
+      flog('không trượt tốc độ được → crossfade');
+      crossfadeSource().finally(() => done?.());
+      return;
+    }
+    if (k >= steps) {
+      stopGlide();
+      liveRate = target;
+      src.rate = target;
+      audio().setRate(target);
+      flog(`trượt tốc độ xong → ${target}x`);
+      done?.();
+    }
+  }, STEP);
+}
+
+// Mở bản mới của bài ở tốc độ hiện tại rồi hoà dần sang (~0,6s): bản cũ nhỏ dần, bản mới to dần
+async function crossfadeSource() {
+  const c = ctx;
+  const old = source;
+  const id = curId;
+  if (!c || !old || !id || old.id !== id) {
+    reopen();
+    return;
+  }
+  try {
+    const uri = await fileFor(id);
+    const s = streamSource(c, id, uri);
+    if (!s || curId !== id) {
+      s?.close();
+      reopen();
+      return;
+    }
+    const FADE = 0.6;
+    const t0 = c.currentTime;
+    s.gain.gain.setValueAtTime(0, t0);
+    s.play(expected());
+    s.gain.gain.linearRampToValueAtTime(1, t0 + FADE);
+    old.gain.gain.cancelScheduledValues(t0);
+    old.gain.gain.setValueAtTime(old.gain.gain.value, t0);
+    old.gain.gain.linearRampToValueAtTime(0, t0 + FADE);
+    source = s;
+    stuck = { p: -1, at: Date.now() };
+    setTimeout(() => old.close(), FADE * 1000 + 200);
+  } catch (e) {
+    flog(`crossfade lỗi: ${String(e)}`);
+    reopen();
+  }
 }
 export function useFxSpeed(): FxSpeed {
   return useSyncExternalStore(
@@ -130,7 +226,12 @@ export function setFxMode(m: FxMode) {
     applyMode();
     return;
   }
-  transition(() => applyMode(true));
+  // Đang nghe qua bộ hiệu ứng: morph sang chế độ mới (tắt hẳn về Bình thường thì vẫn chuyển êm về trình phát chính)
+  if (!engineOn()) {
+    transition(() => applyMode(true));
+    return;
+  }
+  applyMode();
 }
 export function useFxMode(): FxMode {
   return useSyncExternalStore(
@@ -235,7 +336,7 @@ let ctx: Ctx | null = null;
 let input: Node | null = null; // nguồn → input → (chuỗi hiệu ứng) → master → duckNode → loa
 let master: Node | null = null;
 let duckNode: Node | null = null;
-let chain: { key: string; stop: () => void } | null = null;
+let chain: { key: string; exit: Node; stop: () => void } | null = null;
 const chainKey = () => `${mode}|${reverbOn() ? 'reverb' : ''}`;
 
 function context(): Ctx | null {
@@ -288,9 +389,15 @@ function impulse(c: Ctx, seconds: number, early: number, damp: number): Buf {
   return buf;
 }
 
-function buildChain(c: Ctx, m: FxMode, reverb: boolean) {
-  let inp: Node = input!;
-  const out = master!;
+function buildChain(c: Ctx, m: FxMode, reverb: boolean, startGain = 1) {
+  // Mỗi chuỗi có cổng vào / ra riêng: hai chuỗi chạy chồng lên nhau được trong lúc chuyển chế độ (morph)
+  const entry = c.createGain();
+  const exit = c.createGain();
+  exit.gain.value = startGain;
+  input!.connect(entry);
+  exit.connect(master!);
+  let inp: Node = entry;
+  const out = exit;
   const nodes: { disconnect: () => void }[] = [];
   const sources: { stop: (when?: number) => void }[] = [];
   const keep = <T extends { disconnect: () => void }>(n: T) => (nodes.push(n), n);
@@ -300,7 +407,7 @@ function buildChain(c: Ctx, m: FxMode, reverb: boolean) {
     const stage = keep(c.createGain());
     const dry = keep(c.createGain());
     dry.gain.value = 0.72;
-    input!.connect(dry);
+    entry.connect(dry);
     dry.connect(stage);
     const pre = keep(c.createDelay(0.2));
     pre.delayTime.value = 0.045;
@@ -311,7 +418,7 @@ function buildChain(c: Ctx, m: FxMode, reverb: boolean) {
     tone.frequency.value = 5200;
     const wet = keep(c.createGain());
     wet.gain.value = 0.5;
-    input!.connect(pre);
+    entry.connect(pre);
     pre.connect(verb);
     verb.connect(tone);
     tone.connect(wet);
@@ -407,6 +514,7 @@ function buildChain(c: Ctx, m: FxMode, reverb: boolean) {
 
   return {
     key: `${m}|${reverb ? 'reverb' : ''}`,
+    exit,
     stop: () => {
       sources.forEach((s) => {
         try {
@@ -414,11 +522,13 @@ function buildChain(c: Ctx, m: FxMode, reverb: boolean) {
         } catch {}
       });
       try {
-        inp.disconnect();
+        (input as any)?.disconnect(entry);
       } catch {}
-      try {
-        input?.disconnect();
-      } catch {}
+      [entry, exit, inp].forEach((n) => {
+        try {
+          n.disconnect();
+        } catch {}
+      });
       nodes.forEach((n) => {
         try {
           n.disconnect();
@@ -515,8 +625,9 @@ async function transition(change: () => void) {
 // → mất nhạc, mất cả trình phát trên Dynamic Island. Máy không đọc dần được định dạng này thì mới giải mã cả bài như cũ
 interface FxSource {
   id: string;
-  rate: number; // tốc độ lúc mở nguồn (đổi tốc độ thì mở lại nguồn)
-  resyncs: number; // số lần phải tua lại cho khớp (nhiều quá khi đang đổi tốc độ → đọc dần không theo được tốc độ)
+  rate: number; // tốc độ nguồn đang chạy
+  gain: Node; // âm lượng riêng của nguồn (để hoà hai nguồn khi crossfade)
+  setRate(r: number): boolean; // đổi tốc độ ngay khi đang phát; false = không đổi được
   playing: boolean;
   pos(): number; // vị trí đang phát trong bài (giây)
   ended(): boolean; // đã phát tới cuối file (nguồn đọc dần hết file thì không tua / phát lại được nữa, phải mở lại)
@@ -532,16 +643,26 @@ function streamSource(c: Ctx, id: string, uri: string): FxSource | null {
   try {
     path = decodeURI(path);
   } catch {}
-  const r = rate();
+  const r = liveRate;
   const node: any = (c as any).context?.createFileSource?.({ source: path, loop: false, volume: 1, playbackRate: r, preservesPitch: false });
   if (!node) return null;
   // Đưa nguồn vào chuỗi hiệu ứng (không thì thư viện tự nối thẳng ra loa)
   const media = new A.MediaElementAudioSourceNode(c as any, { mediaElement: { getFileSourceNode: () => node } as any });
-  media.connect(input);
+  const g = c.createGain();
+  media.connect(g);
+  g.connect(input);
   const src: FxSource = {
     id,
     rate: r,
-    resyncs: 0,
+    gain: g,
+    setRate(v) {
+      try {
+        node.playbackRate = v;
+        return Math.abs((node.playbackRate ?? v) - v) < 0.01;
+      } catch {
+        return false;
+      }
+    },
     playing: false,
     pos: () => (typeof node.currentTime === 'number' ? node.currentTime : -1),
     ended: () => typeof node.duration === 'number' && node.duration > 0 && node.currentTime >= node.duration - 0.3,
@@ -567,6 +688,9 @@ function streamSource(c: Ctx, id: string, uri: string): FxSource | null {
         media.disconnect();
       } catch {}
       try {
+        g.disconnect();
+      } catch {}
+      try {
         node.onended = '0';
         node.disconnect(undefined);
       } catch {}
@@ -579,7 +703,9 @@ function streamSource(c: Ctx, id: string, uri: string): FxSource | null {
 async function bufferSource(c: Ctx, id: string, uri: string): Promise<FxSource> {
   const A = lib()!;
   const buffer: Buf = await A.decodeAudioData(uri);
-  const r = rate();
+  const r = liveRate;
+  const g = c.createGain();
+  g.connect(input!);
   let node: Src | null = null;
   let start = 0; // ctx.currentTime lúc bắt đầu
   let offset = 0; // vị trí trong bài lúc đó
@@ -596,7 +722,8 @@ async function bufferSource(c: Ctx, id: string, uri: string): Promise<FxSource> 
   const src: FxSource = {
     id,
     rate: r,
-    resyncs: 0,
+    gain: g,
+    setRate: () => false, // nguồn giải mã cả bài: đổi tốc độ bằng cách mở lại (crossfade)
     playing: false,
     pos: () => (node ? offset + (c.currentTime - start) * r : -1),
     ended: () => !!node && offset + (c.currentTime - start) * r >= buffer.duration - 0.3,
@@ -606,7 +733,7 @@ async function bufferSource(c: Ctx, id: string, uri: string): Promise<FxSource> 
       const n = c.createBufferSource();
       n.buffer = buffer;
       n.playbackRate.value = r; // đổi cả tốc độ lẫn cao độ
-      n.connect(input);
+      n.connect(g);
       const when = c.currentTime + 0.03;
       n.start(when, Math.max(0, at + 0.03 * r));
       node = n;
@@ -620,6 +747,9 @@ async function bufferSource(c: Ctx, id: string, uri: string): Promise<FxSource> 
     },
     close() {
       stopNode();
+      try {
+        g.disconnect();
+      } catch {}
     },
   };
   return src;
@@ -636,8 +766,7 @@ let lastLog = 0; // lúc bộ âm thanh bắt đầu không chạy (0 = đang ch
 let last = { playing: false, time: 0, at: 0 }; // lần báo gần nhất của trình phát chính
 
 // Vị trí trong bài lúc này theo trình phát chính (đang đổi tốc độ thì thời gian trong bài chạy nhanh / chậm hơn đồng hồ)
-const expected = () => (last.playing ? last.time + ((Date.now() - last.at) / 1000) * rate() : last.time);
-let preferBuffer: string | null = null; // bài mà nguồn đọc dần không theo được tốc độ → giải mã cả bài
+const expected = () => (last.playing ? last.time + ((Date.now() - last.at) / 1000) * liveRate : last.time);
 
 function dropSource() {
   source?.close();
@@ -653,7 +782,7 @@ async function loadTrack(id: string) {
     if (token !== loadToken) return;
     let s: FxSource | null = null;
     try {
-      if (preferBuffer !== id) s = streamSource(c, id, uri);
+      s = streamSource(c, id, uri);
     } catch (e) {
       console.warn('[fx] stream', e);
       flog(`stream lỗi: ${String(e)}`);
@@ -677,6 +806,7 @@ async function loadTrack(id: string) {
 }
 
 // Đặt lại toàn bộ theo chế độ hiện tại
+// instant: đổi ngay (không morph)
 function applyMode(instant = false) {
   if (!engineOn()) {
     wantMix = 0;
@@ -695,8 +825,25 @@ function applyMode(instant = false) {
   const c = context();
   if (!c) return;
   if (chain?.key !== chainKey()) {
-    chain?.stop();
-    chain = buildChain(c, mode, reverbOn());
+    const old = chain;
+    const live = !!old && mix > 0.5 && !!source && source.id === curId && last.playing && !instant;
+    if (old && live) {
+      // Morph: chuỗi cũ tan dần, chuỗi mới hiện dần (~1,2s). 8D lan dần ra hai tai, đuôi vang cũ nhỏ dần chứ không bị cắt
+      const MORPH = 1.2;
+      const nw = buildChain(c, mode, reverbOn(), 0);
+      const t0 = c.currentTime;
+      old.exit.gain.cancelScheduledValues(t0);
+      old.exit.gain.setValueAtTime(old.exit.gain.value, t0);
+      old.exit.gain.linearRampToValueAtTime(0, t0 + MORPH);
+      nw.exit.gain.setValueAtTime(0, t0);
+      nw.exit.gain.linearRampToValueAtTime(1, t0 + MORPH);
+      chain = nw;
+      flog(`morph ${old.key} → ${nw.key}`);
+      setTimeout(() => old.stop(), MORPH * 1000 + 300);
+    } else {
+      old?.stop();
+      chain = buildChain(c, mode, reverbOn());
+    }
   }
   if (curId && source?.id !== curId) loadTrack(curId);
   sync(true);
@@ -753,9 +900,11 @@ function sync(force = false) {
   }
   deadSince = 0;
   // Vừa đổi tốc độ: nguồn đang mở với tốc độ cũ → mở lại với tốc độ mới
-  if (src.rate !== rate()) {
-    flog(`nguồn đang ở ${src.rate}x, cần ${rate()}x → mở lại nguồn`);
-    reopen();
+  if (gliding) return; // đang trượt tốc độ: đừng tua (thời gian hai bên đang đổi cùng nhịp)
+  if (Math.abs(src.rate - liveRate) > 0.001) {
+    flog(`nguồn đang ở ${src.rate}x, cần ${liveRate}x → crossfade`);
+    src.rate = liveRate; // tránh gọi lại liên tục trong lúc chờ
+    crossfadeSource();
     return;
   }
   const want = expected();
@@ -773,17 +922,7 @@ function sync(force = false) {
   const bg = AppState.currentState !== 'active';
   driftCount = drift > (bg ? 2.5 : 0.35) ? driftCount + 1 : 0;
   if (!src.playing || force || drift > (bg ? 4 : 1.5) || driftCount >= 2) {
-    if (src.playing) {
-      flog(`tua lại: lệch ${drift.toFixed(2)}s`);
-      src.resyncs++;
-      // Đang đổi tốc độ mà nguồn đọc dần cứ lệch hoài (máy không đổi tốc độ được kiểu này) → giải mã cả bài
-      if (src.rate !== 1 && src.resyncs >= 4 && preferBuffer !== src.id && curId) {
-        flog('nguồn đọc dần không theo được tốc độ → chuyển sang giải mã cả bài');
-        preferBuffer = curId;
-        reopen();
-        return;
-      }
-    }
+    if (src.playing) flog(`tua lại: lệch ${drift.toFixed(2)}s`);
     driftCount = 0;
     src.play(want);
   }

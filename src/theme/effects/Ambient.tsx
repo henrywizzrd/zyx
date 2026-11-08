@@ -22,7 +22,7 @@ import { drawLeaf, LEAF_COLORS, LEAF_SVGS, makeLeafPaths } from './leaves';
 import { BEAN_COLORS, BEAN_SVG } from './beans';
 import { drawBubble, drawFish, FISH_BODY, FISH_COLORS, FISH_FIN, FISH_TAIL } from './ocean';
 import { useScreenSize } from '../../components/ScreenSize';
-import { LOOSE_PETAL_PATH, meteorSkySvg, PETAL_PATH } from './scenes';
+import { auroraSkySvg, LOOSE_PETAL_PATH, meteorSkySvg, neonSkySvg, PETAL_PATH, rainGlassSvg } from './scenes';
 
 // Hiệu ứng rơi nhẹ liên tục phía sau nội dung (bật/tắt trong trang Giao diện):
 //  - bộ Snow: bông tuyết
@@ -51,6 +51,9 @@ export function AmbientEffect({ paused }: { paused?: boolean }) {
   if (theme.preset === 'latte' && on.latte) return <CoffeeBeans />;
   if (theme.preset === 'sakura' && on.sakura) return <SakuraPetals />;
   if (theme.preset === 'meteor' && on.meteor) return <MeteorShower />;
+  if (theme.preset === 'aurora' && on.aurora) return <AuroraRibbons />;
+  if (theme.preset === 'rain' && on.rain) return <RainOnGlass />;
+  if (theme.preset === 'neon' && on.neon) return <NeonGrid />;
   return null;
 }
 
@@ -59,11 +62,13 @@ export function AmbientEffect({ paused }: { paused?: boolean }) {
 export function ThemeScene() {
   const { theme } = useTheme();
   const { width, height } = useScreenSize();
-  const kind = theme.background.type === 'preset' && theme.preset === 'meteor' ? theme.preset : null;
+  const p = theme.preset;
+  const kind = theme.background.type === 'preset' && (p === 'meteor' || p === 'aurora' || p === 'rain' || p === 'neon') ? p : null;
   const svg = useMemo(() => {
     if (!kind || width < 1 || height < 1) return null;
     try {
-      return Skia.SVG.MakeFromString(meteorSkySvg(width, height));
+      const make = kind === 'aurora' ? auroraSkySvg : kind === 'rain' ? rainGlassSvg : kind === 'neon' ? neonSkySvg : meteorSkySvg;
+      return Skia.SVG.MakeFromString(make(width, height));
     } catch (e) {
       console.warn('[theme] scene', e);
       return null;
@@ -492,6 +497,214 @@ function MeteorShower() {
         canvas.drawCircle(hx, hy, 4.5, head);
         head.setAlphaf(fade);
         canvas.drawCircle(hx, hy, 1.6, head);
+      }
+    } catch (e) {
+      // vẽ lỗi thì khung hình này để trống
+    }
+    return rec.finishRecordingAsPicture();
+  });
+  return <Layer picture={picture} />;
+}
+
+// ---------- Cực quang: ba dải sáng (xanh lá, ngọc, tím) uốn lượn chậm, sáng ở mép dưới, mờ dần lên trên ----------
+const AURORA_BANDS: [string, number, number, number, number, number, number][] = [
+  // màu "r,g,b", chân dải (phần màn hình), biên độ uốn, độ cao dải, tốc độ, pha, độ đậm
+  ['61,245,160', 0.27, 0.05, 0.2, 0.05, 0, 0.55],
+  ['43,217,232', 0.33, 0.06, 0.16, 0.038, 2.1, 0.42],
+  ['155,108,255', 0.21, 0.045, 0.15, 0.03, 4.2, 0.38],
+];
+function AuroraRibbons() {
+  const { width, height } = useScreenSize();
+  const clock = useAmbientClock();
+  const picture = useDerivedValue(() => {
+    const t = clock.value / 1000;
+    const rec = Skia.PictureRecorder();
+    const canvas = rec.beginRecording(Skia.XYWHRect(0, 0, width, height));
+    try {
+      const N = 28;
+      for (let b = 0; b < AURORA_BANDS.length; b++) {
+        const [rgb, base, amp, hgt, speed, phase, alpha] = AURORA_BANDS[b];
+        const pb = Skia.PathBuilder.Make();
+        const tops: number[] = [];
+        for (let i = 0; i <= N; i++) {
+          const u = i / N;
+          const x = u * width;
+          const y = height * (base + amp * Math.sin(u * 5.6 + t * speed * 6.28 + phase) + amp * 0.5 * Math.sin(u * 14.4 - t * speed * 4 + phase * 1.7));
+          const hh = height * hgt * (0.65 + 0.35 * Math.sin(u * 9 + t * 0.4 + phase));
+          if (i === 0) pb.moveTo(x, y);
+          else pb.lineTo(x, y);
+          tops.push(x, y - hh);
+        }
+        for (let i = tops.length - 2; i >= 0; i -= 2) pb.lineTo(tops[i], tops[i + 1]);
+        pb.close();
+        const path = pb.detach();
+        const breath = 0.75 + 0.25 * Math.sin(t * 0.35 + phase);
+        const paint = Skia.Paint();
+        paint.setAntiAlias(true);
+        paint.setShader(
+          Skia.Shader.MakeLinearGradient(
+            { x: 0, y: height * (base - hgt - amp) },
+            { x: 0, y: height * (base + amp) },
+            [Skia.Color(`rgba(${rgb},0)`), Skia.Color(`rgba(${rgb},${(alpha * 0.55 * breath).toFixed(3)})`), Skia.Color(`rgba(${rgb},${(alpha * breath).toFixed(3)})`)],
+            [0, 0.7, 1],
+            0
+          )
+        );
+        paint.setMaskFilter(Skia.MaskFilter.MakeBlur(0, 16, true));
+        canvas.drawPath(path, paint);
+      }
+    } catch (e) {
+      // vẽ lỗi thì khung hình này để trống
+    }
+    return rec.finishRecordingAsPicture();
+  });
+  return <Layer picture={picture} />;
+}
+
+// ---------- Mưa trên kính: mưa rơi phía sau, cứ vài giây một giọt nước chảy dài xuống kính, thỉnh thoảng sấm chớp ----------
+const DRIP_EVERY = 2.6; // giây
+const DRIP_DUR = 4.2;
+const FLASH_EVERY = 21;
+function RainOnGlass() {
+  const { width, height } = useScreenSize();
+  const clock = useAmbientClock();
+  // Vệt mưa: x, tốc độ (px/s), độ dài, độ đậm, pha
+  const streaks = useMemo(() => {
+    const out: number[] = [];
+    for (let i = 0; i < scaled(70, width, height); i++) out.push(rnd(i, 51), 700 + rnd(i, 52) * 500, 14 + rnd(i, 53) * 26, 0.08 + rnd(i, 54) * 0.18, rnd(i, 55));
+    return out;
+  }, [width, height]);
+  const picture = useDerivedValue(() => {
+    const t = clock.value / 1000;
+    const rec = Skia.PictureRecorder();
+    const canvas = rec.beginRecording(Skia.XYWHRect(0, 0, width, height));
+    try {
+      // Mưa rơi (phía sau kính: mảnh, mờ, hơi xiên)
+      const rain = Skia.Paint();
+      rain.setAntiAlias(true);
+      rain.setStyle(1);
+      rain.setStrokeWidth(1);
+      rain.setStrokeCap(1);
+      rain.setColor(Skia.Color('#D2E1F0'));
+      for (let i = 0; i < streaks.length; i += 5) {
+        const len = streaks[i + 2];
+        const y = ((streaks[i + 4] * (height + len) + streaks[i + 1] * t) % (height + len)) - len;
+        const x = streaks[i] * (width + 60) - 30 + y * 0.12;
+        rain.setAlphaf(streaks[i + 3]);
+        canvas.drawLine(x, y, x + len * 0.12, y + len, rain);
+      }
+
+      // Giọt nước chảy trên kính: nhanh dần, hơi lắc, để lại vệt ướt phía sau
+      const trail = Skia.Paint();
+      trail.setAntiAlias(true);
+      trail.setStyle(1);
+      trail.setStrokeCap(1);
+      const head = Skia.Paint();
+      head.setAntiAlias(true);
+      head.setColor(Skia.Color('#FFFFFF'));
+      const cur = Math.floor(t / DRIP_EVERY);
+      for (let k = cur - 2; k <= cur; k++) {
+        if (k < 0) continue;
+        const st = k * DRIP_EVERY + rnd(k, 61) * 0.8;
+        const p = (t - st) / DRIP_DUR;
+        if (p < 0 || p > 1) continue;
+        const x0 = width * (0.05 + rnd(k, 62) * 0.9);
+        const y0 = height * (0.05 + rnd(k, 63) * 0.45);
+        const dist = height * (0.3 + rnd(k, 64) * 0.4);
+        const r = 2.6 + rnd(k, 65) * 2;
+        const y = y0 + dist * Math.pow(p, 1.7);
+        const x = x0 + Math.sin(p * 11 + k) * 2.2;
+        const fade = p > 0.82 ? (1 - p) / 0.18 : p < 0.06 ? p / 0.06 : 1;
+        trail.setStrokeWidth(r * 0.9);
+        trail.setShader(
+          Skia.Shader.MakeLinearGradient({ x, y: y0 }, { x, y }, [Skia.Color('rgba(255,255,255,0)'), Skia.Color(`rgba(255,255,255,${(0.16 * fade).toFixed(3)})`)], null, 0)
+        );
+        canvas.drawLine(x0, y0, x, y, trail);
+        head.setAlphaf(0.2 * fade);
+        canvas.drawOval(Skia.XYWHRect(x - r, y - r * 1.15, r * 2, r * 2.3), head);
+        head.setAlphaf(0.55 * fade);
+        canvas.drawCircle(x - r * 0.35, y - r * 0.45, Math.max(0.6, r * 0.28), head);
+      }
+
+      // Sấm chớp: ~21 giây một lần, hai lần loé nhanh rồi tắt dần, sáng từ trên trời xuống
+      const c = Math.floor(t / FLASH_EVERY);
+      const local = t - c * FLASH_EVERY - (5 + rnd(c, 71) * 11);
+      if (local >= 0 && local < 0.75) {
+        const a =
+          local < 0.06 ? (local / 0.06) * 0.5
+          : local < 0.14 ? 0.5 - ((local - 0.06) / 0.08) * 0.42
+          : local < 0.22 ? 0.08 + ((local - 0.14) / 0.08) * 0.32
+          : 0.4 * (1 - (local - 0.22) / 0.53);
+        const flash = Skia.Paint();
+        flash.setShader(
+          Skia.Shader.MakeLinearGradient({ x: 0, y: 0 }, { x: 0, y: height }, [Skia.Color(`rgba(235,240,255,${a.toFixed(3)})`), Skia.Color(`rgba(235,240,255,${(a * 0.25).toFixed(3)})`)], null, 0)
+        );
+        canvas.drawRect(Skia.XYWHRect(0, 0, width, height), flash);
+      }
+    } catch (e) {
+      // vẽ lỗi thì khung hình này để trống
+    }
+    return rec.finishRecordingAsPicture();
+  });
+  return <Layer picture={picture} />;
+}
+
+// ---------- Neon: lưới phối cảnh chạy về phía người xem dưới chân trời, thỉnh thoảng nháy glitch ----------
+const GLITCH_EVERY = 6.5;
+function NeonGrid() {
+  const { width, height } = useScreenSize();
+  const clock = useAmbientClock();
+  const picture = useDerivedValue(() => {
+    const t = clock.value / 1000;
+    const rec = Skia.PictureRecorder();
+    const canvas = rec.beginRecording(Skia.XYWHRect(0, 0, width, height));
+    try {
+      const hy = height * 0.62;
+      const cx = width / 2;
+      const glow = Skia.Paint();
+      glow.setAntiAlias(true);
+      glow.setStyle(1);
+      glow.setStrokeWidth(3);
+      glow.setMaskFilter(Skia.MaskFilter.MakeBlur(0, 4, true));
+      const core = Skia.Paint();
+      core.setAntiAlias(true);
+      core.setStyle(1);
+      core.setStrokeWidth(1);
+      // Đường dọc: hội tụ về điểm giữa chân trời
+      const V = 16;
+      for (let i = 0; i <= V; i++) {
+        const bx = cx + (i - V / 2) * width * 0.2;
+        glow.setColor(Skia.Color('rgba(255,61,203,0.35)'));
+        core.setColor(Skia.Color('rgba(255,120,225,0.55)'));
+        canvas.drawLine(cx, hy, bx, height, glow);
+        canvas.drawLine(cx, hy, bx, height, core);
+      }
+      // Đường ngang: trôi dần xuống (lại gần), càng gần càng thưa và sáng
+      const Hn = 10;
+      for (let k = 0; k < Hn; k++) {
+        const z = ((k + t * 0.55) % Hn) / Hn;
+        const y = hy + (height - hy) * Math.pow(z, 2.2);
+        const a = 0.15 + 0.6 * z;
+        glow.setColor(Skia.Color(`rgba(0,240,255,${(a * 0.6).toFixed(3)})`));
+        core.setColor(Skia.Color(`rgba(120,250,255,${a.toFixed(3)})`));
+        canvas.drawLine(0, y, width, y, glow);
+        canvas.drawLine(0, y, width, y, core);
+      }
+      // Glitch: vài vệt màu lệch ngang trong ~0,3 giây, mỗi 6,5 giây
+      const c = Math.floor(t / GLITCH_EVERY);
+      const local = t - c * GLITCH_EVERY - (2 + rnd(c, 81) * 3);
+      if (local >= 0 && local < 0.3) {
+        const step = Math.floor(t * 20);
+        const bar = Skia.Paint();
+        for (let j = 0; j < 5; j++) {
+          const y = rnd(step, 90 + j) * height;
+          const h = 2 + rnd(step, 100 + j) * 14;
+          const dx = (rnd(step, 110 + j) - 0.5) * 40;
+          bar.setColor(Skia.Color(j % 2 ? 'rgba(0,240,255,0.28)' : 'rgba(255,61,203,0.28)'));
+          canvas.drawRect(Skia.XYWHRect(dx, y, width, h), bar);
+        }
+        bar.setColor(Skia.Color('rgba(255,255,255,0.08)'));
+        canvas.drawRect(Skia.XYWHRect(0, rnd(step, 120) * height, width, 1.5), bar);
       }
     } catch (e) {
       // vẽ lỗi thì khung hình này để trống

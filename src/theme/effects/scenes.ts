@@ -35,3 +35,53 @@ export function meteorSkySvg(W: number, H: number): string {
   s += '</svg>';
   return s;
 }
+
+// ---------- Cực quang: trời đêm xanh đen ngả ngọc ở chân trời, sao thưa hơn trời sao băng ----------
+export function auroraSkySvg(W: number, H: number): string {
+  const rnd = seeded(29);
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+  s += `<defs><linearGradient id="asky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#020812"/><stop offset="0.55" stop-color="#05131F"/><stop offset="1" stop-color="#082027"/></linearGradient></defs>`;
+  s += `<rect width="${W}" height="${H}" fill="url(#asky)"/>`;
+  for (let i = 0; i < 150; i++) {
+    const r = rnd() < 0.07 ? 1.1 + rnd() * 0.5 : 0.35 + rnd() * 0.6;
+    const y = rnd() * H * 0.85;
+    s += `<circle cx="${f(rnd() * W)}" cy="${f(y)}" r="${f(r)}" fill="#FFFFFF" opacity="${f((0.3 + rnd() * 0.55) * (1 - y / H / 1.4))}"/>`;
+  }
+  return s + '</svg>';
+}
+
+// ---------- Mưa trên kính: nền xám, rất nhiều giọt nước đọng lốm đốm (có viền sáng / tối như giọt thật) ----------
+export function rainGlassSvg(W: number, H: number): string {
+  const rnd = seeded(47);
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+  s += `<defs>
+    <linearGradient id="rbg" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#3A4048"/><stop offset="0.6" stop-color="#2C3137"/><stop offset="1" stop-color="#23272C"/></linearGradient>
+    <radialGradient id="drop" cx="0.42" cy="0.38" r="0.62"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.26"/><stop offset="0.65" stop-color="#FFFFFF" stop-opacity="0.08"/><stop offset="1" stop-color="#000000" stop-opacity="0.32"/></radialGradient>
+  </defs>`;
+  s += `<rect width="${W}" height="${H}" fill="url(#rbg)"/>`;
+  const n = Math.round(460 * Math.min(1.6, (W * H) / (390 * 844)));
+  for (let i = 0; i < n; i++) {
+    const big = rnd() < 0.16;
+    const r = big ? 3.5 + rnd() * 4.5 : 1 + rnd() * 2.2;
+    const x = rnd() * W;
+    const y = rnd() * H;
+    const ry = r * (1 + rnd() * 0.25); // hơi dẹt theo chiều dọc
+    s += `<ellipse cx="${f(x)}" cy="${f(y)}" rx="${f(r)}" ry="${f(ry)}" fill="url(#drop)"/>`;
+    if (r > 1.6) s += `<circle cx="${f(x - r * 0.35)}" cy="${f(y - ry * 0.4)}" r="${f(Math.max(0.5, r * 0.22))}" fill="#FFFFFF" opacity="0.6"/>`;
+  }
+  return s + '</svg>';
+}
+
+// ---------- Neon: trời tím đen, chân trời phát sáng hồng (lưới chuyển động vẽ riêng) ----------
+export function neonSkySvg(W: number, H: number): string {
+  const horizon = H * 0.62;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+  s += `<defs>
+    <linearGradient id="nbg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#07030F"/><stop offset="0.55" stop-color="#160A2B"/><stop offset="0.62" stop-color="#2A0D3D"/><stop offset="1" stop-color="#0A0514"/></linearGradient>
+    <linearGradient id="nglow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF3DCB" stop-opacity="0"/><stop offset="1" stop-color="#FF3DCB" stop-opacity="0.35"/></linearGradient>
+  </defs>`;
+  s += `<rect width="${W}" height="${H}" fill="url(#nbg)"/>`;
+  s += `<rect x="0" y="${f(horizon - H * 0.16)}" width="${W}" height="${f(H * 0.16)}" fill="url(#nglow)"/>`;
+  s += `<rect x="0" y="${f(horizon - 0.75)}" width="${W}" height="1.5" fill="#FF7AE0" opacity="0.85"/>`;
+  return s + '</svg>';
+}

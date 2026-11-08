@@ -184,7 +184,11 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
   };
 
   // Bóng đổ nhẹ để dock tách khỏi nội dung phía sau; đang kéo thì nổi cao hơn
-  const glow = lit
+  // Bộ Neon: dock phát sáng hồng neon thay cho bóng đen
+  const neon = theme.preset === 'neon';
+  const glow = neon
+    ? { shadowColor: theme.colors.accent, shadowOpacity: lit ? 0.85 : 0.6, shadowRadius: lit ? 24 : 18, shadowOffset: { width: 0, height: 0 }, elevation: 12 }
+    : lit
     ? { shadowColor: '#000', shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 14 }
     : { shadowColor: '#000', shadowOpacity: 0.22, shadowRadius: 22, shadowOffset: { width: 0, height: 10 }, elevation: 10 };
 
