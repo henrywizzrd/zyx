@@ -1,4 +1,6 @@
 import { SplitPane } from '../components/SplitPane';
+import { ScalePressable } from '../components/PressScale';
+import { Stagger } from '../components/Stagger';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BlurView } from 'expo-blur';
@@ -611,7 +613,11 @@ export function SearchScreen() {
                   {artists.length > 0 && head(tr('search.filter.artist'))}
                   {artists.map(cardRow)}
                   {songs.length > 0 && head(tr('search.filter.song'))}
-                  {songs.map((t) => songRow(t, tr('kind.song')))}
+                  {songs.map((t, i) => (
+                    <Stagger key={`st-${t.id}`} i={i}>
+                      {songRow(t, tr('kind.song'))}
+                    </Stagger>
+                  ))}
                   {videos.length > 0 && head(tr('kind.video'), true)}
                   {videos.map((t) => songRow(t, tr('kind.video')))}
                   {albums.length > 0 && head(tr('search.filter.album'))}
@@ -728,7 +734,7 @@ function GenreTile({ title, color, width, height, onPress }: { title: string; co
   const rgb = rgbOf(color);
   const dark = theme.colors.glassTint === 'dark';
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.tile, { width, height, borderWidth: 1.2, borderColor: `rgba(${rgb},0.8)`, opacity: pressed ? 0.75 : 1 }]}>
+    <ScalePressable onPress={onPress} style={[styles.tile, { width, height, borderWidth: 1.2, borderColor: `rgba(${rgb},0.8)` }]}>
       {Platform.OS === 'ios' && glass.intensity > 0 && <BlurView intensity={glass.intensity} tint={theme.colors.glassTint} style={StyleSheet.absoluteFill} />}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(${rgb},${glass.alpha(dark ? 0.3 : 0.4, dark ? 0.55 : 0.7).toFixed(2)})` }]} />
       <Text numberOfLines={2} style={[styles.tileTitle, { color: dark ? '#FFFFFF' : theme.colors.text }]}>{title}</Text>
@@ -738,7 +744,7 @@ function GenreTile({ title, color, width, height, onPress }: { title: string; co
         color={dark ? `rgb(${rgb})` : '#FFFFFF'}
         style={{ position: 'absolute', right: 12, bottom: 10, textShadowColor: `rgba(${rgb},0.9)`, textShadowRadius: 12 }}
       />
-    </Pressable>
+    </ScalePressable>
   );
 }
 

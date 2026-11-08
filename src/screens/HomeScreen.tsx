@@ -1,4 +1,6 @@
 import { SplitPane } from '../components/SplitPane';
+import { ScalePressable } from '../components/PressScale';
+import { Stagger } from '../components/Stagger';
 import { loadTrendingSummed, trendingId } from '../data/trending';
 import { PostCard } from '../components/PostCard';
 import { feedKey, useFeed } from '../components/FeedList';
@@ -6,9 +8,9 @@ import RNMaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, PixelRatio, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useContentInsets } from '../components/FloatingDock';
@@ -24,6 +26,7 @@ import { SmartImage } from '../components/Cover';
 import { cacheGet, cacheSet, createPlaylist, getPlaylists, getRecent, getTopArtists, RecentItem, useDbVersion } from '../data/db';
 
 const PAD = 16;
+type ScrollViewRef = React.ComponentRef<typeof ScrollView>;
 const CARD = 148;
 
 
@@ -201,7 +204,7 @@ function CoverCard({ title, subtitle, thumb, round, onPress, onLongPress, icon }
   const { theme } = useTheme();
   const r = round ? CARD / 2 : 8;
   return (
-    <Pressable onPress={onPress} onLongPress={onLongPress} style={{ width: CARD }}>
+    <ScalePressable onPress={onPress} onLongPress={onLongPress} style={{ width: CARD }}>
       {thumb ? (
         // Xin ảnh đúng cỡ hiển thị thật trên màn hình (CARD × mật độ điểm ảnh, iPhone là ×3).
         // Ảnh bài hát lưu từ kết quả tìm kiếm chỉ có 120px nên phóng lên 148pt sẽ bị mờ
@@ -219,13 +222,13 @@ function CoverCard({ title, subtitle, thumb, round, onPress, onLongPress, icon }
       {!!subtitle && (
         <Text numberOfLines={2} style={{ color: theme.colors.textSecondary, fontSize: 12, textAlign: round ? 'center' : 'left' }}>{subtitle}</Text>
       )}
-    </Pressable>
+    </ScalePressable>
   );
 }
 
-function HRow({ children }: { children: React.ReactNode }) {
+function HRow({ children, scrollRef }: { children: React.ReactNode; scrollRef?: React.RefObject<ScrollViewRef | null> }) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingHorizontal: PAD }} style={{ marginHorizontal: -PAD }}>
+    <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingHorizontal: PAD }} style={{ marginHorizontal: -PAD }}>
       {children}
     </ScrollView>
   );
@@ -265,10 +268,10 @@ function MyPlaylists() {
   const dbv = useDbVersion();
   const lists = useMemo(() => getPlaylists().slice(0, 7), [dbv]);
   const chip = (key: string, title: string, onPress: () => void, cover: React.ReactNode) => (
-    <Pressable key={key} onPress={onPress} style={[styles.chip, { backgroundColor: theme.colors.surface }]}>
+    <ScalePressable key={key} onPress={onPress} outerStyle={{ width: '48.8%' }} style={[styles.chip, { width: '100%', backgroundColor: theme.colors.surface }]}>
       {cover}
       <Text numberOfLines={2} style={[styles.chipTitle, { color: theme.colors.text }]}>{title}</Text>
-    </Pressable>
+    </ScalePressable>
   );
   const iconCover = (name: keyof typeof Ionicons.glyphMap, bg: string, fg = '#FFFFFF') => (
     <View style={[styles.chipCover, { backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }]}>
@@ -334,14 +337,53 @@ function useOpenContext() {
 }
 
 // list: màn hình ngang — xếp dọc thành các ô giống "Playlist của tôi" thay vì hàng trượt ngang
+// Danh sách ĐỨNG YÊN trong lúc dùng app: bấm một mục cũ (mục đó được đưa lên đầu trong dữ liệu) thì hàng không bị
+// xếp lại, không bị giật về đầu nữa. Chỉ làm mới khi bấm nút ↻ cạnh tiêu đề, hoặc lần mở app sau.
+// Có mục mới chưa hiện thì nút ↻ sáng màu nhấn
 function Recent({ list }: { list?: boolean }) {
   const { theme } = useTheme();
   const t = useT();
   const dbv = useDbVersion();
-  const items = useMemo(() => getRecent(12), [dbv]);
+  const [ver, setVer] = useState(0);
+  const items = useMemo(() => getRecent(12), [ver]); // eslint-disable-line react-hooks/exhaustive-deps
+  const latest = useMemo(() => getRecent(12), [dbv]);
+  const sig = (l: RecentItem[]) => l.map((r) => `${r.kind}:${r.id}`).join('|');
+  const stale = sig(latest) !== sig(items);
+  // Chưa có mục nào thì hiện ngay khi có (không bắt bấm ↻ cho lần đầu)
+  useEffect(() => {
+    if (!items.length && latest.length) setVer((v) => v + 1);
+  }, [latest]); // eslint-disable-line react-hooks/exhaustive-deps
+  const rowRef = useRef<ScrollViewRef>(null);
+  const spin = useSharedValue(0);
+  const spinStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value * 360}deg` }] }));
+  const reload = () => {
+    spin.value = 0;
+    spin.value = withTiming(1, { duration: 500 });
+    setVer((v) => v + 1);
+    rowRef.current?.scrollTo({ x: 0, animated: true });
+  };
   const { open } = useOpenContext();
+  const head = (
+    <SectionTitle
+      title={t('home.section.recent')}
+      right={
+        items.length ? (
+          <Pressable onPress={reload} hitSlop={10} style={[styles.reloadBtn, { backgroundColor: stale ? theme.colors.accent : theme.colors.surface }]}>
+            <Animated.View style={spinStyle}>
+              <Ionicons name="refresh" size={18} color={stale ? theme.colors.onAccent : theme.colors.text} />
+            </Animated.View>
+          </Pressable>
+        ) : undefined
+      }
+    />
+  );
   if (!items.length) {
-    return <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>{t('home.recentEmpty')}</Text>;
+    return (
+      <>
+        {head}
+        <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>{t('home.recentEmpty')}</Text>
+      </>
+    );
   }
   const label: Record<string, string> = {
     search: t('kind.song'), liked: t('kind.playlist'), local: t('kind.playlist'), shared: t('kind.playlist'), playlist: t('kind.playlist'),
@@ -350,6 +392,8 @@ function Recent({ list }: { list?: boolean }) {
   // Màn hình ngang: ảnh bìa to, 2 cột, trải dọc xuống (giống lưới trong Thư viện)
   if (list) {
     return (
+      <>
+      {head}
       <View style={styles.grid}>
         {items.map((r) => (
           <Pressable key={`${r.kind}:${r.id}`} onPress={() => open(r)} style={({ pressed }) => [styles.bigItem, pressed && { opacity: 0.7 }]}>
@@ -368,10 +412,13 @@ function Recent({ list }: { list?: boolean }) {
           </Pressable>
         ))}
       </View>
+      </>
     );
   }
   return (
-    <HRow>
+    <>
+    {head}
+    <HRow scrollRef={rowRef}>
       {items.map((r) => (
         <CoverCard
           key={`${r.kind}:${r.id}`}
@@ -383,6 +430,7 @@ function Recent({ list }: { list?: boolean }) {
         />
       ))}
     </HRow>
+    </>
   );
 }
 
@@ -472,8 +520,8 @@ function Trending() {
             {data.gathering ? ` • ${t('home.trendingGathering', { have: data.gathering.have, need: data.gathering.need })}` : ''}
           </Text>
           {data.songs.slice(0, 10).map((s, i) => (
+            <Stagger key={`${s.id}:${i}:${region}:${range}`} i={i}>
             <Pressable
-              key={`${s.id}:${i}`}
               onPress={() => playTrack(s, data.songs, ctx!)}
               onLongPress={() => songMenu(s)}
               style={styles.rankRow}
@@ -488,6 +536,7 @@ function Trending() {
                 <Ionicons name="ellipsis-horizontal" size={20} color={textSecondary} />
               </Pressable>
             </Pressable>
+            </Stagger>
           ))}
           {data.playlistId && (
             <Pressable
@@ -639,12 +688,7 @@ export function HomeScreen() {
       case 'myPlaylists':
         return <MyPlaylists />;
       case 'recent':
-        return (
-          <>
-            <SectionTitle title={t('home.section.recent')} />
-            <Recent list={landscape} />
-          </>
-        );
+        return <Recent list={landscape} />;
       case 'feed':
         return <Feed />;
       case 'trending':
@@ -751,6 +795,7 @@ const styles = StyleSheet.create({
   chipTitle: { flex: 1, marginHorizontal: 10, fontSize: 13, fontWeight: '700' },
   cardTitle: { marginTop: 8, fontSize: 14, fontWeight: '700' },
   pill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14 },
+  reloadBtn: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   regionBox: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
   regionList: { marginTop: 6, minWidth: 190, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', paddingVertical: 4 },
   regionRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, height: 42 },

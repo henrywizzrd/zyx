@@ -19,7 +19,8 @@ import { FxMode, fxLogText, setFxMode, useFxMode } from '../player/fxEngine';
 import { BlurView } from 'expo-blur';
 import RNMaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
-import RAnimated, { Easing as REasing, interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import RAnimated, { Easing as REasing, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import { PlayPauseGlyph, SkipGlyph, useBounce } from '../components/PlayerIcons';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useScreenSize } from '../components/ScreenSize';
 
@@ -30,7 +31,23 @@ const USE_NATIVE = Platform.OS !== 'web';
 
 const fmt = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`;
 const SOFT = 'rgba(255,255,255,0.65)';
-const ON = '#1ED760'; // màu nút đang bật (xanh lá kiểu Spotify)
+// Màu nút đang bật (trộn, lặp, lời, chế độ âm thanh...): theo màu nhấn của theme, gán lại mỗi lần vẽ màn hình.
+// Màu nhấn tối quá (vd. nâu cà phê) thì pha trắng cho sáng lên, không thì chìm trên nền tối của player
+let ON = '#1ED760';
+function onColor(hex: string) {
+  const h = hex.replace('#', '').slice(0, 6);
+  const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
+  if (Number.isNaN(n)) return '#1ED760';
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  if (lum < 0.45) {
+    const k = Math.min(0.6, 0.45 - lum + 0.25);
+    r = Math.round(r + (255 - r) * k);
+    g = Math.round(g + (255 - g) * k);
+    b = Math.round(b + (255 - b) * k);
+  }
+  return `rgb(${r},${g},${b})`;
+}
 
 // Nút lặp: hai mũi tên chạy vòng quanh thành hình vuông bo góc (vẽ bằng Skia, khung 24×24).
 //  - tắt: trắng mờ
@@ -64,9 +81,9 @@ function LyricsIcon({ on }: { on: boolean }) {
   );
 }
 
-function RepeatIcon({ mode }: { mode: 'off' | 'all' | 'one' }) {
+function RepeatIcon({ mode, color: forced }: { mode: 'off' | 'all' | 'one'; color?: string }) {
   const on = mode !== 'off';
-  const color = on ? ON : SOFT;
+  const color = forced ?? (on ? ON : SOFT);
   const path = React.useMemo(() => skia?.Skia.Path.MakeFromSVGString(REPEAT_PATH) ?? null, []);
   return (
     <View style={{ alignItems: 'center' }}>
@@ -82,13 +99,88 @@ function RepeatIcon({ mode }: { mode: 'off' | 'all' | 'one' }) {
         )}
         {mode === 'one' && (
           <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
-            <Text style={{ color: ON, fontSize: 9, fontWeight: '900', lineHeight: 11, includeFontPadding: false }}>1</Text>
+            <Text style={{ color, fontSize: 9, fontWeight: '900', lineHeight: 11, includeFontPadding: false }}>1</Text>
           </View>
         )}
       </View>
 
     </View>
   );
+}
+
+// Chuyển bài: ảnh bìa và tên bài trượt vào từ phía bài mới (bấm tới / tự sang bài: từ phải; bấm lùi: từ trái),
+// mờ dần lên và nảy nhẹ về đúng cỡ
+let swapDir = 1;
+function TrackSwap({ id, children, dist = 36, style }: { id: string; children: React.ReactNode; dist?: number; style?: any }) {
+  const x = useSharedValue(0);
+  const o = useSharedValue(1);
+  const sc = useSharedValue(1);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    x.value = swapDir * dist;
+    o.value = 0.2;
+    sc.value = 0.94;
+    x.value = withSpring(0, { damping: 18, stiffness: 180 });
+    o.value = withTiming(1, { duration: 280 });
+    sc.value = withSpring(1, { damping: 14, stiffness: 200 });
+    swapDir = 1;
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const st = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateX: x.value }, { scale: sc.value }] }));
+  return <RAnimated.View style={[style, st]}>{children}</RAnimated.View>;
+}
+
+// Nút trong hàng điều khiển: thu nhỏ khi nhấn, nảy lại khi thả
+function CtlBtn({ onPress, style, children }: { onPress: () => void; style?: any; children: React.ReactNode }) {
+  const b = useBounce();
+  return (
+    <Pressable onPress={onPress} onPressIn={b.onPressIn} onPressOut={b.onPressOut} hitSlop={10} style={style}>
+      <RAnimated.View style={[{ alignItems: 'center', justifyContent: 'center' }, b.style]}>{children}</RAnimated.View>
+    </Pressable>
+  );
+}
+
+// Thả tim: biểu tượng nảy to rồi về, 6 hạt nhỏ toả ra xung quanh rồi tan (chỉ lúc bật, tắt thì chỉ nảy nhẹ)
+function LikePop({ on, color, children }: { on: boolean; color: string; children: React.ReactNode }) {
+  const pop = useSharedValue(1);
+  const burst = useSharedValue(0);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    pop.value = 0.6;
+    pop.value = withSpring(1, { damping: 7, stiffness: 320 });
+    if (on) {
+      burst.value = 0;
+      burst.value = withTiming(1, { duration: 520, easing: REasing.out(REasing.cubic) });
+    }
+  }, [on]); // eslint-disable-line react-hooks/exhaustive-deps
+  const iconStyle = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
+  return (
+    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <Particle key={i} i={i} burst={burst} color={color} />
+      ))}
+      <RAnimated.View style={iconStyle}>{children}</RAnimated.View>
+    </View>
+  );
+}
+function Particle({ i, burst, color }: { i: number; burst: { value: number }; color: string }) {
+  const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
+  const style = useAnimatedStyle(() => {
+    const t = burst.value;
+    const d = 6 + 16 * t;
+    return {
+      opacity: t <= 0 || t >= 1 ? 0 : 1 - t,
+      transform: [{ translateX: Math.cos(a) * d }, { translateY: Math.sin(a) * d }, { scale: 1 - 0.5 * t }],
+    };
+  });
+  return <RAnimated.View pointerEvents="none" style={[{ position: 'absolute', width: 5, height: 5, borderRadius: 3, backgroundColor: color }, style]} />;
 }
 
 // Nhớ đang xem lời hay ảnh bìa, để vuốt xuống rồi mở lại player vẫn giữ nguyên
@@ -100,6 +192,7 @@ const posMemo = { ax: 0, ay: 0, lx: 0, ly: 0, ok: false };
 
 export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const { theme } = useTheme();
+  ON = onColor(theme.colors.accent);
   const sheet = useActionSheet();
   // Đang mở hàng chờ / bảng thao tác: duỗi phẳng hai trang sách. Trang nghiêng 3D chồm ra phía trước nên iPhone vẽ nó
   // đè lên mọi thứ ở trên (hàng chờ, bảng "Thêm vào playlist"), kể cả khi các bảng đó nằm ở lớp trên
@@ -128,7 +221,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const FxButton = (
     <Pressable onPress={pickFx} hitSlop={10} style={styles.sideBtn}>
       <Ionicons name={fxMode === 'off' ? 'headset-outline' : 'headset'} size={22} color={fxMode === 'off' ? SOFT : ON} />
-      {fxMode !== 'off' && <View style={styles.dot} />}
+      {fxMode !== 'off' && <View style={[styles.dot, { backgroundColor: ON }]} />}
     </Pressable>
   );
   const pad = useContentInsets();
@@ -281,7 +374,9 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
 
   const LikeButton = (
     <Pressable onPress={() => track.id !== 'none' && toggleLike(track.id)} hitSlop={10} style={styles.roundBtn}>
-      <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? accent : '#FFFFFF'} />
+      <LikePop on={isLiked} color={ON}>
+        <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? ON : '#FFFFFF'} />
+      </LikePop>
     </Pressable>
   );
   const MoreButton = (
@@ -293,7 +388,9 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   // Kiểu Spotify: đã thích = vòng tròn xanh có dấu tích, chưa thích = vòng tròn viền có dấu cộng
   const SaveButton = (
     <Pressable onPress={() => track.id !== 'none' && toggleLike(track.id)} hitSlop={10} style={styles.flatBtn}>
-      <Ionicons name={isLiked ? 'checkmark-circle' : 'add-circle-outline'} size={30} color={isLiked ? ON : '#FFFFFF'} />
+      <LikePop on={isLiked} color={ON}>
+        <Ionicons name={isLiked ? 'checkmark-circle' : 'add-circle-outline'} size={30} color={isLiked ? ON : '#FFFFFF'} />
+      </LikePop>
     </Pressable>
   );
   const MoreButtonFlat = (
@@ -358,49 +455,39 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   // màn hình bị React coi là loại mới sau mỗi lần vẽ lại (thời gian bài hát đổi liên tục) nên nút bị gỡ ra
   // dựng lại giữa lúc đang bấm → lúc ăn lúc không
   const controls = (big = true) => (
-    <View style={[styles.controls, { gap: big ? 54 : 36 }]}>
-      <Pressable onPress={prev} hitSlop={12}>
-        <Ionicons name="play-back" size={big ? 40 : 32} color="#FFFFFF" />
-      </Pressable>
-      <Pressable onPress={togglePlay} hitSlop={12} style={{ width: big ? 64 : 52, alignItems: 'center' }}>
-        {loading ? (
-          <ActivityIndicator size="large" color="#FFFFFF" />
-        ) : (
-          <Ionicons name={isPlaying ? 'pause' : 'play'} size={big ? 58 : 46} color="#FFFFFF" />
-        )}
-      </Pressable>
-      <Pressable onPress={next} hitSlop={12}>
-        <Ionicons name="play-forward" size={big ? 40 : 32} color="#FFFFFF" />
-      </Pressable>
-    </View>
+    <View style={styles.spotRow}>{controlRow(big ? 1 : 0.8)}</View>
   );
 
-  // Hàng điều khiển kiểu Spotify: trộn bài | lùi | phát (nút tròn trắng) | tới | lặp
-  const spotifyControls = (
-    <View style={styles.spotRow}>
-      <Pressable onPress={toggleShuffle} hitSlop={10} style={styles.sideBtn}>
-        <Ionicons name="shuffle" size={26} color={shuffle ? ON : SOFT} />
-        {shuffle && <View style={styles.dot} />}
-      </Pressable>
-      <Pressable onPress={prev} hitSlop={12} style={styles.skipSlot}>
-        <Ionicons name="play-skip-back" size={34} color="#FFFFFF" />
-      </Pressable>
-      <Pressable onPress={togglePlay} hitSlop={10} style={styles.playBtn}>
-        {loading ? (
-          <ActivityIndicator color="#000000" />
-        ) : (
-          <Ionicons name={isPlaying ? 'pause' : 'play'} size={34} color="#000000" style={isPlaying ? undefined : { marginLeft: 4 }} />
-        )}
-      </Pressable>
-      <Pressable onPress={next} hitSlop={12} style={styles.skipSlot}>
-        <Ionicons name="play-skip-forward" size={34} color="#FFFFFF" />
-      </Pressable>
-      <Pressable onPress={cycleRepeat} hitSlop={10} style={styles.sideBtn}>
-        <RepeatIcon mode={repeat} />
-        {repeat !== 'off' && <View style={styles.dot} />}
-      </Pressable>
-    </View>
+  // Hàng điều khiển kiểu mới: trộn | ◀◀ | ▶ to (không vòng tròn) | ▶▶ | lặp.
+  // Nút đang bật đổi sang màu nhấn của theme + chấm nhỏ bên dưới; lặp 1 bài có số 1. Bấm nút nào cũng nảy nhẹ
+  const controlRow = (k: number) => (
+    <>
+      <CtlBtn onPress={toggleShuffle} style={styles.sideBtn}>
+        <Ionicons name="shuffle" size={Math.round(26 * k)} color={shuffle ? ON : '#FFFFFF'} />
+      </CtlBtn>
+      {shuffle ? <View style={[styles.dot, styles.dotLeft, { backgroundColor: ON }]} pointerEvents="none" /> : null}
+      <CtlBtn
+        onPress={() => {
+          swapDir = -1;
+          prev();
+        }}
+        style={[styles.skipSlot, { width: 52 * k }]}
+      >
+        <SkipGlyph dir="back" size={Math.round(46 * k)} />
+      </CtlBtn>
+      <CtlBtn onPress={togglePlay} style={{ width: PLAY * k, height: PLAY * k, alignItems: 'center', justifyContent: 'center' }}>
+        {loading ? <ActivityIndicator size="large" color="#FFFFFF" /> : <PlayPauseGlyph playing={isPlaying} size={Math.round(56 * k)} />}
+      </CtlBtn>
+      <CtlBtn onPress={next} style={[styles.skipSlot, { width: 52 * k }]}>
+        <SkipGlyph dir="forward" size={Math.round(46 * k)} />
+      </CtlBtn>
+      <CtlBtn onPress={cycleRepeat} style={styles.sideBtn}>
+        <RepeatIcon mode={repeat} color={repeat !== 'off' ? ON : '#FFFFFF'} />
+      </CtlBtn>
+      {repeat !== 'off' ? <View style={[styles.dot, styles.dotRight, { backgroundColor: ON }]} pointerEvents="none" /> : null}
+    </>
   );
+  const spotifyControls = <View style={styles.spotRow}>{controlRow(1)}</View>;
 
   const Volume = <VolumeBar />;
 
@@ -459,9 +546,11 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
           <StatusBar barStyle="light-content" />
           <View style={rowStyle}>
             <View style={{ justifyContent: 'center' }} {...swipe.panHandlers}>
+              <TrackSwap id={track.id}>
               <Cover track={track} size={1200} style={{ width: art, height: art, borderRadius: 12 }}>
                 <Ionicons name="musical-notes" size={48} color="rgba(255,255,255,0.8)" />
               </Cover>
+              </TrackSwap>
             </View>
             <View style={{ flex: 1, justifyContent: 'center' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -492,7 +581,10 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     const spineX = insets.left + 20 + leftW + 14; // vị trí gáy sách (giữa hai trang)
     // Mỗi trang xoay quanh MÉP TRONG (phía gáy): mép trong đứng yên, mép ngoài nghiêng về phía người xem.
     // (Trước đây xoay quanh giữa trang: nửa trong lùi ra sau mặt phẳng màn hình nên bị nền che mất → trang bị cắt cụt)
-    const SEAM = 140;
+    // Dải nối ở gáy: chỉ rộng hơn khe giữa hai trang (28) một chút, mỗi bên lấn vào trang ~12px để hai mép trang tan vào nền.
+    // (Trước đây cố định 140px: mỗi bên lấn vào trang tới 56px → trên màn hình nhỏ / Android che mất chữ đầu dòng lời
+    // và nút thích của trang trái)
+    const SEAM = 28 + 24;
     // Hàng chờ và các bảng thao tác giờ mở trong cửa sổ riêng (Modal) luôn nằm trên cùng, nên hai trang giữ nguyên độ nghiêng
     // (trước đây phải duỗi phẳng ra cho bảng khỏi bị đè → ảnh bìa và lời xê dịch mỗi lần mở bảng)
     const flat = false;
@@ -506,9 +598,11 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
             style={{ width: leftW, justifyContent: 'center', transformOrigin: 'right center', transform: [{ perspective: 1400 }, { rotateY: flat ? '0deg' : '12deg' }] }}
           >
             <View style={{ alignItems: 'center' }}>
+              <TrackSwap id={track.id}>
               <Cover track={track} size={1200} style={{ width: art, height: art, borderRadius: 10 }}>
                 <Ionicons name="musical-notes" size={40} color="rgba(255,255,255,0.8)" />
               </Cover>
+              </TrackSwap>
             </View>
             {/* Tên bài + nút thích cùng một hàng (trước đây nút thích nằm riêng phía trên ảnh, bị đẩy ra khỏi màn hình) */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 }}>
@@ -563,7 +657,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         <View style={styles.sideBtn} />
         <Pressable onPress={() => setShowLyrics((v) => !v)} hitSlop={10} style={styles.skipSlot}>
           <LyricsIcon on={showLyrics} />
-          {showLyrics && <View style={styles.dot} />}
+          {showLyrics && <View style={[styles.dot, { backgroundColor: ON }]} />}
         </Pressable>
         {/* Chế độ âm thanh: giữa nút lời và nút hàng chờ, thẳng dưới nút phát */}
         <View style={{ width: PLAY, alignItems: 'center' }}>{FxButton}</View>
@@ -603,9 +697,11 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
             <RAnimated.View style={[StyleSheet.absoluteFill, sharpArtStyle]}>
               <MaskedView style={StyleSheet.absoluteFill} maskElement={artMask}>
                 <RAnimated.View style={[StyleSheet.absoluteFill, artZoomStyle]}>
-                  <Cover track={track} size={1200} style={{ flex: 1 }}>
-                    <Ionicons name="musical-notes" size={72} color="rgba(255,255,255,0.8)" />
-                  </Cover>
+                  <TrackSwap id={track.id} dist={60} style={{ flex: 1 }}>
+                    <Cover track={track} size={1200} style={{ flex: 1 }}>
+                      <Ionicons name="musical-notes" size={72} color="rgba(255,255,255,0.8)" />
+                    </Cover>
+                  </TrackSwap>
                 </RAnimated.View>
               </MaskedView>
             </RAnimated.View>
@@ -731,8 +827,10 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
             onLayout={(e) => setBlockH(e.nativeEvent.layout.height)}
             style={[{ position: 'absolute', left: 0, top: 0, width: slotW || undefined, transformOrigin: 'left top' }, floatStyle]}
           >
-            <Text numberOfLines={1} style={styles.title}>{title}</Text>
-            <Text numberOfLines={1} style={styles.artist}>{artist}</Text>
+            <TrackSwap id={track.id}>
+              <Text numberOfLines={1} style={styles.title}>{title}</Text>
+              <Text numberOfLines={1} style={styles.artist}>{artist}</Text>
+            </TrackSwap>
           </RAnimated.View>
         </View>
 
@@ -839,5 +937,8 @@ const styles = StyleSheet.create({
   volume: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   bottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 },
   bottomBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  dot: { position: 'absolute', bottom: 0, width: 4, height: 4, borderRadius: 2, backgroundColor: ON },
+  dot: { position: 'absolute', bottom: 0, width: 4, height: 4, borderRadius: 2 },
+  // Chấm "đang bật" của nút trộn / lặp (nút nằm trong hàng giãn đều nên chấm đặt theo mép trái / phải hàng)
+  dotLeft: { left: 18, bottom: -2 },
+  dotRight: { right: 18, bottom: -2 },
 });

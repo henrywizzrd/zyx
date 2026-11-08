@@ -3,6 +3,25 @@ import { Cover } from './Cover';
 import { playerOrigin } from './PlayerTransition';
 import { Animated, Easing, LayoutAnimation, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import RAnimated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+
+// Biểu tượng tab: vừa được chọn thì nhún xuống rồi nảy lên (kèm nhảy nhẹ lên trên) rồi về chỗ
+function DockIcon({ active, children }: { active: boolean; children: React.ReactNode }) {
+  const sc = useSharedValue(1);
+  const y = useSharedValue(0);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (!active) return;
+    sc.value = withSequence(withTiming(0.78, { duration: 90 }), withSpring(1, { damping: 6, stiffness: 300 }));
+    y.value = withSequence(withTiming(-5, { duration: 120 }), withSpring(0, { damping: 8, stiffness: 260 }));
+  }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
+  const st = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }, { scale: sc.value }] }));
+  return <RAnimated.View style={[{ alignItems: 'center' }, st]}>{children}</RAnimated.View>;
+}
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { GlassFill } from './Glass';
@@ -249,7 +268,9 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
                   onPress={() => onChange(id)}
                   style={{ width: cellW, height: cellH, alignItems: 'center', justifyContent: 'center' }}
                 >
-                  <Ionicons name={ICONS[id]} size={labels ? 25 : 27} color={color} />
+                  <DockIcon active={isActive}>
+                    <Ionicons name={ICONS[id]} size={labels ? 25 : 27} color={color} />
+                  </DockIcon>
                   {labels && <Text numberOfLines={1} style={{ color, fontSize: 11, fontWeight: '600', marginTop: 3 }}>{t(LABELS[id])}</Text>}
                 </Pressable>
               );

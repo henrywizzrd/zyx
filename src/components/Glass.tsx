@@ -2,6 +2,9 @@ import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import RNMaskedView from '@react-native-masked-view/masked-view';
+
+const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
 import { useTheme } from '../theme/ThemeProvider';
 
 // Lớp kính mờ (frosted) phủ kín khung chứa nó, đặt làm con đầu tiên của dock, mini player, popup...
@@ -46,20 +49,28 @@ export function GlassFill({ radius = 0, solid = 0, slab = false }: { radius?: nu
             locations={[0, 0.45, 1]}
             style={StyleSheet.absoluteFill}
           />
-          {/* Cạnh kính: sáng ở trên, tối nhẹ ở dưới */}
+          {/* Cạnh kính: một đường viền mảnh ĐỀU bốn phía, cộng thêm lớp viền sáng hơn chỉ ở phần trên, mờ dần xuống
+              (ánh đèn chiếu từ trên). Trước đây mỗi cạnh một màu (trên rất sáng, dưới gần như mất) nên ở các góc bo
+              thấy rõ chỗ đổi màu, nhìn như viền trên đậm còn viền dưới bị nhạt hẳn */}
           <View
             style={[
               StyleSheet.absoluteFill,
-              {
-                borderRadius: radius,
-                borderWidth: 1,
-                borderTopColor: glassTint === 'dark' ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.9)',
-                borderLeftColor: glassTint === 'dark' ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.6)',
-                borderRightColor: glassTint === 'dark' ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.6)',
-                borderBottomColor: glassTint === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-              },
+              { borderRadius: radius, borderWidth: 1, borderColor: glassTint === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.65)' },
             ]}
           />
+          {Platform.OS !== 'web' && (
+            <MaskedView
+              style={StyleSheet.absoluteFill}
+              maskElement={<LinearGradient colors={['#000', 'transparent']} locations={[0, 0.55]} style={{ flex: 1 }} />}
+            >
+              <View
+                style={[
+                  StyleSheet.absoluteFill,
+                  { borderRadius: radius, borderWidth: 1, borderColor: glassTint === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.35)' },
+                ]}
+              />
+            </MaskedView>
+          )}
         </>
       ) : (
         <View style={[StyleSheet.absoluteFill, { borderRadius: radius, borderWidth: StyleSheet.hairlineWidth, borderColor: border }]} />

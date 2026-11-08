@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Stagger } from '../components/Stagger';
 import { loadTrendingSummed, parseTrendingId } from '../data/trending';
 import { FadeBottom } from '../components/FadeBottom';
 import { ActivityIndicator, Image, PixelRatio, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
@@ -386,8 +387,10 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
   handlers.current.menu = menuFor;
   const rowExtra = `${track.id}:${liked.size}:${text}`;
   const renderRow = useCallback(
-    ({ item }: { item: Row }) => (
-      <SongRow item={item} playing={item.id === track.id} isLiked={liked.has(item.id)} showThumb={!isAlbum} handlers={handlers} colors={theme.colors} />
+    ({ item, index }: { item: Row; index: number }) => (
+      <Stagger i={index}>
+        <SongRow item={item} playing={item.id === track.id} isLiked={liked.has(item.id)} showThumb={!isAlbum} handlers={handlers} colors={theme.colors} />
+      </Stagger>
     ),
     [track.id, liked, isAlbum, theme.colors]
   );
