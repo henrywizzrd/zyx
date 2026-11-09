@@ -5,11 +5,14 @@ appId: com.henrywizzrd.zyx
 - launchApp:
     stopApp: true
 - startRecording: zyx-run
-- runFlow:
-    when:
-      visible: "Guest|Khách"
-    commands:
-      - tapOn: "Guest|Khách"
+# Màn đăng nhập hiện chậm trên máy ảo: đợi nó (tối đa 60s) rồi chọn "Khách"
+- extendedWaitUntil:
+    visible: "Guest|Khách"
+    timeout: 60000
+    optional: true
+- tapOn:
+    text: "Guest|Khách"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: "trending-0"
