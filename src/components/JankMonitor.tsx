@@ -24,7 +24,8 @@ export function useRenderProbe(name: string, deps: Record<string, unknown>) {
   n.current++;
   useLayoutEffect(() => {
     const dt = performance.now() - t0;
-    if (dt < 50 || justResumed()) return;
+    // > 1,5s: màn đang ẩn (đóng băng) được vẽ sẵn, tới lúc mở lại mới hiện ra — không phải khựng thật, bỏ qua
+    if (dt < 50 || dt > 1500 || justResumed()) return;
     const why = changed == null ? 'lần đầu' : changed.length ? `đổi: ${changed.join(', ')}` : 'trang cha vẽ lại / state riêng';
     log('jank', `vẽ lại ${name}: ${Math.round(dt)}ms (lần ${n.current}) · ${why}`);
   });

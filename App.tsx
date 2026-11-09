@@ -53,6 +53,9 @@ import { AuthGate } from './src/screens/AuthGate';
 // Các màn hình tab không nhận props: bọc memo để App vẽ lại (đổi tab, mở trang...) thì chúng không phải vẽ lại theo.
 // Chúng vẫn tự cập nhật khi theme, dữ liệu, player... đổi (qua context)
 const HomeTab = React.memo(HomeScreen);
+// Màn player nặng (~55ms mỗi lần vẽ): trước đây mỗi lần khung app vẽ lại (đổi tab, mở / đóng player, bật tắt hiệu ứng nền)
+// là player vẽ lại theo, 2–3 lần cho mỗi lần mở / đóng → luồng JS khựng ~300ms. Giờ chỉ vẽ lại khi chính nó cần
+const NowPlayingMemo = React.memo(NowPlayingScreen);
 const SearchTab = React.memo(SearchScreen);
 const LibraryTab = React.memo(LibraryScreen);
 const SettingsTab = React.memo(SettingsScreen);
@@ -229,6 +232,10 @@ function Root() {
     setLogContext(tab === 'player' ? 'player' : page ? `${tab} › ${page.type}${'title' in page ? ` "${page.title}"` : 'name' in page ? ` "${page.name}"` : ''}` : tab);
   }, [tab, page]);
   const shown = tab === 'player' ? lastTab : tab; // đang mở player thì vẫn vẽ tab phía sau
+  // Hàm đóng player cố định (không tạo mới mỗi lần vẽ) để màn player không phải vẽ lại theo khung app
+  const lastTabRef = useRef(lastTab);
+  lastTabRef.current = lastTab;
+  const closePlayer = useCallback(() => setTab(lastTabRef.current), []);
   useRenderProbe('khung app', { tab, lastTab, playerUp, ambientOff, stack: nav.stack, theme, landscape });
   // Tab đã mở thì giữ lại (chỉ ẩn đi), không dựng lại từ đầu mỗi lần bấm dock.
   // Trước đây mỗi lần đổi tab là dựng lại cả màn hình (Home, Thư viện...), luồng JS bận một lúc nên bấm dock tiếp bị "đơ"
@@ -307,7 +314,7 @@ function Root() {
             <FloatingDock active={tab} onChange={go} hidden={tab === 'player'} />
           )}
           <PlayerTransition open={tab === 'player'} onReopen={() => setTab('player')} onClose={() => setTab(lastTab)} onClosed={() => setPlayerUp(false)} onOpened={() => setAmbientOff(true)}>
-          <NowPlayingScreen onClose={() => setTab(lastTab)} />
+          <NowPlayingMemo onClose={closePlayer} />
         </PlayerTransition>
       </View>
     </View>

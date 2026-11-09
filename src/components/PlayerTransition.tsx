@@ -139,7 +139,9 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
         unmountTimer.current = null;
       }
       flung.value = 0; // mở lại giữa lúc đang thu theo cú vuốt: lần đóng sau phải chạy bình thường
+      let justMounted = false;
       if (!mountedRef.current) {
+        justMounted = true;
         // Giảm chuyển động: "điểm xuất phát" là cả màn hình → không phóng to / dịch chuyển, chỉ còn mờ dần
         const o = reduced ? { x: 0, y: 0, w: W, h: H, r: 0 } : playerOrigin.current ?? { x: W / 2 - 24, y: H - 120, w: 48, h: 48, r: 24 };
         artOff.value = reduced ? 1 : 0;
@@ -153,7 +155,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
         setMounted(true);
       }
       setMoving(true);
-      beginMotion('mở player', `${sized.value ? 'từ viên mini player' : 'từ bong bóng'}${frozenRef.current && !warmRef.current ? ', màn player đang ngủ (phải vẽ lại)' : ''}`);
+      beginMotion('mở player', `${sized.value ? 'từ viên mini player' : 'từ bong bóng'} ${Math.round(ow.value)}×${Math.round(oh.value)}${mountedRef.current && !justMounted ? ' (mở lại khi chưa gỡ xong)' : ''}${frozenRef.current && !warmRef.current ? ', màn player đang ngủ (phải vẽ lại)' : ''}`);
       p.value = withSpring(1, SPRING, (done) => {
         if (done) runOnJS(stopMoving)();
       });
