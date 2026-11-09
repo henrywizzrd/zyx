@@ -23,7 +23,7 @@ adb logcat -c
 adb shell dumpsys gfxinfo $PKG reset > /dev/null
 export PATH="$PATH:$HOME/.maestro/bin"
 cd "$OUT"
-maestro test "$GITHUB_WORKSPACE/.maestro/flow.yaml" --test-output-dir "$OUT/maestro" > "$OUT/maestro.txt" 2>&1 || echo "Kịch bản dừng giữa chừng (xem maestro.txt)" > "$OUT/FLOW_FAILED.txt"
+timeout 1500 maestro test "$GITHUB_WORKSPACE/.maestro/flow.yaml" --test-output-dir "$OUT/maestro" > "$OUT/maestro.txt" 2>&1 || echo "Kịch bản dừng giữa chừng (xem maestro.txt)" > "$OUT/FLOW_FAILED.txt"
 adb exec-out screencap -p > "$OUT/final.png"
 adb shell dumpsys gfxinfo $PKG > "$OUT/gfxinfo.txt"
 adb logcat -d -v time ReactNativeJS:V AndroidRuntime:E '*:S' > "$OUT/logcat.txt"

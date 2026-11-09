@@ -1,3 +1,4 @@
+# Máy ảo không bao giờ đứng yên (hiệu ứng nền chạy liên tục): mỗi lệnh chỉ đợi màn hình ổn định tối đa 0,8s
 # Kịch bản kiểm tra tự động (Maestro) chạy trên máy ảo Android ở GitHub (job ui-check trong build-test-apps.yml).
 # Mỗi bước chụp màn hình; cả lượt được quay video. Kết quả: Actions → lần chạy → Artifacts → "ui-check".
 appId: com.henrywizzrd.zyx
@@ -9,6 +10,7 @@ appId: com.henrywizzrd.zyx
 - tapOn:
     text: "Wait"
     optional: true
+    waitToSettleTimeoutMs: 800
 # Màn đăng nhập hiện chậm trên máy ảo: đợi nó (tối đa 60s) rồi chọn "Khách"
 - extendedWaitUntil:
     visible: "Guest|Khách"
@@ -17,6 +19,7 @@ appId: com.henrywizzrd.zyx
 - tapOn:
     text: "Guest|Khách"
     optional: true
+    waitToSettleTimeoutMs: 800
 - extendedWaitUntil:
     visible:
       id: "trending-0"
@@ -28,16 +31,19 @@ appId: com.henrywizzrd.zyx
 # ---- Dock thanh + bong bóng: mở / đóng player
 - tapOn:
     id: "trending-0"
+    waitToSettleTimeoutMs: 800
 - waitForAnimationToEnd:
     timeout: 2500
 - takeScreenshot: 02-player-open
 - tapOn:
     id: "player-close"
+    waitToSettleTimeoutMs: 800
 - waitForAnimationToEnd:
     timeout: 2000
 - takeScreenshot: 03-closed-bubble
 - tapOn:
     id: "mini-bubble"
+    waitToSettleTimeoutMs: 800
 - waitForAnimationToEnd:
     timeout: 2500
 - takeScreenshot: 04-reopen
@@ -45,6 +51,7 @@ appId: com.henrywizzrd.zyx
     start: 50%, 22%
     end: 50%, 92%
     duration: 260
+    waitToSettleTimeoutMs: 800
 - waitForAnimationToEnd:
     timeout: 2000
 - takeScreenshot: 05-swipe-closed
@@ -52,26 +59,35 @@ appId: com.henrywizzrd.zyx
 # ---- Chuyển sang dock Apple Music
 - tapOn:
     id: "tab-settings"
-- tapOn: "Apple Music"
+    waitToSettleTimeoutMs: 800
+- tapOn:
+    text: "Apple Music"
+    waitToSettleTimeoutMs: 800
 - waitForAnimationToEnd:
     timeout: 1500
 - takeScreenshot: 06-settings-apple
-- tapOn: "Home|Trang chủ"
+- tapOn:
+    text: "Home|Trang chủ"
+    waitToSettleTimeoutMs: 800
 - waitForAnimationToEnd:
     timeout: 1500
 - takeScreenshot: 07-apple-dock
-- scroll
-- scroll
+- scroll:
+    waitToSettleTimeoutMs: 800
+- scroll:
+    waitToSettleTimeoutMs: 800
 - waitForAnimationToEnd:
     timeout: 1500
 - takeScreenshot: 08-dock-collapsed
 - tapOn:
     id: "mini-pill"
+    waitToSettleTimeoutMs: 800
 - waitForAnimationToEnd:
     timeout: 2500
 - takeScreenshot: 09-player-from-pill
 - tapOn:
     id: "player-close"
+    waitToSettleTimeoutMs: 800
 - waitForAnimationToEnd:
     timeout: 2000
 - takeScreenshot: 10-closed-pill
@@ -79,10 +95,12 @@ appId: com.henrywizzrd.zyx
     start: 50%, 35%
     end: 50%, 85%
     duration: 400
+    waitToSettleTimeoutMs: 800
 - swipe:
     start: 50%, 35%
     end: 50%, 85%
     duration: 400
+    waitToSettleTimeoutMs: 800
 - waitForAnimationToEnd:
     timeout: 1500
 - takeScreenshot: 11-dock-expanded
@@ -91,18 +109,25 @@ appId: com.henrywizzrd.zyx
     start: 15%, 93%
     end: 60%, 93%
     duration: 900
+    waitToSettleTimeoutMs: 800
 - waitForAnimationToEnd:
     timeout: 1500
 - takeScreenshot: 12-after-lens
 
 # ---- Nhật ký (mục Chuyển động)
-- tapOn: "Settings|Cài đặt"
+- tapOn:
+    text: "Settings|Cài đặt"
+    waitToSettleTimeoutMs: 800
 - scrollUntilVisible:
     element: "Log|Nhật ký"
     direction: DOWN
     timeout: 15000
-- tapOn: "Log|Nhật ký"
-- tapOn: "Motion.*|Chuyển động.*"
+- tapOn:
+    text: "Log|Nhật ký"
+    waitToSettleTimeoutMs: 800
+- tapOn:
+    text: "Motion.*|Chuyển động.*"
+    waitToSettleTimeoutMs: 800
 - waitForAnimationToEnd:
     timeout: 1500
 - takeScreenshot: 13-log-motion

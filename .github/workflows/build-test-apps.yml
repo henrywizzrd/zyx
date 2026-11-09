@@ -140,7 +140,7 @@ jobs:
       (contains(github.event.head_commit.message, '[update]') || contains(github.event.head_commit.message, '[build]') || contains(github.event.head_commit.message, '[check]')) &&
       needs.android.result != 'failure' && needs.update.result != 'failure'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     permissions:
       contents: write
     steps:
