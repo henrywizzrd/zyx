@@ -41,3 +41,6 @@ yarn-error.*
 /android
 
 .env
+
+# graphify (bản đồ code cho AI, tự tạo lại được)
+graphify-out/
