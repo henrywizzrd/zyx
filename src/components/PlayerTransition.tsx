@@ -231,12 +231,6 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   // Bo góc (theo điểm ảnh thật trên màn hình) ở mỗi thời điểm.
   // Bong bóng tròn: lúc gần về bong bóng thì bo góc = nửa cạnh ảnh đang bay (luôn là hình tròn), xa dần thì chuyển
   // về bo góc thường. Không làm vậy thì ảnh bay trông như ô vuông bo góc, tới cuối mới "bụp" thành hình tròn
-  // Bo góc của ảnh bìa bay: từ bo góc ô ảnh nhỏ tới bo góc ảnh lớn
-  const artRadiusAt = (pv: number) => {
-    'worklet';
-    if (ar.value === or.value && aw.value === ow.value) return radiusAt(pv);
-    return interpolate(pv, [0, 0.97, 1], [ar.value, 48, 0], 'clamp');
-  };
   const radiusAt = (pv: number) => {
     'worklet';
     const base = interpolate(pv, [0, 0.97, 1], [or.value, 48, 0], 'clamp');
@@ -245,6 +239,13 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
     const size = interpolate(pv, [0, 1], [ow.value, W]); // cạnh ảnh album đang bay
     const t = interpolate(pv, [0, 0.35], [0, 1], 'clamp');
     return (size / 2) * (1 - t) + base * t;
+  };
+  // (phải đứng SAU radiusAt: hàm animation nắm biến ngay lúc khai báo, gọi trước khi có là văng app)
+  // Bo góc của ảnh bìa bay: từ bo góc ô ảnh nhỏ tới bo góc ảnh lớn
+  const artRadiusAt = (pv: number) => {
+    'worklet';
+    if (ar.value === or.value && aw.value === ow.value) return radiusAt(pv);
+    return interpolate(pv, [0, 0.97, 1], [ar.value, 48, 0], 'clamp');
   };
 
   const ctx = useMemo<Ctx>(() => ({ reportCover, closeCfg, moving, active: mounted }), [reportCover, closeCfg, moving, mounted]);
