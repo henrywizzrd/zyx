@@ -72,9 +72,15 @@ appId: com.henrywizzrd.zyx
 - waitForAnimationToEnd:
     timeout: 1500
 - takeScreenshot: 07-apple-dock
-- scroll:
+- swipe:
+    start: 50%, 75%
+    end: 50%, 30%
+    duration: 400
     waitToSettleTimeoutMs: 800
-- scroll:
+- swipe:
+    start: 50%, 75%
+    end: 50%, 30%
+    duration: 400
     waitToSettleTimeoutMs: 800
 - waitForAnimationToEnd:
     timeout: 1500
