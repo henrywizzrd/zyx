@@ -1,7 +1,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, PanResponder, PanResponderInstance, Platform, StyleSheet, View } from 'react-native';
+import { Image, Platform, StyleSheet, View } from 'react-native';
+import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
+import { scheduleOnRN } from 'react-native-worklets';
+import { hapticSnap } from './haptics';
 import { BlurView } from 'expo-blur';
-import Animated, { Easing, interpolate, makeMutable, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, interpolate, makeMutable, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { usePlayerPick } from '../player/PlayerProvider';
 import { SmartImage } from './Cover';
 import { ArtSlab, glassShadow as liftShadow } from './Glass';
@@ -29,16 +32,25 @@ export function prewarmPlayer() {
   warmHook?.();
 }
 
+type CloseCfg = Parameters<typeof usePanGesture>[0];
 type Ctx = {
   reportCover: (r: Rect) => void; // không còn dùng, giữ lại để các file cũ không lỗi
-  panHandlers: PanResponderInstance['panHandlers']; // gắn vào vùng cho phép vuốt xuống để thoát
+  closeCfg: CloseCfg | null; // cấu hình cử chỉ vuốt xuống để thoát (mỗi vùng <CloseZone> tạo một cử chỉ riêng từ đây)
   // true trong lúc đang phóng to / thu nhỏ (hoặc đang vuốt xuống): màn player nên tạm dừng mọi chuyển động bên trong
   moving: boolean;
   // false khi player đã đóng hẳn (đang ẩn): màn player nên dừng mọi thứ chạy liên tục
   active: boolean;
 };
-const TransitionContext = createContext<Ctx>({ reportCover: () => {}, panHandlers: {} as Ctx['panHandlers'], moving: false, active: true });
+const TransitionContext = createContext<Ctx>({ reportCover: () => {}, closeCfg: null, moving: false, active: true });
 export const usePlayerTransition = () => useContext(TransitionContext);
+
+// Vùng cho phép vuốt xuống để thu player (thanh nắm, ảnh bìa, khoảng trống...). Cử chỉ chạy trên luồng giao diện:
+// player bám ngón tay 1:1 kể cả khi JS đang bận
+export function CloseZone({ children }: { children: React.ReactElement }) {
+  const { closeCfg } = useContext(TransitionContext);
+  const g = usePanGesture(closeCfg ?? { enabled: false });
+  return <GestureDetector gesture={g}>{children}</GestureDetector>;
+}
 
 // Nở ra như bong bóng cửa sổ nổi (Xiaomi / OPPO): lò xo hơi nảy nhẹ ở cuối
 const SPRING = { damping: 24, stiffness: 210, mass: 1, overshootClamping: true }; // không nảy quá đích
@@ -46,7 +58,8 @@ const SPRING = { damping: 24, stiffness: 210, mass: 1, overshootClamping: true }
 // Mở player như mở app trên iPhone: một ô bo góc từ ảnh album phóng to dần ra tràn màn hình.
 // Cả màn player được thu nhỏ đồng đều bên trong ô đó (không bị méo), ô chỉ cắt phần thừa ở dưới.
 // Lúc đầu ô hiện ảnh album, ảnh mờ dần để lộ màn player; đóng thì chạy ngược lại.
-export function PlayerTransition({ open, onClose, onClosed, onOpened, children }: { open: boolean; onClose: () => void; onClosed?: () => void; onOpened?: () => void; children: React.ReactNode }) {
+export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, children }: { open: boolean; onClose: () => void; onClosed?: () => void; onOpened?: () => void; onReopen?: () => void; children: React.ReactNode }) {
+  const reduced = useReducedMotion(); // "Giảm chuyển động": player chỉ mờ vào / mờ ra, không phóng to từ bong bóng
   const { width: W, height: H } = useScreenSize();
   const { track } = usePlayerPick('track');
   const light = useTheme().theme.colors.glassTint !== 'dark';
@@ -98,17 +111,6 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
   // Không làm vậy thì mỗi khung hình máy phải vẽ lại toàn bộ: ảnh bìa có mép mờ (mask), chữ phát sáng, nền mờ...
   // bên trong một khung bo góc đang đổi kích thước → tụt khung hình
   const [moving, setMoving] = useState(open);
-  // "Chụp thành ảnh" chỉ bật sau 2 khung hình kể từ lúc bắt đầu chuyển: để màn player kịp vẽ đủ (nút, chữ...) rồi mới chụp.
-  // Bật ngay thì có khi chụp đúng lúc màn player chưa vẽ xong → nở ra mà mất nút cho tới khi phóng to xong
-  const [raster, setRaster] = useState(false);
-  useEffect(() => {
-    setRaster(false);
-    if (!moving) return;
-    let id = requestAnimationFrame(() => {
-      id = requestAnimationFrame(() => setRaster(true));
-    });
-    return () => cancelAnimationFrame(id);
-  }, [moving]);
   const onOpenedRef = useRef(onOpened);
   onOpenedRef.current = onOpened;
   const stopMoving = useCallback(() => {
@@ -123,10 +125,14 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
         clearTimeout(unmountTimer.current);
         unmountTimer.current = null;
       }
+      flung.value = 0; // mở lại giữa lúc đang thu theo cú vuốt: lần đóng sau phải chạy bình thường
       if (!mountedRef.current) {
-        const o = playerOrigin.current ?? { x: W / 2 - 24, y: H - 120, w: 48, h: 48, r: 24 };
+        // Giảm chuyển động: "điểm xuất phát" là cả màn hình → không phóng to / dịch chuyển, chỉ còn mờ dần
+        const o = reduced ? { x: 0, y: 0, w: W, h: H, r: 0 } : playerOrigin.current ?? { x: W / 2 - 24, y: H - 120, w: 48, h: 48, r: 24 };
+        artOff.value = reduced ? 1 : 0;
         ox.value = o.x; oy.value = o.y; ow.value = o.w; oh.value = o.h; or.value = o.r;
         p.value = 0;
+        flung.value = 0;
         openSize.current = { W, H };
         setMounted(true);
       }
@@ -150,9 +156,11 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
       // Thu nhỏ ngay lập tức (không đợi đo vị trí mini player): luồng JS có bận thì hiệu ứng vẫn chạy trên UI thread
       // Đường cong đi tới đích dứt khoát (không bò chậm ở cuối): trước đây đoạn cuối kéo dài, ảnh album còn to hơn
       // bong bóng một chút rồi mới "bụp" thành bong bóng
-      p.value = withTiming(0, { duration: 360, easing: Easing.bezier(0.3, 0, 0.15, 1) }, (done) => {
-        if (done) runOnJS(finishClose)();
-      });
+      // Vuốt xuống thả tay đã tự thu về bằng lò xo mang đà cú vuốt (xem closeCfg) → không chạy lại từ đầu ở đây
+      if (!flung.value)
+        p.value = withTiming(0, { duration: 360, easing: Easing.bezier(0.3, 0, 0.15, 1) }, (done) => {
+          if (done) runOnJS(finishClose)();
+        });
       // Thu về đúng chỗ đã mở ra (ảnh album ở mini player lúc bấm mở). KHÔNG đo lại lúc đóng: lúc đó mini player
       // vừa hiện lại và còn đang chạy hiệu ứng (tách khỏi dock, co thành bong bóng...) nên số đo bị sai
       // → ảnh album bay tới chỗ khác, thấy hai ảnh cùng lúc. Trong lúc player mở thì mini player không di chuyển được
@@ -162,29 +170,48 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Vuốt xuống để thoát: ngón tay kéo tới đâu thì cả màn player thu về mini player tới đó
-  const pan = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, g) => g.dy > 8 && g.dy > Math.abs(g.dx) * 1.5,
-        onPanResponderTerminationRequest: () => false,
-        onPanResponderGrant: () => setMoving(true),
-        onPanResponderMove: (_, g) => {
-          p.value = 1 - Math.min(1, Math.max(0, g.dy / (hRef.current * 0.9)));
-        },
-        onPanResponderRelease: (_, g) => {
-          if (g.dy > 120 || g.vy > 0.9) onCloseRef.current();
-          else
-            p.value = withSpring(1, SPRING, (done) => {
-              if (done) runOnJS(stopMoving)();
-            });
-        },
-        onPanResponderTerminate: () => {
-          p.value = withSpring(1, SPRING, (done) => {
-            if (done) runOnJS(stopMoving)();
+  // Vuốt xuống để thoát (chạy trên luồng giao diện): ngón tay kéo tới đâu thì player thu về tới đó.
+  // Thả tay: hất nhanh HOẶC kéo đủ xa là đóng — player thu về bằng lò xo nhận đúng vận tốc ngón tay lúc thả
+  // (vuốt mạnh thu nhanh, vuốt nhẹ thu chậm, không khựng lúc nhả); chưa đủ thì bật về mở, cũng mang đà
+  const flung = useSharedValue(0); // 1 = đang thu về theo cú vuốt
+  const artOff = useSharedValue(0); // 1 = giảm chuyển động: không có ảnh bay
+  const hV = useSharedValue(H);
+  useEffect(() => {
+    hV.value = H;
+  }, [H]); // eslint-disable-line react-hooks/exhaustive-deps
+  const startDrag = useCallback(() => setMoving(true), []);
+  const requestClose = useCallback(() => onCloseRef.current(), []);
+  const closeCfg = useMemo<CloseCfg>(
+    () => ({
+      activeOffsetY: 8,
+      failOffsetX: [-24, 24],
+      onActivate: () => {
+        'worklet';
+        scheduleOnRN(startDrag);
+      },
+      onUpdate: (e) => {
+        'worklet';
+        const t = e.translationY;
+        // kéo lên quá đầu: cản lại (dây chun), không văng player lên trên
+        p.value = t >= 0 ? 1 - Math.min(1, t / (hV.value * 0.9)) : 1;
+      },
+      onDeactivate: (e) => {
+        'worklet';
+        const dist = hV.value * 0.9;
+        const v = -e.velocityY / dist; // vận tốc của độ mở (1/giây)
+        if (e.translationY > 120 || e.velocityY > 900) {
+          flung.value = 1;
+          p.value = withSpring(0, { duration: 380, dampingRatio: 1, velocity: v, overshootClamping: true }, (done) => {
+            if (done) scheduleOnRN(finishClose);
           });
-        },
-      }),
+          scheduleOnRN(hapticSnap);
+          scheduleOnRN(requestClose);
+        } else
+          p.value = withSpring(1, { duration: 400, dampingRatio: 0.8, velocity: v, overshootClamping: true }, (done) => {
+            if (done) scheduleOnRN(stopMoving);
+          });
+      },
+    }),
     [] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
@@ -201,7 +228,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
     return (size / 2) * (1 - t) + base * t;
   };
 
-  const ctx = useMemo<Ctx>(() => ({ reportCover, panHandlers: pan.panHandlers, moving, active: mounted }), [reportCover, pan, moving, mounted]);
+  const ctx = useMemo<Ctx>(() => ({ reportCover, closeCfg, moving, active: mounted }), [reportCover, closeCfg, moving, mounted]);
 
   // Ô cửa sổ: từ khung ảnh album ở mini player lớn dần tới toàn màn hình
   // Ô cửa sổ: từ khung ảnh album ở mini player lớn dần tới toàn màn hình.
@@ -263,7 +290,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
     const sw = interpolate(p.value, [0, 1], [ow.value / A, 1]);
     const r = radiusAt(p.value);
     return {
-      opacity: interpolate(p.value, [0.25, 0.6], [1, 0], 'clamp'),
+      opacity: artOff.value ? 0 : interpolate(p.value, [0.25, 0.6], [1, 0], 'clamp'),
       borderRadius: r / sw,
       transform: [
         { translateX: interpolate(p.value, [0, 1], [ox.value, 0]) },
@@ -300,13 +327,13 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
   if (!everRef.current) return null;
 
   return (
-    <View style={[StyleSheet.absoluteFill, { zIndex: 50 }, !mounted && styles.gone]} pointerEvents={open ? 'auto' : 'none'}>
+    <View style={[StyleSheet.absoluteFill, { zIndex: 50 }, !mounted && styles.gone]} pointerEvents={open ? 'auto' : 'box-none'}>
       {/* Không tô nền cho khung: nền của khung bị kéo méo theo hai chiều nên ở cuối hiệu ứng thu về thành hình vuông vuông
           (đó là cái ô vuông thấy được trước khi thành hình tròn). Màn player đã có nền riêng bên trong */}
-      <Animated.View style={[styles.frame, { width: W, height: H }, win]}>
+      <Animated.View pointerEvents={open ? 'auto' : 'none'} style={[styles.frame, { width: W, height: H }, win]}>
         <Animated.View style={[styles.innerFrame, { width: W, height: H }, inner]}>
           <TransitionContext.Provider value={ctx}>
-            <Animated.View style={[{ width: W, height: H }, screen]} shouldRasterizeIOS={moving && raster} renderToHardwareTextureAndroid={moving && raster}>
+            <Animated.View style={[{ width: W, height: H }, screen]} shouldRasterizeIOS={moving} renderToHardwareTextureAndroid={moving}>
               <Freeze freeze={frozen && !mounted && !warm}>{children}</Freeze>
             </Animated.View>
             {/* Nhoè chuyển động: lúc mới nở ra màn player mờ nhoè, nét dần khi gần to hẳn (đóng thì ngược lại) —
@@ -319,7 +346,12 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, children }
           </TransitionContext.Provider>
         </Animated.View>
       </Animated.View>
-      <Animated.View pointerEvents="none" style={[styles.artShadow, { width: A, height: A }, art]}>
+      {/* Đang thu về mà chạm vào ảnh đang bay: mở ngược ra lại từ đúng chỗ đó, không phải đợi thu xong */}
+      <Animated.View
+        pointerEvents={!open && mounted && onReopen ? 'auto' : 'none'}
+        onTouchStart={!open && mounted ? onReopen : undefined}
+        style={[styles.artShadow, { width: A, height: A }, art]}
+      >
         {slabRadius > 0 && (
           <Animated.View
             style={[StyleSheet.absoluteFill, { borderRadius: slabRadius, borderCurve: 'continuous' }, liftShadow(1.15 * (A / (o0?.w || A)), light), shadowFade]}

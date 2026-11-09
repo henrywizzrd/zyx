@@ -11,10 +11,10 @@
       "bundleIdentifier": "com.henrywizzrd.zyx",
       "infoPlist": {
         "UIBackgroundModes": [
-          "audio",
           "audio"
         ],
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CADisableMinimumFrameDurationOnPhone": true
       }
     },
     "android": {

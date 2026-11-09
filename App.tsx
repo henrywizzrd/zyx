@@ -306,7 +306,7 @@ function Root() {
           ) : (
             <FloatingDock active={tab} onChange={go} hidden={tab === 'player'} />
           )}
-          <PlayerTransition open={tab === 'player'} onClose={() => setTab(lastTab)} onClosed={() => setPlayerUp(false)} onOpened={() => setAmbientOff(true)}>
+          <PlayerTransition open={tab === 'player'} onReopen={() => setTab('player')} onClose={() => setTab(lastTab)} onClosed={() => setPlayerUp(false)} onOpened={() => setAmbientOff(true)}>
           <NowPlayingScreen onClose={() => setTab(lastTab)} />
         </PlayerTransition>
       </View>

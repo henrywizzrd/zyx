@@ -7,7 +7,7 @@ import { useT } from '../i18n';
 import { usePlayerPick, useProgress } from '../player/PlayerProvider';
 import { useContentInsets } from '../components/FloatingDock';
 import { Cover, SmartImage } from '../components/Cover';
-import { usePlayerTransition } from '../components/PlayerTransition';
+import { CloseZone, usePlayerTransition } from '../components/PlayerTransition';
 import { Slider } from '../components/Slider';
 import { LyricsView } from '../components/LyricsView';
 import { useLyrics } from '../music/lyrics';
@@ -241,7 +241,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const artist = idle ? t('np.idleArtist') : track.artist;
 
   // Báo vị trí ảnh bìa lớn để lúc mở player, ảnh album từ mini player bay tới đúng chỗ này.
-  // Vùng gắn swipe.panHandlers cho phép vuốt xuống để thoát.
+  // Các vùng bọc <CloseZone> cho phép vuốt xuống để thoát.
   const swipe = usePlayerTransition();
 
   const [showLyrics, setShowLyricsState] = useState(() => lyricsOpen);
@@ -528,9 +528,9 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     // Vuốt xuống để thoát khi nằm ngang: thanh ngang ở mép trên (cả dải trên cùng đều vuốt được),
     // và mọi chỗ trống không phải lời / thanh trượt (trang trái, cột nút bên phải)
     const GrabBar = (
-      <View {...swipe.panHandlers} style={{ position: 'absolute', top: 0, left: 0, right: 0, height: padT + 14, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 4 }}>
+      <CloseZone><View  style={{ position: 'absolute', top: 0, left: 0, right: 0, height: padT + 14, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 4 }}>
         <View style={{ width: 44, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.45)' }} />
-      </View>
+      </View></CloseZone>
     );
     const rowStyle = {
       flex: 1,
@@ -549,13 +549,13 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
           {Background}
           <StatusBar barStyle="light-content" />
           <View style={rowStyle}>
-            <View style={{ justifyContent: 'center' }} {...swipe.panHandlers}>
+            <CloseZone><View style={{ justifyContent: 'center' }} >
               <TrackSwap id={track.id}>
               <Cover track={track} size={1200} style={{ width: art, height: art, borderRadius: 12 }}>
                 <Ionicons name="musical-notes" size={48} color="rgba(255,255,255,0.8)" />
               </Cover>
               </TrackSwap>
-            </View>
+            </View></CloseZone>
             <View style={{ flex: 1, justifyContent: 'center' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
                 <View style={{ flex: 1 }} />
@@ -569,7 +569,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
               </View>
               <View style={{ marginTop: 14 }}>{Progress}</View>
             </View>
-            <View {...swipe.panHandlers} style={sideZone}>{SideButtons}</View>
+            <CloseZone><View  style={sideZone}>{SideButtons}</View></CloseZone>
           </View>
           {GrabBar}
           <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} inModal />
@@ -597,8 +597,8 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         {Background}
         <StatusBar barStyle="light-content" />
         <View style={rowStyle}>
-          <View
-            {...swipe.panHandlers}
+          <CloseZone><View
+            
             style={{ width: leftW, justifyContent: 'center', transformOrigin: 'right center', transform: [{ perspective: 1400 }, { rotateY: flat ? '0deg' : '12deg' }] }}
           >
             <View style={{ alignItems: 'center' }}>
@@ -620,11 +620,11 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
             <View style={{ marginTop: 2 }}>
               {controls(false)}
             </View>
-          </View>
+          </View></CloseZone>
           <View style={{ flex: 1, transformOrigin: 'left center', transform: [{ perspective: 1400 }, { rotateY: flat ? '0deg' : '-10deg' }] }}>
             <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} />
           </View>
-          <View {...swipe.panHandlers} style={sideZone}>{SideButtons}</View>
+          <CloseZone><View  style={sideZone}>{SideButtons}</View></CloseZone>
         </View>
         {/* Gáy sách: dải kính mờ phủ lên mép trong của hai trang, mờ dần ra hai bên → ảnh và lời nối liền nhau */}
         {/* Lúc mở bảng (hàng chờ, chế độ âm thanh...) hai trang duỗi phẳng ra: không còn gáy sách nên bỏ dải nối,
@@ -751,8 +751,8 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
 
           {/* Phần đầu: thanh kéo + hàng ảnh nhỏ (khi xem lời). Vuốt xuống ở đây để thu player lại */}
           <RAnimated.View style={headerFullStyle} pointerEvents={full ? 'none' : 'box-none'}>
-          <View
-            {...swipe.panHandlers}
+          <CloseZone><View
+            
             onLayout={(e) => {
               setHeaderH(e.nativeEvent.layout.height);
               headerHV.value = e.nativeEvent.layout.height;
@@ -785,14 +785,14 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
                 }}
               />
             </View>
-          </View>
+          </View></CloseZone>
           </RAnimated.View>
 
           {/* Khoảng trống giữa (vuốt xuống để thu player khi đang xem ảnh bìa) */}
-          <View style={{ flex: 1 }} pointerEvents={showLyrics ? 'none' : 'auto'} {...swipe.panHandlers} />
+          <CloseZone><View style={{ flex: 1 }} pointerEvents={showLyrics ? 'none' : 'auto'}  /></CloseZone>
 
           {/* Hàng tên bài dưới ảnh bìa: chỉ giữ chỗ cho tên bài + nút thích / menu */}
-          <View
+          <CloseZone><View
             style={{ paddingLeft: side, paddingRight: pad.right + 24 }}
             pointerEvents={showLyrics ? 'none' : 'auto'}
             onLayout={(e) => {
@@ -800,7 +800,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
               setInfoH(e.nativeEvent.layout.height);
               updatePos();
             }}
-            {...swipe.panHandlers}
+            
           >
             <View
               style={styles.info}
@@ -823,7 +823,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
                 {MoreButtonFlat}
               </RAnimated.View>
             </View>
-          </View>
+          </View></CloseZone>
 
           {/* Tên bài + nghệ sĩ: một khối duy nhất bay giữa hai chỗ trên */}
           <RAnimated.View
@@ -839,17 +839,17 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         </View>
 
         {/* Thanh thời gian, nút điều khiển, âm lượng, hàng dưới: đứng yên khi chuyển ảnh bìa ⇄ lời */}
-        <RAnimated.View
+        <CloseZone><RAnimated.View
           style={[{ paddingLeft: side, paddingRight: pad.right + 24, paddingBottom: pad.bottom + 8 }, bodyFullStyle]}
           pointerEvents={full ? 'none' : 'auto'}
           onLayout={(e) => {
             setBodyH(e.nativeEvent.layout.height);
             bodyHV.value = e.nativeEvent.layout.height;
           }}
-          {...swipe.panHandlers}
+          
         >
           {PlayerBody}
-        </RAnimated.View>
+        </RAnimated.View></CloseZone>
 
         {/* Kiểu lời + toàn màn hình: chỉ là ký hiệu, không nền */}
         {lyricsMounted && bodyH > 0 && (

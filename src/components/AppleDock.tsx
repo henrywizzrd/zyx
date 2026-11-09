@@ -6,8 +6,11 @@
 //  - cuộn trang xuống: thanh tab thu thành nút tròn (icon tab đang mở), mini player chui xuống nằm giữa; cuộn lên thì mở lại
 // Chỉ dùng khi màn hình dọc; xoay ngang thì App dùng lại dock dạng thanh dọc
 import React, { useEffect, useRef } from 'react';
-import { PanResponder, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
+import { scheduleOnRN } from 'react-native-worklets';
+import { hapticSnap, hapticTick } from './haptics';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { useT } from '../i18n';
@@ -55,7 +58,8 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
   const noRim = theme.dock.rimLight === false;
   const insets = useSafeAreaInsets();
   const { width: W } = useWindowDimensions();
-  const { M, H, GAP, MH, MGAP, CH } = AM;
+  const reduced = useReducedMotion(); // iPhone bật "Giảm chuyển động": không giãn, không phồng, chỉ đổi vị trí / mờ
+  const { M, H, GAP, MH, MGAP } = AM;
   const bottom = amBottom(insets.bottom);
   const labels = theme.dock.labels;
 
@@ -66,16 +70,25 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
   const fullW = W - M * 2 - (hasSearch ? GAP + H : 0);
   const tw = (fullW - 8) / n;
   const idx = tabs.indexOf(active as Tab);
-  const shown = idx >= 0 ? idx : (tabs.indexOf((lastRef.current ?? 'home') as Tab));
+  const shown = idx >= 0 ? idx : tabs.indexOf((lastRef.current ?? 'home') as Tab);
 
-  // ---- vệt chọn + kính lúp ----
+  // ---- vệt chọn + kính lúp (mọi giá trị chạy trên luồng giao diện)
   const pillX = useSharedValue(Math.max(0, idx) * tw);
   const pillSX = useSharedValue(1);
   const lensOn = useSharedValue(0);
   const lensX = useSharedValue(0);
   const lensSX = useSharedValue(1);
   const lensSY = useSharedValue(1);
+  const lensIdx = useSharedValue(-1);
   const barPress = useSharedValue(1);
+  const down = useSharedValue(0); // ngón tay đang đặt trên thanh (1) — để "giữ yên" cũng bật kính lúp
+  const startX = useSharedValue(0);
+  const twV = useSharedValue(tw);
+  const nV = useSharedValue(n);
+  useEffect(() => {
+    twV.value = tw;
+    nV.value = n;
+  }, [tw, n]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (idx >= 0) {
       pillX.value = withSpring(idx * tw, SNAP);
@@ -88,93 +101,103 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
     setDockCollapsed(false);
   }, [active]);
 
-  const select = (i: number, stretch: boolean) => {
+  const choose = (i: number, stretch: boolean) => {
     const id = tabs[i];
     if (!id) return;
-    if (stretch && i !== idx) pillSX.value = withSequence(withTiming(1.22, { duration: 90 }), withSpring(1, SNAP));
+    if (stretch && i !== idx && !reduced) pillSX.value = withSequence(withTiming(1.22, { duration: 90 }), withSpring(1, SNAP));
     onChange(id);
   };
+  const chooseRef = useRef(choose);
+  chooseRef.current = choose;
+  const pick = (i: number, stretch: boolean) => chooseRef.current(i, stretch);
 
-  // ---- cử chỉ trên thanh tab (dùng ref để PanResponder luôn thấy giá trị mới nhất) ----
-  const live = useRef({ tw, n, idx, select, collapsed: false });
-  live.current = { tw, n, idx, select, collapsed: false };
-  const drag = useRef<{ lens: boolean; hold: ReturnType<typeof setTimeout> | null; lastX: number; lastT: number } | null>(null);
-  const xOf = (pageX: number) => pageX - M;
-  const lensTo = (x: number) => {
-    const { tw: w, n: k } = live.current;
-    lensX.value = withSpring(Math.max(0, Math.min((k - 1) * w, x - 4 - w / 2)), LENS);
+  // Giữ yên ~170ms (không di ngón) cũng bật kính lúp: hẹn giờ một lần ở luồng JS, rồi bật trên luồng giao diện
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const armHold = () => {
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    holdTimer.current = setTimeout(() => {
+      if (down.value === 1 && lensOn.value < 0.5) startLensUI(startX.value);
+    }, 170);
   };
-  const startLens = (x: number) => {
-    if (!drag.current || drag.current.lens) return;
-    drag.current.lens = true;
+  function startLensUI(x: number) {
+    'worklet';
+    if (lensOn.value > 0.5 || dockCollapse.value > 0.5) return;
+    const w = twV.value;
     lensX.value = pillX.value;
     lensOn.value = withSpring(1, LENS);
-    lensTo(x);
-  };
-  const pan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant: (e) => {
-        if (dockCollapse.value > 0.5) {
-          setDockCollapsed(false);
-          drag.current = null;
-          return;
-        }
-        const x = xOf(e.nativeEvent.pageX);
-        barPress.value = withSpring(1.03, SQUISH);
-        drag.current = { lens: false, hold: setTimeout(() => startLens(x), 170), lastX: x, lastT: Date.now() };
-      },
-      onPanResponderMove: (e) => {
-        const d = drag.current;
-        if (!d) return;
-        const x = xOf(e.nativeEvent.pageX);
-        const now = Date.now();
-        if (!d.lens && Math.abs(x - d.lastX) > 6) {
-          if (d.hold) clearTimeout(d.hold);
-          startLens(x);
-        }
-        if (d.lens) {
-          lensTo(x);
-          const v = (x - d.lastX) / Math.max(1, now - d.lastT);
-          const st = Math.min(0.35, Math.abs(v) * 0.22); // kéo nhanh: kính giãn ngang, dẹt dọc
-          lensSX.value = withSpring(1 + st, { stiffness: 420, damping: 18 });
-          lensSY.value = withSpring(1 - st * 0.55, { stiffness: 420, damping: 18 });
-        }
-        d.lastX = x;
-        d.lastT = now;
-      },
-      onPanResponderRelease: (e) => end(e.nativeEvent.pageX),
-      onPanResponderTerminate: (e) => end(e.nativeEvent.pageX),
-    })
-  ).current;
-  function end(pageX: number) {
-    const d = drag.current;
-    drag.current = null;
-    barPress.value = withSpring(1, SQUISH);
-    if (!d) return;
-    if (d.hold) clearTimeout(d.hold);
-    const { tw: w, n: k, select: sel } = live.current;
-    const i = Math.max(0, Math.min(k - 1, Math.floor((xOf(pageX) - 4) / w)));
-    if (d.lens) {
-      pillX.value = lensX.value; // vệt chọn hiện lại đúng chỗ kính lúp vừa thả
-      pillX.value = withSpring(i * w, SNAP);
-      lensX.value = withSpring(i * w, LENS);
-      lensOn.value = withSpring(0, LENS);
-      lensSX.value = withSpring(1, LENS);
-      lensSY.value = withSpring(1, LENS);
-      sel(i, false);
-    } else sel(i, true);
+    lensX.value = withSpring(Math.max(0, Math.min((nV.value - 1) * w, x - 4 - w / 2)), LENS);
   }
 
-  // ---- kiểu chuyển động ----
+  // Một cử chỉ duy nhất cho cả thanh, chạy trên luồng giao diện:
+  //  chạm rồi nhấc (không di) = chọn tab; di quá 6px hoặc giữ yên = kính lúp theo tay; thả = hít vào tab gần nhất
+  const gesture = usePanGesture({
+    minDistance: 0,
+    onActivate: (e) => {
+      'worklet';
+      if (dockCollapse.value > 0.5) {
+        setDockCollapsed(false); // đang thu: chạm là mở dock ra
+        down.value = 0;
+        return;
+      }
+      down.value = 1;
+      startX.value = e.x;
+      lensIdx.value = -1;
+      barPress.value = withSpring(reduced ? 1 : 1.03, SQUISH);
+      scheduleOnRN(armHold);
+    },
+    onUpdate: (e) => {
+      'worklet';
+      if (down.value !== 1) return;
+      if (lensOn.value < 0.5 && Math.abs(e.translationX) > 6) startLensUI(e.x);
+      if (lensOn.value < 0.5) return;
+      const w = twV.value;
+      lensX.value = withSpring(Math.max(0, Math.min((nV.value - 1) * w, e.x - 4 - w / 2)), LENS);
+      if (!reduced) {
+        const st = Math.min(0.35, (Math.abs(e.velocityX) / 1000) * 0.22); // kéo nhanh: giãn ngang, dẹt dọc
+        lensSX.value = withSpring(1 + st, { stiffness: 420, damping: 18 });
+        lensSY.value = withSpring(1 - st * 0.55, { stiffness: 420, damping: 18 });
+      }
+      // lướt qua tab khác: tách nhẹ một cái (chỉ lúc đổi ô, không phải mỗi khung hình)
+      const i = Math.max(0, Math.min(nV.value - 1, Math.floor((e.x - 4) / w)));
+      if (i !== lensIdx.value) {
+        if (lensIdx.value !== -1) scheduleOnRN(hapticTick);
+        lensIdx.value = i;
+      }
+    },
+    onDeactivate: (e) => {
+      'worklet';
+      if (down.value !== 1) return;
+      down.value = 0;
+      barPress.value = withSpring(1, SQUISH);
+      const w = twV.value;
+      const i = Math.max(0, Math.min(nV.value - 1, Math.floor((e.x - 4) / w)));
+      if (lensOn.value > 0.01) {
+        pillX.value = lensX.value; // vệt chọn hiện lại đúng chỗ kính lúp vừa thả
+        pillX.value = withSpring(i * w, SNAP);
+        lensX.value = withSpring(i * w, LENS);
+        lensOn.value = withSpring(0, LENS);
+        lensSX.value = withSpring(1, LENS);
+        lensSY.value = withSpring(1, LENS);
+        scheduleOnRN(hapticSnap);
+        scheduleOnRN(pick, i, false);
+      } else scheduleOnRN(pick, i, true);
+    },
+    onFinalize: () => {
+      'worklet';
+      if (down.value === 1) {
+        down.value = 0;
+        barPress.value = withSpring(1, SQUISH);
+        lensOn.value = withSpring(0, LENS);
+      }
+    },
+  });
+
+  // ---- kiểu chuyển động
+  // Thu / mở dock khi cuộn: KHÔNG đổi kích thước hay vị trí của cả khối (bắt tính lại bố cục mỗi khung hình) —
+  // chỉ lớp kính nền (không có nội dung bên trong) đổi bề rộng, hàng tab chỉ mờ đi, mini player chỉ dịch chuyển
   const c = dockCollapse;
-  const barStyle = useAnimatedStyle(() => ({
-    width: fullW + (H - fullW) * c.value,
-    transform: [{ scale: barPress.value }],
-  }));
-  const rowFade = useAnimatedStyle(() => ({ opacity: Math.max(0, 1 - c.value * 2.2) }));
+  const glassW = useAnimatedStyle(() => ({ width: fullW + (H - fullW) * c.value, transform: [{ scale: barPress.value }] }));
+  const rowFade = useAnimatedStyle(() => ({ opacity: Math.max(0, 1 - c.value * 2.2), transform: [{ scale: barPress.value }] }));
   const iconFade = useAnimatedStyle(() => ({ opacity: Math.max(0, (c.value - 0.45) / 0.55) }));
   const pillStyle = useAnimatedStyle(() => ({
     opacity: idx >= 0 ? Math.max(0, 1 - c.value * 2.2) * (1 - lensOn.value * 0.9) : 0,
@@ -184,27 +207,27 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
   const lh = H + 10;
   const lensStyle = useAnimatedStyle(() => {
     const s = 0.86 + 0.14 * lensOn.value;
-    return { opacity: lensOn.value, left: 4 + lensX.value - 5, transform: [{ scaleX: s * lensSX.value }, { scaleY: s * lensSY.value }] };
+    return { opacity: lensOn.value, transform: [{ translateX: lensX.value }, { scaleX: s * lensSX.value }, { scaleY: s * lensSY.value }] };
   });
   // hàng tab trong kính lúp: trùng đúng vị trí hàng thật, rồi phóng to quanh tâm kính
   const lensRow = useAnimatedStyle(() => {
-    const k = 1 + 0.18 * lensOn.value;
+    const k = 1 + (reduced ? 0 : 0.18) * lensOn.value;
     const lx = 4 + lensX.value - 5;
     return { transform: [{ translateX: lw / 2 }, { translateY: lh / 2 }, { scale: k }, { translateX: -(lx - 4 + lw / 2) }, { translateY: -(lh / 2 - 5) }] };
   });
 
-  // ---- mini player ----
+  // ---- mini player
   const { track, isPlaying, togglePlay, next } = usePlayerPick('track', 'isPlaying', 'togglePlay', 'next');
   const artRef = useRef<ViewRef>(null);
   const miniPress = useSharedValue(1);
   const searchPress = useSharedValue(1);
+  const fullMW = W - M * 2;
   const colW = W - M * 2 - H * 2 - GAP * 2 + (hasSearch ? 0 : H + GAP);
+  const dropY = H + MGAP - (H - MH) / 2; // đầy đủ: nằm trên thanh; thu: hạ xuống ngang hàng thanh
   const miniStyle = useAnimatedStyle(() => ({
-    left: M + (M + H + GAP - M) * c.value,
-    width: W - M * 2 + (colW - (W - M * 2)) * c.value,
-    bottom: bottom + H + MGAP + (bottom + (H - CH) / 2 - (bottom + H + MGAP)) * c.value - bottom,
-    height: MH + (CH - MH) * c.value,
-    transform: [{ scale: miniPress.value }],
+    // bề rộng vẫn phải đổi (chữ tên bài co lại), nhưng chỉ trong khối nhỏ này; vị trí đi bằng transform
+    width: fullMW + (colW - fullMW) * c.value,
+    transform: [{ translateX: (H + GAP) * c.value }, { translateY: dropY * c.value }, { scale: miniPress.value }],
   }));
   const searchStyle = useAnimatedStyle(() => ({ transform: [{ scale: searchPress.value }] }));
   const openFromMini = () => {
@@ -213,26 +236,20 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
       onOpenPlayer();
     });
   };
-
-  const glassBox = (r: number) => (
-    <>
-      <GlassFill radius={r} solid={0.5} slab noRim={noRim} />
-    </>
-  );
+  // nhấn: phản hồi ngay lúc chạm (không đợi nhấc tay)
+  const squish = (sv: typeof miniPress, k: number) => ({
+    onPressIn: () => (sv.value = withSpring(reduced ? 1 : k, SQUISH)),
+    onPressOut: () => (sv.value = withSpring(1, SQUISH)),
+  });
 
   return (
     <View pointerEvents={hidden ? 'none' : 'box-none'} style={[StyleSheet.absoluteFill, { opacity: hidden ? 0 : 1 }]}>
       <View pointerEvents="box-none" style={[styles.layer, { left: 0, right: 0, bottom, height: H + MGAP + MH + 20 }]}>
         {/* mini player */}
         {track && (
-          <Animated.View style={[styles.abs, { borderRadius: MH / 2, borderCurve: 'continuous' }, glassShadow(1, light), miniStyle]}>
-            {glassBox(MH / 2)}
-            <Pressable
-              onPress={openFromMini}
-              onPressIn={() => (miniPress.value = withSpring(1.03, SQUISH))}
-              onPressOut={() => (miniPress.value = withSpring(1, SQUISH))}
-              style={styles.miniRow}
-            >
+          <Animated.View style={[styles.abs, { left: M, bottom: H + MGAP, height: MH, borderRadius: MH / 2, borderCurve: 'continuous' }, glassShadow(1, light), miniStyle]}>
+            <GlassFill radius={MH / 2} solid={0.5} slab noRim={noRim} />
+            <Pressable onPress={openFromMini} {...squish(miniPress, 1.03)} style={styles.miniRow}>
               <View ref={artRef} collapsable={false} style={[styles.miniArt, { backgroundColor: track.color }]}>
                 {track.thumb ? <SmartImage url={track.thumb} size={96} style={StyleSheet.absoluteFill} /> : null}
               </View>
@@ -254,47 +271,44 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
           </Animated.View>
         )}
 
-        {/* thanh tab */}
-        <Animated.View
-          {...pan.panHandlers}
-          style={[styles.abs, { left: M, bottom: 0, height: H, borderRadius: H / 2, borderCurve: 'continuous' }, glassShadow(1, light), barStyle]}
-        >
-          {glassBox(H / 2)}
-          <Animated.View pointerEvents="none" style={[styles.pill, { width: tw, backgroundColor: light ? 'rgba(0,0,0,0.065)' : 'rgba(255,255,255,0.12)' }, pillStyle]} />
-          <Animated.View pointerEvents="none" style={[styles.row, rowFade]}>
-            {tabs.map((id) => (
-              <Cell key={id} id={id} on={id === active} labels={labels} width={tw} />
-            ))}
-          </Animated.View>
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.lens,
-              { width: lw, height: lh, backgroundColor: light ? 'rgba(250,250,252,0.93)' : 'rgba(58,58,62,0.93)', borderColor: light ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.35)' },
-              lensStyle,
-            ]}
-          >
-            <Animated.View style={[styles.row, { left: 0, top: 0, width: fullW, height: H, transformOrigin: 'left top' }, lensRow]}>
+        {/* thanh tab: lớp kính nền đổi bề rộng (nhận cử chỉ), nội dung nằm trên, cố định chỗ */}
+        <View pointerEvents="box-none" style={[styles.abs, { left: M, bottom: 0, width: fullW, height: H }]}>
+          <GestureDetector gesture={gesture}>
+            <Animated.View style={[styles.abs, { left: 0, top: 0, height: H, borderRadius: H / 2, borderCurve: 'continuous' }, glassShadow(1, light), glassW]}>
+              <GlassFill radius={H / 2} solid={0.5} slab noRim={noRim} />
+              <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center, iconFade]}>
+                {shown >= 0 && <DockGlyph id={tabs[shown]} size={28} color={theme.colors.accent} />}
+              </Animated.View>
+            </Animated.View>
+          </GestureDetector>
+          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, rowFade]}>
+            <Animated.View style={[styles.pill, { width: tw, backgroundColor: light ? 'rgba(0,0,0,0.065)' : 'rgba(255,255,255,0.12)' }, pillStyle]} />
+            <View style={styles.row}>
               {tabs.map((id) => (
                 <Cell key={id} id={id} on={id === active} labels={labels} width={tw} />
               ))}
+            </View>
+            <Animated.View
+              style={[
+                styles.lens,
+                { left: -1, width: lw, height: lh, backgroundColor: light ? 'rgba(250,250,252,0.93)' : 'rgba(58,58,62,0.93)', borderColor: light ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.35)' },
+                lensStyle,
+              ]}
+            >
+              <Animated.View style={[styles.row, { left: 0, top: 0, width: fullW, height: H, transformOrigin: 'left top' }, lensRow]}>
+                {tabs.map((id) => (
+                  <Cell key={id} id={id} on={id === active} labels={labels} width={tw} />
+                ))}
+              </Animated.View>
             </Animated.View>
           </Animated.View>
-          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center, iconFade]}>
-            {shown >= 0 && <DockGlyph id={tabs[shown]} size={28} color={theme.colors.accent} />}
-          </Animated.View>
-        </Animated.View>
+        </View>
 
         {/* nút tìm kiếm tròn tách riêng */}
         {hasSearch && (
           <Animated.View style={[styles.abs, { right: M, bottom: 0, width: H, height: H, borderRadius: H / 2 }, glassShadow(1, light), searchStyle]}>
-            {glassBox(H / 2)}
-            <Pressable
-              onPress={() => onChange('search')}
-              onPressIn={() => (searchPress.value = withSpring(1.12, SQUISH))}
-              onPressOut={() => (searchPress.value = withSpring(1, SQUISH))}
-              style={[StyleSheet.absoluteFill, styles.center]}
-            >
+            <GlassFill radius={H / 2} solid={0.5} slab noRim={noRim} />
+            <Pressable onPress={() => onChange('search')} {...squish(searchPress, 1.12)} style={[StyleSheet.absoluteFill, styles.center]}>
               <DockGlyph id="search" size={27} color={active === 'search' ? theme.colors.accent : theme.colors.text} />
             </Pressable>
           </Animated.View>
