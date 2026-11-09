@@ -11,7 +11,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, PixelRatio, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import Animated, { FadeInDown, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, FadeOut, FadeInDown, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useDockCollapse } from '../components/dockCollapse';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
@@ -461,7 +461,9 @@ function Trending() {
     </Pressable>
   );
   const regionList = regionOpen && (
-    <Animated.View entering={FadeInDown.duration(180)} style={[styles.regionList, { backgroundColor: surface, borderColor: border }]}>
+    // Nổi lên trên danh sách (không đẩy danh sách xuống): mọc ra từ góc của ô chọn, tấm kính có bóng đổ
+    <Animated.View entering={popIn} exiting={FadeOut.duration(120)} style={[styles.regionList, glassShadow(1, theme.colors.glassTint !== 'dark')]}>
+      <GlassFill radius={14} solid={0.85} slab />
       {(['ZZ', 'VN', 'KR', 'US'] as TrendingRegion[]).map((k) => (
         <Pressable
           key={k}
@@ -494,7 +496,7 @@ function Trending() {
   return (
     <View>
       <SectionTitle title={t('home.section.trending')} right={chips} />
-      <View style={{ alignItems: 'flex-start', marginBottom: 8 }}>
+      <View style={{ alignItems: 'flex-start', marginBottom: 8, zIndex: 20, elevation: 20 }}>
         {regionBox}
         {regionList}
       </View>
@@ -793,6 +795,15 @@ export function HomeScreen() {
 }
 
 const CHIP_R = 16;
+// Bảng chọn nổi: hiện từ 95% + mờ → rõ (không mọc từ 0), đường cong ease-out mạnh, 160ms
+const popIn = () => {
+  'worklet';
+  const ease = Easing.bezier(0.23, 1, 0.32, 1);
+  return {
+    initialValues: { opacity: 0, transform: [{ scale: 0.95 }] },
+    animations: { opacity: withTiming(1, { duration: 160, easing: ease }), transform: [{ scale: withTiming(1, { duration: 160, easing: ease }) }] },
+  };
+};
 const styles = StyleSheet.create({
   greeting: { flex: 1, fontSize: 26, fontWeight: '800' },
   editBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
@@ -812,7 +823,7 @@ const styles = StyleSheet.create({
   pill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14 },
   staleDot: { position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: 4 },
   regionBox: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
-  regionList: { marginTop: 6, minWidth: 190, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', paddingVertical: 4 },
+  regionList: { position: 'absolute', top: '100%', left: 0, marginTop: 6, minWidth: 190, borderRadius: 14, borderCurve: 'continuous', paddingVertical: 4, transformOrigin: 'left top' },
   regionRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, height: 42 },
   rankRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   rankThumb: { width: 46, height: 46, borderRadius: 4 },

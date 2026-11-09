@@ -12,7 +12,12 @@ import { Freeze } from './Freeze';
 import { useTheme } from '../theme/ThemeProvider';
 import { useScreenSize } from './ScreenSize';
 
-export type Rect = { x: number; y: number; w: number; h: number; r: number; slab?: boolean }; // slab: điểm xuất phát là bong bóng kiểu khối kính
+export type Rect = {
+  x: number; y: number; w: number; h: number; r: number;
+  slab?: boolean; // điểm xuất phát là bong bóng kiểu khối kính
+  // Khung player nở ra từ (x,y,w,h,r) — vd cả viên mini player; còn ảnh bìa bay riêng từ ô ảnh nhỏ này (nếu có)
+  art?: { x: number; y: number; w: number; h: number; r: number };
+}; // slab: điểm xuất phát là bong bóng kiểu khối kính
 
 // Nơi bấm để mở player (ảnh album ở mini player hoặc mục Player trên dock).
 // Nơi bấm ghi vào đây trước khi đổi tab, hiệu ứng đọc ra để biết phải phóng to từ đâu.
@@ -99,6 +104,9 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
     p.value = open ? 1 : 0;
   }
   const ox = useSharedValue(0), oy = useSharedValue(0), ow = useSharedValue(1), oh = useSharedValue(1), or = useSharedValue(0);
+  // ô xuất phát của ảnh bìa bay (mặc định trùng khung player)
+  const sized = useSharedValue(0); // 1 = khung thật sự đổi kích thước (xuất phát từ viên thuốc dẹt)
+  const ax = useSharedValue(0), ay = useSharedValue(0), aw = useSharedValue(1), ar = useSharedValue(0);
 
   const openSize = useRef({ W, H }); // kích thước màn hình lúc mở player
   const hRef = useRef(H);
@@ -131,6 +139,9 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
         const o = reduced ? { x: 0, y: 0, w: W, h: H, r: 0 } : playerOrigin.current ?? { x: W / 2 - 24, y: H - 120, w: 48, h: 48, r: 24 };
         artOff.value = reduced ? 1 : 0;
         ox.value = o.x; oy.value = o.y; ow.value = o.w; oh.value = o.h; or.value = o.r;
+        const a = (o as Rect).art ?? o;
+        ax.value = a.x; ay.value = a.y; aw.value = a.w; ar.value = a.r;
+        sized.value = o.h > 0 && o.w / o.h > 2.2 ? 1 : 0;
         p.value = 0;
         flung.value = 0;
         openSize.current = { W, H };
@@ -152,6 +163,8 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
       const o = playerOrigin.current;
       if (o && (Math.abs(os.W - W) > 1 || Math.abs(os.H - H) > 1)) {
         ox.value = o.x; oy.value = o.y; ow.value = o.w; oh.value = o.h; or.value = o.r;
+        const a = (o as Rect).art ?? o;
+        ax.value = a.x; ay.value = a.y; aw.value = a.w; ar.value = a.r;
       }
       // Thu nhỏ ngay lập tức (không đợi đo vị trí mini player): luồng JS có bận thì hiệu ứng vẫn chạy trên UI thread
       // Đường cong đi tới đích dứt khoát (không bò chậm ở cuối): trước đây đoạn cuối kéo dài, ảnh album còn to hơn
@@ -218,6 +231,12 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   // Bo góc (theo điểm ảnh thật trên màn hình) ở mỗi thời điểm.
   // Bong bóng tròn: lúc gần về bong bóng thì bo góc = nửa cạnh ảnh đang bay (luôn là hình tròn), xa dần thì chuyển
   // về bo góc thường. Không làm vậy thì ảnh bay trông như ô vuông bo góc, tới cuối mới "bụp" thành hình tròn
+  // Bo góc của ảnh bìa bay: từ bo góc ô ảnh nhỏ tới bo góc ảnh lớn
+  const artRadiusAt = (pv: number) => {
+    'worklet';
+    if (ar.value === or.value && aw.value === ow.value) return radiusAt(pv);
+    return interpolate(pv, [0, 0.97, 1], [ar.value, 48, 0], 'clamp');
+  };
   const radiusAt = (pv: number) => {
     'worklet';
     const base = interpolate(pv, [0, 0.97, 1], [or.value, 48, 0], 'clamp');
@@ -242,7 +261,25 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
     const sh = interpolate(p.value, [0, 1], [oh.value / H, 1]);
     // Bo góc mong muốn (theo điểm ảnh thật), đổi ra đơn vị của khung trước khi co
     const r = radiusAt(p.value);
+    if (sized.value) {
+      // Xuất phát từ viên thuốc dẹt (mini player kiểu Apple Music): co giãn hai chiều khác nhau thì bo góc bị méo
+      // thành hình chữ nhật góc nhọn → ở đây khung đổi kích thước thật (bên trong chỉ có màn player đặt tuyệt đối,
+      // cỡ cố định, nên máy chỉ tính lại đúng khung này), bo góc là bo góc thật, vị trí vẫn đi bằng transform
+      return {
+        width: W * sw,
+        height: H * sh,
+        borderRadius: r,
+        transform: [
+          { translateX: interpolate(p.value, [0, 1], [ox.value, 0]) },
+          { translateY: interpolate(p.value, [0, 1], [oy.value, 0]) },
+          { scaleX: 1 },
+          { scaleY: 1 },
+        ],
+      };
+    }
     return {
+      width: W,
+      height: H,
       transform: [
         { translateX: interpolate(p.value, [0, 1], [ox.value, 0]) },
         { translateY: interpolate(p.value, [0, 1], [oy.value, 0]) },
@@ -261,6 +298,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
     const sw = interpolate(p.value, [0, 1], [ow.value / W, 1]);
     const sh = interpolate(p.value, [0, 1], [oh.value / H, 1]);
     const k = Math.max(sw, sh);
+    if (sized.value) return { transform: [{ scaleX: k }, { scaleY: k }] };
     return { transform: [{ scaleX: k / sw }, { scaleY: k / sh }] };
   });
   const veil = useAnimatedStyle(() => ({ opacity: interpolate(p.value, [0.3, 0.92], [1, 0], 'clamp') }));
@@ -274,8 +312,8 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   // chiều cao) nên ảnh thò ra dưới khung player lúc thu nhỏ → cạnh dưới vuông, trông sượng
   const A = Math.min(W, H);
   const artClip = useAnimatedStyle(() => {
-    const sw = interpolate(p.value, [0, 1], [ow.value / A, 1]);
-    const r = radiusAt(p.value);
+    const sw = interpolate(p.value, [0, 1], [aw.value / A, 1]);
+    const r = artRadiusAt(p.value);
     return { borderRadius: r / sw };
   });
 
@@ -287,14 +325,14 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   const shadowFade = useAnimatedStyle(() => ({ opacity: interpolate(p.value, [0, 0.25], [1, 0], 'clamp') }));
 
   const art = useAnimatedStyle(() => {
-    const sw = interpolate(p.value, [0, 1], [ow.value / A, 1]);
-    const r = radiusAt(p.value);
+    const sw = interpolate(p.value, [0, 1], [aw.value / A, 1]);
+    const r = artRadiusAt(p.value);
     return {
       opacity: artOff.value ? 0 : interpolate(p.value, [0.25, 0.6], [1, 0], 'clamp'),
       borderRadius: r / sw,
       transform: [
-        { translateX: interpolate(p.value, [0, 1], [ox.value, 0]) },
-        { translateY: interpolate(p.value, [0, 1], [oy.value, 0]) },
+        { translateX: interpolate(p.value, [0, 1], [ax.value, 0]) },
+        { translateY: interpolate(p.value, [0, 1], [ay.value, 0]) },
         { scale: sw },
       ],
     };
@@ -340,7 +378,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
                 mắt thấy chuyển động liền mạch hơn, che luôn những khung hình chưa kịp vẽ */}
             {Platform.OS === 'ios' && (
               <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, veil]}>
-                <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+                <BlurView intensity={40} tint={light ? "light" : "dark"} style={StyleSheet.absoluteFill} />
               </Animated.View>
             )}
           </TransitionContext.Provider>

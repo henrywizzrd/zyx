@@ -3,6 +3,7 @@ import { Platform, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ICONS } from './FloatingDock';
 import type { TabId } from '../theme/types';
+import { DockGlyph } from './DockIcons';
 
 const skia = Platform.OS === 'web' ? null : (require('@shopify/react-native-skia') as typeof import('@shopify/react-native-skia'));
 
@@ -35,7 +36,7 @@ export function VinylIcon({ size, color }: { size: number; color: string }) {
   );
 }
 
+// Icon tab cho mọi kiểu dock: dùng chung bộ icon kiểu Apple Music (DockIcons) để dock thanh / bubble / Apple Music giống nhau
 export function TabIcon({ id, size, color }: { id: Exclude<TabId, 'player'>; size: number; color: string }) {
-  if (id === 'settings') return <View style={{ width: size, height: size }}><VinylIcon size={size} color={color} /></View>;
-  return <Ionicons name={ICONS[id]} size={size} color={color} />;
+  return <DockGlyph id={id} size={size} color={color} />;
 }

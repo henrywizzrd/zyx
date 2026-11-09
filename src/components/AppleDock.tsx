@@ -106,8 +106,13 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
     }
   }, [idx, tw]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // đổi tab → mở dock lại
+  // đổi tab → mở dock lại. Mở / đóng player thì KHÔNG: player thu về đúng chỗ viên mini player lúc mở — nếu dock
+  // tự giãn ra trong lúc player đang mở thì viên đã dời chỗ, player thu về chỗ cũ → còn sót một ảnh "ma" ở đó
+  const prevActive = useRef(active);
   useEffect(() => {
+    const prev = prevActive.current;
+    prevActive.current = active;
+    if (active === 'player' || prev === 'player') return;
     setDockCollapsed(false);
   }, [active]);
 
@@ -272,11 +277,17 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
     opacity: interpolate(pp.value, [0, 0.7], [1, 0], 'clamp'),
     transform: [{ translateY: interpolate(pp.value, [0, 1], [0, sink]) }],
   }));
-  const miniOut = useAnimatedStyle(() => ({ opacity: interpolate(pp.value, [0, 0.14], [1, 0], 'clamp') }));
+  const miniOut = useAnimatedStyle(() => ({ opacity: interpolate(pp.value, [0, 0.22], [1, 0], 'clamp') }));
+  // Player nở ra từ CẢ viên mini player (như Apple Music): khung player = viên thuốc giãn ra, ảnh bìa bay riêng
+  // từ ô ảnh nhỏ lên chỗ ảnh lớn; đóng thì ngược lại, co về đúng hình viên thuốc
+  const pillRef = useRef<ViewRef>(null);
   const openFromMini = () => {
-    artRef.current?.measureInWindow((x, y, w, h) => {
-      if (w > 0) playerOrigin.current = { x, y, w, h, r: 9 };
-      onOpenPlayer();
+    artRef.current?.measureInWindow((ax, ay, aw, ah) => {
+      pillRef.current?.measureInWindow((x, y, w, h) => {
+        if (w > 0 && aw > 0) playerOrigin.current = { x, y, w, h, r: h / 2, art: { x: ax, y: ay, w: aw, h: ah, r: 9 } };
+        else if (aw > 0) playerOrigin.current = { x: ax, y: ay, w: aw, h: ah, r: 9 };
+        onOpenPlayer();
+      });
     });
   };
   // nhấn: phản hồi ngay lúc chạm (không đợi nhấc tay)
@@ -290,7 +301,7 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
       <View pointerEvents="box-none" style={[styles.layer, { left: 0, right: 0, bottom, height: H + MGAP + MH + 20 }]}>
         {/* mini player */}
         {track && (
-          <Animated.View style={[styles.abs, { left: M, bottom: H + MGAP, height: MH, borderRadius: MH / 2, borderCurve: 'continuous' }, glassShadow(1, light), miniStyle, miniOut]}>
+          <Animated.View ref={pillRef} style={[styles.abs, { left: M, bottom: H + MGAP, height: MH, borderRadius: MH / 2, borderCurve: 'continuous' }, glassShadow(1, light), miniStyle, miniOut]}>
             <GlassFill radius={MH / 2} solid={0.5} slab noRim={noRim} />
             <Pressable onPress={openFromMini} {...squish(miniPress, 1.03)} style={styles.miniRow}>
               <View ref={artRef} collapsable={false} style={[styles.miniArt, { backgroundColor: track.color }]}>
