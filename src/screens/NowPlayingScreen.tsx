@@ -791,8 +791,10 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
           {/* Khoảng trống giữa (vuốt xuống để thu player khi đang xem ảnh bìa) */}
           <CloseZone><View style={{ flex: 1 }} pointerEvents={showLyrics ? 'none' : 'auto'}  /></CloseZone>
 
-          {/* Hàng tên bài dưới ảnh bìa: chỉ giữ chỗ cho tên bài + nút thích / menu */}
-          <CloseZone><View
+          {/* Hàng tên bài dưới ảnh bìa: chỉ giữ chỗ cho tên bài + nút thích / menu.
+              Vùng vuốt (CloseZone) bọc BÊN TRONG: bộ nhận cử chỉ thêm một lớp bao, bọc ở ngoài thì toạ độ đo (wrapY)
+              bị tính theo lớp bao đó (= 0) → tên bài bay sai chỗ, mất hẳn khỏi màn hình */}
+          <View
             style={{ paddingLeft: side, paddingRight: pad.right + 24 }}
             pointerEvents={showLyrics ? 'none' : 'auto'}
             onLayout={(e) => {
@@ -802,7 +804,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
             }}
             
           >
-            <View
+            <CloseZone><View
               style={styles.info}
               onLayout={(e) => {
                 pos.current.rowY = e.nativeEvent.layout.y;
@@ -822,8 +824,8 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
                 {SaveButton}
                 {MoreButtonFlat}
               </RAnimated.View>
-            </View>
-          </View></CloseZone>
+            </View></CloseZone>
+          </View>
 
           {/* Tên bài + nghệ sĩ: một khối duy nhất bay giữa hai chỗ trên */}
           <RAnimated.View

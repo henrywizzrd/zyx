@@ -21,7 +21,7 @@ import { GlassFill, glassShadow } from './Glass';
 import { SmartImage } from './Cover';
 import { usePlayerPick, ViewRef } from '../player/PlayerProvider';
 import { PlayPauseGlyph, SkipGlyph } from './PlayerIcons';
-import { playerOrigin, playerProgress } from './PlayerTransition';
+import { playerOrigin, playerProgress, prewarmPlayer } from './PlayerTransition';
 import { dockCollapse, setDockCollapsed } from './dockCollapse';
 
 export const AM = { M: 20, H: 62, GAP: 10, MH: 52, MGAP: 8, CH: 54 };
@@ -291,8 +291,11 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
     });
   };
   // nhấn: phản hồi ngay lúc chạm (không đợi nhấc tay)
-  const squish = (sv: typeof miniPress, k: number) => ({
-    onPressIn: () => (sv.value = withSpring(reduced ? 1 : k, SQUISH)),
+  const squish = (sv: typeof miniPress, k: number, onIn?: () => void) => ({
+    onPressIn: () => {
+      onIn?.();
+      sv.value = withSpring(reduced ? 1 : k, SQUISH);
+    },
     onPressOut: () => (sv.value = withSpring(1, SQUISH)),
   });
 
@@ -303,7 +306,7 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
         {track && (
           <Animated.View ref={pillRef} style={[styles.abs, { left: M, bottom: H + MGAP, height: MH, borderRadius: MH / 2, borderCurve: 'continuous' }, glassShadow(1, light), miniStyle, miniOut]}>
             <GlassFill radius={MH / 2} solid={0.5} slab noRim={noRim} />
-            <Pressable onPress={openFromMini} {...squish(miniPress, 1.03)} style={styles.miniRow}>
+            <Pressable onPress={openFromMini} {...squish(miniPress, 1.03, prewarmPlayer)} style={styles.miniRow}>
               <View ref={artRef} collapsable={false} style={[styles.miniArt, { backgroundColor: track.color }]}>
                 {track.thumb ? <SmartImage url={track.thumb} size={96} style={StyleSheet.absoluteFill} /> : null}
               </View>

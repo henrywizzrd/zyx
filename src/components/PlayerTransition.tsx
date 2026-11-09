@@ -91,7 +91,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
     unmountTimer.current = setTimeout(() => {
       unmountTimer.current = null;
       if (!openRef.current) setMounted(false);
-    }, 80);
+    }, 600); // gỡ hẳn sau một nhịp (lớp chuyển cảnh đã tự ẩn trên luồng giao diện), tránh đè lên đúng lúc dock / mini player vừa hiện
   }, [setMounted]);
   useEffect(() => () => {
     if (unmountTimer.current) clearTimeout(unmountTimer.current);
@@ -363,7 +363,9 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   }, []);
   useEffect(() => {
     if (mounted) return setFrozen(false);
-    const id = setTimeout(() => setFrozen(true), 60);
+    // Đợi hẳn một lúc sau khi thu về mới đóng băng: đóng băng = ẩn cả cây màn player trên luồng giao diện (tốn vài
+    // chục ms) — làm ngay lúc vừa thu về thì rơi đúng khoảnh khắc cuối của chuyển động → thấy khựng một cái
+    const id = setTimeout(() => setFrozen(true), 1200);
     return () => clearTimeout(id);
   }, [mounted]);
   if (!everRef.current) return null;
