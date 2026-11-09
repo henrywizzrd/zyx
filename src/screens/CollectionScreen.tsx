@@ -5,6 +5,7 @@ import { Stagger } from '../components/Stagger';
 import { loadTrendingSummed, parseTrendingId } from '../data/trending';
 import { FadeBottom } from '../components/FadeBottom';
 import { ActivityIndicator, Image, PixelRatio, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { GlassFill, glassShadow } from '../components/Glass';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
@@ -60,6 +61,9 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
   const sheet = useActionSheet();
   const dbv = useDbVersion();
   const { text, textSecondary, accent, surface, border, bg } = theme.colors;
+  // Nút tròn (trộn bài, lưu, đổi tên, back) là tấm kính giống dock
+  const gs = glassShadow(0.6, theme.colors.glassTint !== 'dark');
+  const roundGlass = <GlassFill radius={24} solid={0.45} slab />;
 
   const [allRows, setRows] = useState<Row[]>([]);
   // Nút "Đã tải" ở Thư viện đang bật: chỉ hiện (và chỉ phát) các bài đã tải về máy
@@ -301,7 +305,8 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
     <>
       {/* Trộn bài | Phát | Lưu */}
       <View style={[styles.actions, landscape && { gap: 12 }]}>
-        <Pressable onPress={() => playAll(true)} disabled={!rows.length} style={[styles.roundBtn, { backgroundColor: border }]}>
+        <Pressable onPress={() => playAll(true)} disabled={!rows.length} style={[styles.roundBtn, gs]}>
+          {roundGlass}
           <Ionicons name="shuffle" size={24} color={shuffle ? accent : text} />
         </Pressable>
         <Pressable onPress={() => playAll(false)} disabled={!rows.length} style={[styles.playBtn, landscape && { width: undefined, flex: 1, maxWidth: 160 }, { backgroundColor: text, opacity: rows.length ? 1 : 0.4 }]}>
@@ -309,11 +314,13 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
           <Text style={{ color: bg, fontSize: 18, fontWeight: '800' }}>{t('col.play')}</Text>
         </Pressable>
         {yt ? (
-          <Pressable onPress={toggleSaved} style={[styles.roundBtn, { backgroundColor: border }]}>
+          <Pressable onPress={toggleSaved} style={[styles.roundBtn, gs]}>
+          {roundGlass}
             <Ionicons name={saved ? 'checkmark' : 'add'} size={28} color={saved ? accent : text} />
           </Pressable>
         ) : local ? (
-          <Pressable onPress={rename} style={[styles.roundBtn, { backgroundColor: border }]}>
+          <Pressable onPress={rename} style={[styles.roundBtn, gs]}>
+          {roundGlass}
             <Ionicons name="pencil" size={20} color={text} />
           </Pressable>
         ) : (
@@ -368,10 +375,12 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
         </FadeBottom>
         </StretchyBg>
         <View style={[styles.topBar, { top: pad.top + 6, left: pad.left + 16, right: pad.right + 16 }]}>
-          <Pressable onPress={goBack} hitSlop={10} style={styles.glassBtn}>
+          <Pressable onPress={goBack} hitSlop={10} style={[styles.glassBtn, glassShadow(0.5)]}>
+            <GlassFill radius={21} dark />
             <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
           </Pressable>
-          <Pressable onPress={openMore} hitSlop={10} style={styles.glassBtn}>
+          <Pressable onPress={openMore} hitSlop={10} style={[styles.glassBtn, glassShadow(0.5)]}>
+            <GlassFill radius={21} dark />
             <Ionicons name="ellipsis-horizontal" size={22} color="#FFFFFF" />
           </Pressable>
         </View>
@@ -424,10 +433,12 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
       <View style={[StyleSheet.absoluteFill, { flexDirection: 'row' }]}>
         <ScrollView style={{ width: leftW, flexGrow: 0 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: pad.top + 10, paddingBottom: pad.bottom + pad.endPadding, paddingHorizontal: 16 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Pressable onPress={goBack} hitSlop={10} style={[styles.glassBtn, { backgroundColor: surface }]}>
+            <Pressable onPress={goBack} hitSlop={10} style={[styles.glassBtn, gs]}>
+              <GlassFill radius={21} solid={0.45} slab />
               <Ionicons name="chevron-back" size={24} color={text} />
             </Pressable>
-            <Pressable onPress={openMore} hitSlop={10} style={[styles.glassBtn, { backgroundColor: surface }]}>
+            <Pressable onPress={openMore} hitSlop={10} style={[styles.glassBtn, gs]}>
+              <GlassFill radius={21} solid={0.45} slab />
               <Ionicons name="ellipsis-horizontal" size={22} color={text} />
             </Pressable>
           </View>
@@ -512,13 +523,12 @@ const styles = StyleSheet.create({
   topBar: { position: 'absolute', flexDirection: 'row', justifyContent: 'space-between' },
   glassBtn: {
     width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.25)',
   },
   title: { fontSize: 28, fontWeight: '900', textAlign: 'center' },
   owner: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
   ownerThumb: { width: 26, height: 26, borderRadius: 13 },
   actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 18, marginTop: 20, marginBottom: 14 },
-  roundBtn: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  roundBtn: { width: 48, height: 48, borderRadius: 24, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
   playBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: 160, height: 52, borderRadius: 26 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   thumb: { width: 48, height: 48, borderRadius: 4 },

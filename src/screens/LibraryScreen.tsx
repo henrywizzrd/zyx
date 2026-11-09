@@ -28,6 +28,7 @@ import { ProfileFeed } from '../components/ProfileFeed';
 import { StretchyBg } from '../components/Stretchy';
 import { useSharedValue } from 'react-native-reanimated';
 import { useDockCollapse } from '../components/dockCollapse';
+import { GlassFill, glassShadow } from '../components/Glass';
 
 const H_PAD = 16;
 const COVER_H = 520; // chiều cao vùng ảnh bìa: phủ phần đầu trang rồi mờ dần xuống tận danh sách
@@ -218,8 +219,9 @@ export function LibraryScreen() {
   const chip = (label: string, on: boolean, onPress: () => void) => (
     <Pressable
       onPress={onPress}
-      style={[styles.chip, { backgroundColor: on ? accent : surface }]}
+      style={[styles.chip, on ? { backgroundColor: accent } : glassShadow(0.5, theme.colors.glassTint !== 'dark')]}
     >
+      {!on && <GlassFill radius={18} solid={0.45} slab />}
       <Text style={{ color: on ? theme.colors.onAccent : text, fontWeight: '600', fontSize: 13 }}>{label}</Text>
     </Pressable>
   );
@@ -260,8 +262,9 @@ export function LibraryScreen() {
       renderItem = (it) =>
         tap(
           it,
-          <View style={[styles.chipRow, { backgroundColor: surface }]}>
-            <CoverBox item={it} size={56} radius={0} />
+          <View style={[styles.chipRow, glassShadow(0.6, theme.colors.glassTint !== 'dark')]}>
+            <GlassFill radius={14} solid={0.5} slab />
+            <CoverBox item={it} size={48} radius={9} />
             <Text numberOfLines={2} style={{ color: text, flex: 1, marginHorizontal: 10, fontSize: 13, fontWeight: '600' }}>
               {titleOf(it)}
             </Text>
@@ -310,7 +313,8 @@ export function LibraryScreen() {
         {/* Tìm kiếm, sắp xếp, đổi kiểu hiển thị */}
         <View style={{ paddingHorizontal: H_PAD, marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           {searchOpen ? (
-            <View style={[styles.searchBox, { backgroundColor: surface }]}>
+            <View style={[styles.searchBox, glassShadow(0.5, theme.colors.glassTint !== 'dark')]}>
+              <GlassFill radius={14} solid={0.5} slab />
               <Ionicons name="search" size={16} color={textSecondary} />
               <TextInput
                 autoFocus
@@ -614,8 +618,8 @@ const styles = StyleSheet.create({
   followersRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
   plusBtn: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   follower: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18 },
-  searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 8, paddingHorizontal: 10 },
+  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, borderCurve: 'continuous' },
+  searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderCurve: 'continuous', paddingHorizontal: 12 },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 },
-  chipRow: { height: 56, borderRadius: 6, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
+  chipRow: { height: 60, borderRadius: 14, borderCurve: 'continuous', flexDirection: 'row', alignItems: 'center', paddingLeft: 6 },
 });

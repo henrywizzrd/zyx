@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNav } from '../nav/Nav';
 import { signOut, useSession } from '../data/auth';
 import { setCrossfade, useCrossfade } from '../player/crossfade';
+import { GlassFill, glassShadow } from '../components/Glass';
 
 // labels: chữ hiển thị cho từng lựa chọn (bỏ trống thì hiện chính giá trị)
 function Chips<T extends string>({ options, value, onSelect, labels }: { options: readonly T[]; value: T; onSelect: (v: T) => void; labels?: Partial<Record<T, string>> }) {
@@ -21,8 +22,9 @@ function Chips<T extends string>({ options, value, onSelect, labels }: { options
           <Pressable
             key={o}
             onPress={() => onSelect(o)}
-            style={[styles.chip, { backgroundColor: on ? theme.colors.accent : theme.colors.surface }]}
+            style={[styles.chip, on ? { backgroundColor: theme.colors.accent } : glassShadow(0.5, theme.colors.glassTint !== 'dark')]}
           >
+            {!on && <GlassFill radius={20} solid={0.45} slab />}
             <Text style={{ color: on ? theme.colors.onAccent : theme.colors.text, fontWeight: '600' }}>{labels?.[o] ?? o}</Text>
           </Pressable>
         );
@@ -41,6 +43,8 @@ export function SettingsScreen() {
   const profile = useProfile();
   const syncErr = useProfileSyncError();
   const crossfade = useCrossfade();
+  // Thẻ trong Cài đặt là tấm kính giống dock (cùng kiểu với ô playlist ở Home)
+  const gs = glassShadow(0.8, theme.colors.glassTint !== 'dark');
 
   const settingsPart = (
     <>
@@ -48,7 +52,8 @@ export function SettingsScreen() {
       <Text style={{ color: theme.colors.textSecondary, marginTop: 8 }}>{t('settings.hint')}</Text>
 
       {/* Giao diện: mở Theme Studio */}
-      <Pressable onPress={() => push({ type: 'themeStudio' })} style={[styles.row, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+      <Pressable onPress={() => push({ type: 'themeStudio' })} style={[styles.row, gs]}>
+        <GlassFill radius={16} solid={0.5} slab />
         <View style={[styles.rowIcon, { backgroundColor: theme.colors.accent }]}>
           <Ionicons name="color-palette" size={20} color={theme.colors.onAccent} />
         </View>
@@ -121,7 +126,8 @@ export function SettingsScreen() {
     <>
       {/* Tài khoản: đang đăng nhập tên gì (hoặc Khách) + Đăng xuất (quay về màn đăng nhập) */}
       <Text style={label}>{t('settings.account')}</Text>
-      <View style={[styles.row, { marginTop: 0, backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+      <View style={[styles.row, { marginTop: 0 }, gs]}>
+        <GlassFill radius={16} solid={0.5} slab />
         <View style={[styles.rowIcon, { backgroundColor: theme.colors.accent }]}>
           <Ionicons name={session?.mode === 'account' ? 'person' : 'person-outline'} size={20} color={theme.colors.onAccent} />
         </View>
@@ -134,7 +140,8 @@ export function SettingsScreen() {
       </View>
       {/* Hồ sơ chưa đồng bộ được: hiện lý do + nút thử lại */}
       {!!syncErr && (
-        <Pressable onPress={() => syncProfile()} style={{ marginTop: 8, padding: 12, borderRadius: 12, backgroundColor: theme.colors.surface }}>
+        <Pressable onPress={() => syncProfile()} style={[{ marginTop: 8, padding: 12, borderRadius: 16, borderCurve: 'continuous' }, gs]}>
+          <GlassFill radius={16} solid={0.5} slab />
           <Text style={{ color: '#E5484D', fontSize: 13, lineHeight: 18 }}>{t('settings.syncError', { msg: syncErr })}</Text>
           <Text style={{ color: theme.colors.accent, fontWeight: '700', marginTop: 6 }}>{t('settings.syncRetry')}</Text>
         </Pressable>
@@ -145,13 +152,15 @@ export function SettingsScreen() {
     <>
       <Pressable
         onPress={resetTheme}
-        style={[styles.chip, { backgroundColor: theme.colors.surface, alignSelf: 'flex-start', marginTop: 32 }]}
+        style={[styles.chip, { alignSelf: 'flex-start', marginTop: 32 }, glassShadow(0.5, theme.colors.glassTint !== 'dark')]}
       >
+        <GlassFill radius={20} solid={0.45} slab />
         <Text style={{ color: theme.colors.text, fontWeight: '600' }}>{t('settings.reset')}</Text>
       </Pressable>
       {/* Nhật ký dò lỗi (thay cho Playback lab) */}
-      <Pressable onPress={() => push({ type: 'log' })} style={[styles.row, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-        <View style={[styles.rowIcon, { backgroundColor: theme.colors.surface }]}>
+      <Pressable onPress={() => push({ type: 'log' })} style={[styles.row, gs]}>
+        <GlassFill radius={16} solid={0.5} slab />
+        <View style={[styles.rowIcon, { backgroundColor: theme.colors.bg }]}>
           <Ionicons name="document-text-outline" size={20} color={theme.colors.text} />
         </View>
         <View style={{ flex: 1 }}>
@@ -172,7 +181,8 @@ export function SettingsScreen() {
         right={
           <>
             <Text style={[styles.title, { color: theme.colors.text }]}>{t('settings.account')}</Text>
-            <View style={[styles.profileCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+            <View style={[styles.profileCard, gs]}>
+              <GlassFill radius={18} solid={0.5} slab />
               {profile.avatar ? (
                 <Image source={{ uri: profile.avatar }} style={styles.avatar} />
               ) : (
@@ -218,9 +228,9 @@ export function SettingsScreen() {
 const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '700' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 20, padding: 12, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
-  profileCard: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 16, padding: 14, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
+  chip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderCurve: 'continuous' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 20, padding: 12, borderRadius: 16, borderCurve: 'continuous' },
+  profileCard: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 16, padding: 14, borderRadius: 18, borderCurve: 'continuous' },
   avatar: { width: 60, height: 60, borderRadius: 30 },
   rowIcon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 });
