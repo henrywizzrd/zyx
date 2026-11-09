@@ -447,6 +447,7 @@ export const vi = {
   'stats.plays': "{n} lượt",
   'stats.empty': "Chưa có gì để thống kê. Nghe vài bài rồi quay lại đây nhé.",
   'settings.dockRim': "Ánh sáng viền dock",
+  'log.f.motion': "Chuyển động",
 };
 
 export type StringKey = keyof typeof vi;
@@ -877,4 +878,5 @@ export const en: Record<StringKey, string> = {
   'stats.plays': "{n} plays",
   'stats.empty': "Nothing to show yet. Play a few songs and come back.",
   'settings.dockRim': "Dock edge light",
+  'log.f.motion': "Motion",
 };

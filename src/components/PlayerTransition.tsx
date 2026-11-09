@@ -3,6 +3,7 @@ import { Image, Platform, StyleSheet, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import { scheduleOnRN } from 'react-native-worklets';
 import { hapticSnap } from './haptics';
+import { beginMotion, endMotion } from './JankMonitor';
 import { BlurView } from 'expo-blur';
 import Animated, { Easing, interpolate, makeMutable, runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { usePlayerPick } from '../player/PlayerProvider';
@@ -87,6 +88,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   const unmountTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finishClose = useCallback(() => {
     if (openRef.current || !mountedRef.current || unmountTimer.current) return;
+    endMotion('đã thu về');
     onClosedRef.current?.();
     unmountTimer.current = setTimeout(() => {
       unmountTimer.current = null;
@@ -115,6 +117,8 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   onCloseRef.current = onClose;
 
   const reportCover = useCallback(() => {}, []);
+  const frozenRef = useRef(false); // cho nhật ký chuyển động: lúc mở, màn player có đang ngủ không
+  const warmRef = useRef(false);
   // Trong lúc chuyển cảnh, cả màn player được "chụp" thành một ảnh (rasterize) rồi chỉ việc phóng to / thu nhỏ ảnh đó.
   // Không làm vậy thì mỗi khung hình máy phải vẽ lại toàn bộ: ảnh bìa có mép mờ (mask), chữ phát sáng, nền mờ...
   // bên trong một khung bo góc đang đổi kích thước → tụt khung hình
@@ -122,6 +126,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   const onOpenedRef = useRef(onOpened);
   onOpenedRef.current = onOpened;
   const stopMoving = useCallback(() => {
+    endMotion(openRef.current ? '' : 'thả tay → bật lại mở');
     setMoving(false);
     if (openRef.current) onOpenedRef.current?.(); // đã phóng to xong hẳn
   }, []);
@@ -148,6 +153,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
         setMounted(true);
       }
       setMoving(true);
+      beginMotion('mở player', `${sized.value ? 'từ viên mini player' : 'từ bong bóng'}${frozenRef.current && !warmRef.current ? ', màn player đang ngủ (phải vẽ lại)' : ''}`);
       p.value = withSpring(1, SPRING, (done) => {
         if (done) runOnJS(stopMoving)();
       });
@@ -157,6 +163,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
       return () => clearTimeout(id);
     } else if (mountedRef.current) {
       setMoving(true);
+      if (!flung.value) beginMotion('đóng player', sized.value ? 'về viên mini player' : 'về bong bóng');
       // Đã xoay màn hình trong lúc mở player (dọc ↔ ngang): chỗ cũ của bong bóng không còn đúng,
       // thu về chỗ mới của bong bóng (tính theo hình học, không đo nên không bị sai)
       const os = openSize.current;
@@ -192,7 +199,10 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   useEffect(() => {
     hV.value = H;
   }, [H]); // eslint-disable-line react-hooks/exhaustive-deps
-  const startDrag = useCallback(() => setMoving(true), []);
+  const startDrag = useCallback(() => {
+    setMoving(true);
+    beginMotion('vuốt player xuống');
+  }, []);
   const requestClose = useCallback(() => onCloseRef.current(), []);
   const closeCfg = useMemo<CloseCfg>(
     () => ({
@@ -305,7 +315,9 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   const veil = useAnimatedStyle(() => ({ opacity: interpolate(p.value, [0, 0.04, 0.3, 0.92], [0, 1, 1, 0], 'clamp') }));
   // Thu về hẳn (độ mở ~0): giấu toàn bộ lớp chuyển cảnh ngay trên luồng giao diện, không đợi JS gỡ ra.
   // Trước đây khung player (cỡ viên mini player, phủ lớp nhoè) còn nằm đè lên viên mini player vài giây → thấy viên bị nhoè
-  const rootVis = useAnimatedStyle(() => ({ opacity: p.value < 0.003 ? 0 : 1 }));
+  // Chỉ áp cho kiểu viên mini player (dock Apple Music): viên thật hiện dần theo độ mở trên luồng giao diện nên không hở.
+  // Bong bóng thì chỉ hiện lại khi JS báo (onClosed) → giấu sớm ở đây là hở một nhịp không có gì (bong bóng nháy)
+  const rootVis = useAnimatedStyle(() => ({ opacity: sized.value && p.value < 0.003 ? 0 : 1 }));
   const screen = useAnimatedStyle(() => ({ opacity: interpolate(p.value, [0.22, 0.55], [0, 1], 'clamp') }));
 
   // Ảnh album (vuông, ở đầu) phủ lên, mờ dần để lộ màn player (đóng lại thì hiện dần trở lại).
@@ -349,6 +361,8 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   // Đóng băng sau một nhịp: để màn player kịp nhận active = false (dừng xoay nền, dừng đồng hồ lời...) rồi mới đứng im
   const [frozen, setFrozen] = useState(false);
   const [warm, setWarm] = useState(false);
+  frozenRef.current = frozen;
+  warmRef.current = warm;
   const warmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     warmHook = () => {

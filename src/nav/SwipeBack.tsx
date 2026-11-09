@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import Animated, { Easing, SharedValue, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
+import { beginMotion, endMotion } from '../components/JankMonitor';
 import { useScreenSize } from '../components/ScreenSize';
 import { PageBackdrop } from '../components/AppBackground';
 import { log } from '../data/applog';
@@ -18,6 +19,8 @@ const SPRING = { damping: 30, stiffness: 260, mass: 1, overshootClamping: true }
 // Ghi vào nhật ký (mục Vuốt) để dò lỗi lúc vuốt quay lại
 function swipeLog(msg: string) {
   log('swipe', msg);
+  // thả tay: đo nốt đoạn trang trượt ra / trượt về rồi ghi vào mục Chuyển động
+  if (msg.startsWith('thả tay')) setTimeout(() => endMotion(msg.includes('quay lại') ? 'đã quay lại' : 'ở lại trang'), 320);
 }
 
 
@@ -88,6 +91,7 @@ export function SwipeBack({ onBack, fade, children }: { onBack: () => void; fade
     cover.value = 1;
     scheduleOnRN(setLive, true);
     scheduleOnRN(swipeLog, 'bắt đầu vuốt từ cạnh trái');
+    scheduleOnRN(beginMotion, 'vuốt quay lại', '');
   };
   const onUpdate = (e: { translationX: number }) => {
     'worklet';

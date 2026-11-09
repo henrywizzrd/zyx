@@ -10,8 +10,9 @@ import { clearLog, fmtTime, LogLine, LogTag, logToText, useLog } from '../data/a
 
 type Filter = 'all' | LogTag;
 const EMPTY: LogLine[] = [];
-const FILTERS: Filter[] = ['all', 'music', 'fx', 'error', 'jank', 'swipe', 'ui'];
+const FILTERS: Filter[] = ['all', 'motion', 'music', 'fx', 'error', 'jank', 'swipe', 'ui'];
 const TAG_COLOR: Record<LogTag, string> = {
+  motion: '#F5A524',
   music: '#3DB2FF',
   fx: '#A78BFA',
   error: '#E5484D',

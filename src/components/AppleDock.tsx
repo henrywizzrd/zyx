@@ -9,6 +9,7 @@ import React, { useEffect, useRef } from 'react';
 import { GestureDetector, usePanGesture, useSimultaneousGestures, useTapGesture } from 'react-native-gesture-handler';
 import { scheduleOnRN } from 'react-native-worklets';
 import { hapticSnap, hapticTick } from './haptics';
+import { beginMotionAny, endMotion } from './JankMonitor';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Animated, { interpolate, SharedValue, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -139,6 +140,7 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
     if (lensOn.value > 0.5 || dockCollapse.value > 0.5) return;
     const w = twV.value;
     lensX.value = pillX.value;
+    beginMotionAny('kính lúp dock');
     lensOn.value = withSpring(1, LENS);
     lensX.value = withSpring(Math.max(0, Math.min((nV.value - 1) * w, x - 4 - w / 2)), LENS);
   }
@@ -161,7 +163,9 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
       lensX.value = withSpring(i * w, LENS);
       lensOn.value = withSpring(0, LENS);
       lensSX.value = withSpring(1, LENS);
-      lensSY.value = withSpring(1, LENS);
+      lensSY.value = withSpring(1, LENS, (done) => {
+        if (done) scheduleOnRN(endMotion, `thả ở ô ${i + 1}`);
+      });
       scheduleOnRN(hapticSnap);
       scheduleOnRN(pick, i, false);
     } else if (tapOk) scheduleOnRN(pick, i, true);
