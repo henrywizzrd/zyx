@@ -255,6 +255,7 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
                 <Pressable
                   key={id}
                   {...d.pressProps}
+                  testID={`tab-${id}`}
                   onPress={() => onChange(id)}
                   style={{ width: cellW, height: cellH, alignItems: 'center', justifyContent: 'center' }}
                 >

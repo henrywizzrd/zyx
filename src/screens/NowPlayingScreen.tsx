@@ -759,7 +759,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
             }}
             style={{ paddingTop: pad.top + 4, paddingLeft: side, paddingRight: pad.right + 24 }}
           >
-            <Pressable onPress={onClose} hitSlop={14} style={styles.grabberWrap}>
+            <Pressable testID="player-close" onPress={onClose} hitSlop={14} style={styles.grabberWrap}>
               <View style={styles.grabber} />
             </Pressable>
             <View

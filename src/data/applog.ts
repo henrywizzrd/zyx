@@ -64,6 +64,8 @@ export function log(tag: LogTag, msg: string) {
   dirty = true;
   if (tag === 'error') flushLog();
   notify();
+  // Chép ra nhật ký hệ thống (Android: logcat) để máy kiểm tra tự động trên GitHub đọc được
+  if (tag !== 'music' && tag !== 'fx') console.log(`[zyx][${tag}] ${msg}`);
 }
 
 export function clearLog() {

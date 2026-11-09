@@ -310,7 +310,7 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
         {track && (
           <Animated.View ref={pillRef} style={[styles.abs, { left: M, bottom: H + MGAP, height: MH, borderRadius: MH / 2, borderCurve: 'continuous' }, glassShadow(1, light), miniStyle, miniOut]}>
             <GlassFill radius={MH / 2} solid={0.5} slab noRim={noRim} />
-            <Pressable onPress={openFromMini} {...squish(miniPress, 1.03, prewarmPlayer)} style={styles.miniRow}>
+            <Pressable testID="mini-pill" onPress={openFromMini} {...squish(miniPress, 1.03, prewarmPlayer)} style={styles.miniRow}>
               <View ref={artRef} collapsable={false} style={[styles.miniArt, { backgroundColor: track.color }]}>
                 {track.thumb ? <SmartImage url={track.thumb} size={96} style={StyleSheet.absoluteFill} /> : null}
               </View>
@@ -335,7 +335,7 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
         {/* thanh tab: lớp kính nền đổi bề rộng (nhận cử chỉ), nội dung nằm trên, cố định chỗ */}
         <Animated.View pointerEvents="box-none" style={[styles.abs, { left: M, bottom: 0, width: fullW, height: H }, barsOut]}>
           <GestureDetector gesture={gesture}>
-            <Animated.View style={[styles.abs, { left: 0, top: 0, height: H, borderRadius: H / 2, borderCurve: 'continuous' }, glassShadow(1, light), glassW]}>
+            <Animated.View testID="dock-bar" style={[styles.abs, { left: 0, top: 0, height: H, borderRadius: H / 2, borderCurve: 'continuous' }, glassShadow(1, light), glassW]}>
               <GlassFill radius={H / 2} solid={0.5} slab noRim={noRim} />
               <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center, iconFade]}>
                 {shown >= 0 && <DockGlyph id={tabs[shown]} size={28} color={theme.colors.accent} />}
@@ -374,7 +374,7 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
           <Animated.View pointerEvents="box-none" style={[styles.abs, { right: M, bottom: 0, width: H, height: H }, barsOut]}>
           <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: H / 2 }, glassShadow(1, light), searchStyle]}>
             <GlassFill radius={H / 2} solid={0.5} slab noRim={noRim} />
-            <Pressable onPress={() => onChange('search')} {...squish(searchPress, 1.12)} style={[StyleSheet.absoluteFill, styles.center]}>
+            <Pressable testID="dock-search" onPress={() => onChange('search')} {...squish(searchPress, 1.12)} style={[StyleSheet.absoluteFill, styles.center]}>
               <DockGlyph id="search" size={27} color={active === 'search' ? theme.colors.accent : theme.colors.text} />
             </Pressable>
           </Animated.View>

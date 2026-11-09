@@ -1,0 +1,102 @@
+# Kịch bản kiểm tra tự động (Maestro) chạy trên máy ảo Android ở GitHub (job ui-check trong build-test-apps.yml).
+# Mỗi bước chụp màn hình; cả lượt được quay video. Kết quả: Actions → lần chạy → Artifacts → "ui-check".
+appId: com.henrywizzrd.zyx
+---
+- launchApp:
+    stopApp: true
+- startRecording: zyx-run
+- runFlow:
+    when:
+      visible: "Guest|Khách"
+    commands:
+      - tapOn: "Guest|Khách"
+- extendedWaitUntil:
+    visible:
+      id: "trending-0"
+    timeout: 90000
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 01-home
+
+# ---- Dock thanh + bong bóng: mở / đóng player
+- tapOn:
+    id: "trending-0"
+- waitForAnimationToEnd:
+    timeout: 2500
+- takeScreenshot: 02-player-open
+- tapOn:
+    id: "player-close"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 03-closed-bubble
+- tapOn:
+    id: "mini-bubble"
+- waitForAnimationToEnd:
+    timeout: 2500
+- takeScreenshot: 04-reopen
+- swipe:
+    start: 50%, 22%
+    end: 50%, 92%
+    duration: 260
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 05-swipe-closed
+
+# ---- Chuyển sang dock Apple Music
+- tapOn:
+    id: "tab-settings"
+- tapOn: "Apple Music"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: 06-settings-apple
+- tapOn: "Home|Trang chủ"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: 07-apple-dock
+- scroll
+- scroll
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: 08-dock-collapsed
+- tapOn:
+    id: "mini-pill"
+- waitForAnimationToEnd:
+    timeout: 2500
+- takeScreenshot: 09-player-from-pill
+- tapOn:
+    id: "player-close"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: 10-closed-pill
+- swipe:
+    start: 50%, 35%
+    end: 50%, 85%
+    duration: 400
+- swipe:
+    start: 50%, 35%
+    end: 50%, 85%
+    duration: 400
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: 11-dock-expanded
+# kéo kính lúp qua các tab rồi thả
+- swipe:
+    start: 15%, 93%
+    end: 60%, 93%
+    duration: 900
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: 12-after-lens
+
+# ---- Nhật ký (mục Chuyển động)
+- tapOn: "Settings|Cài đặt"
+- scrollUntilVisible:
+    element: "Log|Nhật ký"
+    direction: DOWN
+    timeout: 15000
+- tapOn: "Log|Nhật ký"
+- tapOn: "Motion.*|Chuyển động.*"
+- waitForAnimationToEnd:
+    timeout: 1500
+- takeScreenshot: 13-log-motion
+- stopRecording

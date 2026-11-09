@@ -189,6 +189,7 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
                 pressOut();
                 d.pressProps.onPressOut();
               }}
+              testID="mini-bubble"
               onPress={openPlayer}
             >
               <Animated.View style={{ transform: [{ scale: press }] }}>

@@ -529,6 +529,7 @@ function Trending() {
           {data.songs.slice(0, 10).map((s, i) => (
             <Stagger key={`${s.id}:${i}:${region}:${range}`} i={i}>
             <Pressable
+              testID={`trending-${i}`}
               onPress={() => playTrack(s, data.songs, ctx!)}
               onLongPress={() => songMenu(s)}
               style={styles.rankRow}

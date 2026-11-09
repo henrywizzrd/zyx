@@ -129,3 +129,51 @@ jobs:
         run: |
           npx --yes eas-cli@latest update --channel preview --platform ios --message "$MSG" --non-interactive
           npx --yes eas-cli@latest update --channel preview --platform android --message "$MSG" --non-interactive
+
+  # Kiểm tra giao diện tự động trên máy ảo Android: chạy sau mỗi [update] / [build] (hoặc commit có [check]).
+  # Mở app, bấm theo kịch bản .maestro/flow.yaml (mở / đóng player, đổi dock, thu dock, kính lúp, nhật ký),
+  # chụp từng bước + quay video + đo khung hình. Kết quả ở Artifacts → "ui-check" (Claude tự tải về xem)
+  ui-check:
+    needs: [android, update]
+    if: >-
+      always() && github.event_name == 'push' &&
+      (contains(github.event.head_commit.message, '[update]') || contains(github.event.head_commit.message, '[build]') || contains(github.event.head_commit.message, '[check]')) &&
+      needs.android.result != 'failure' && needs.update.result != 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      # APK: vừa build xong thì dùng bản đó, không thì lấy APK của bản Release mới nhất (+ bản cập nhật OTA mới nhất)
+      - uses: actions/download-artifact@v5
+        if: needs.android.result == 'success'
+        with:
+          name: Zyx-android
+          path: apk
+      - name: Lấy APK của bản Release mới nhất
+        if: needs.android.result != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --json tagName -q '.[0].tagName')
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern Zyx.apk --dir apk
+      - name: Bật KVM cho máy ảo
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Cài Maestro
+        run: curl -fsSL "https://get.maestro.mobile.dev" | bash
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash .maestro/run.sh
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: ui-check
+          path: ui-out
