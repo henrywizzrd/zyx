@@ -462,8 +462,8 @@ function Trending() {
   );
   const regionList = regionOpen && (
     // Nổi lên trên danh sách (không đẩy danh sách xuống): mọc ra từ góc của ô chọn, tấm kính có bóng đổ
-    <Animated.View entering={popIn} exiting={FadeOut.duration(120)} style={[styles.regionList, glassShadow(1, theme.colors.glassTint !== 'dark')]}>
-      <GlassFill radius={14} solid={0.85} slab />
+    <Animated.View entering={popIn} exiting={FadeOut.duration(120)} style={[styles.regionList, { backgroundColor: theme.colors.surface, borderColor: border, borderWidth: StyleSheet.hairlineWidth }, glassShadow(1, theme.colors.glassTint !== 'dark')]}>
+      {/* nền đặc (không trong suốt): bảng chọn nằm đè lên danh sách, trong suốt thì chữ hai lớp chồng lên nhau */}
       {(['ZZ', 'VN', 'KR', 'US'] as TrendingRegion[]).map((k) => (
         <Pressable
           key={k}

@@ -302,7 +302,10 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
     if (sized.value) return { transform: [{ scaleX: k }, { scaleY: k }] };
     return { transform: [{ scaleX: k / sw }, { scaleY: k / sh }] };
   });
-  const veil = useAnimatedStyle(() => ({ opacity: interpolate(p.value, [0.3, 0.92], [1, 0], 'clamp') }));
+  const veil = useAnimatedStyle(() => ({ opacity: interpolate(p.value, [0, 0.04, 0.3, 0.92], [0, 1, 1, 0], 'clamp') }));
+  // Thu về hẳn (độ mở ~0): giấu toàn bộ lớp chuyển cảnh ngay trên luồng giao diện, không đợi JS gỡ ra.
+  // Trước đây khung player (cỡ viên mini player, phủ lớp nhoè) còn nằm đè lên viên mini player vài giây → thấy viên bị nhoè
+  const rootVis = useAnimatedStyle(() => ({ opacity: p.value < 0.003 ? 0 : 1 }));
   const screen = useAnimatedStyle(() => ({ opacity: interpolate(p.value, [0.22, 0.55], [0, 1], 'clamp') }));
 
   // Ảnh album (vuông, ở đầu) phủ lên, mờ dần để lộ màn player (đóng lại thì hiện dần trở lại).
@@ -366,7 +369,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   if (!everRef.current) return null;
 
   return (
-    <View style={[StyleSheet.absoluteFill, { zIndex: 50 }, !mounted && styles.gone]} pointerEvents={open ? 'auto' : 'box-none'}>
+    <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 50 }, !mounted && styles.gone, rootVis]} pointerEvents={open ? 'auto' : 'box-none'}>
       {/* Không tô nền cho khung: nền của khung bị kéo méo theo hai chiều nên ở cuối hiệu ứng thu về thành hình vuông vuông
           (đó là cái ô vuông thấy được trước khi thành hình tròn). Màn player đã có nền riêng bên trong */}
       <Animated.View pointerEvents={open ? 'auto' : 'none'} style={[styles.frame, { width: W, height: H }, win]}>
@@ -414,7 +417,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
           )}
         </Animated.View>
       </Animated.View>
-    </View>
+    </Animated.View>
   );
 }
 
