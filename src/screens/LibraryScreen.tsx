@@ -28,6 +28,7 @@ import { ProfileFeed } from '../components/ProfileFeed';
 import { StretchyBg } from '../components/Stretchy';
 import { useSharedValue } from 'react-native-reanimated';
 import { useDockCollapse } from '../components/dockCollapse';
+import { useRenderProbe } from '../components/JankMonitor';
 import { GlassFill, glassShadow } from '../components/Glass';
 
 const H_PAD = 16;
@@ -183,6 +184,7 @@ export function LibraryScreen() {
   // Offline: tự chỉ hiện bài đã tải (không đổi lựa chọn đã lưu của nút "Đã tải")
   const offlineNow = useOffline();
   const onlyDl = useOnlyDownloaded() || offlineNow;
+  useRenderProbe('Thư viện', { theme, landscape, t, profile, pad, width, height, library, push, onlyDl });
   useDownloads(); // tải xong / xoá bài thì vẽ lại, danh sách lọc theo trạng thái mới
   const hasDownloads = (i: Item) => {
     if (i.kind === 'liked') return getLikedTracks().some((x) => isDownloaded(x.id));

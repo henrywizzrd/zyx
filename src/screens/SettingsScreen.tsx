@@ -10,6 +10,7 @@ import { useNav } from '../nav/Nav';
 import { signOut, useSession } from '../data/auth';
 import { setCrossfade, useCrossfade } from '../player/crossfade';
 import { GlassFill, glassShadow } from '../components/Glass';
+import { useRenderProbe } from '../components/JankMonitor';
 
 // labels: chữ hiển thị cho từng lựa chọn (bỏ trống thì hiện chính giá trị)
 function Chips<T extends string>({ options, value, onSelect, labels }: { options: readonly T[]; value: T; onSelect: (v: T) => void; labels?: Partial<Record<T, string>> }) {
@@ -43,6 +44,7 @@ export function SettingsScreen() {
   const profile = useProfile();
   const syncErr = useProfileSyncError();
   const crossfade = useCrossfade();
+  useRenderProbe('Cài đặt', { theme, landscape, t, push, pad, session, profile, syncErr, crossfade });
   // Thẻ trong Cài đặt là tấm kính giống dock (cùng kiểu với ô playlist ở Home)
   const gs = glassShadow(0.8, theme.colors.glassTint !== 'dark');
 

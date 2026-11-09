@@ -1,3 +1,4 @@
+import { useRenderProbe } from '../components/JankMonitor';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Platform, Pressable, Share, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -196,6 +197,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const fxMode = useFxMode();
   const fxSpeed = useFxSpeed();
   const fxOn = fxMode !== 'off' || fxSpeed !== 'normal';
+  useRenderProbe('Player', { theme, sheet, sheetOpen, t, fxMode, fxSpeed });
   const pickFx = () => {
     const opts: { id: FxMode; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
       { id: 'off', label: t('fx.off'), icon: 'musical-note-outline' },

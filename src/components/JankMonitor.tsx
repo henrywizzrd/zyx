@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { makeMutable, useFrameCallback } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { getLogContext, justResumed, log } from '../data/applog';
@@ -9,6 +9,25 @@ function report(ms: number) {
   if (justResumed()) return;
   const c = getLogContext();
   log('jank', `giao diện khựng ${ms}ms${c ? ` · ${c}` : ''}`);
+}
+
+// ---------------- Đo thời gian vẽ lại của một màn hình ----------------
+// Đặt ở đầu màn hình nặng (Home, Thư viện, Player...). Vẽ lại tốn hơn 50ms thì ghi vào Nhật ký: tốn bao lâu,
+// và giá trị nào đổi khiến nó vẽ lại (so với lần vẽ trước) — để biết chỗ làm luồng JS khựng khi mở / đóng player, đổi tab
+export function useRenderProbe(name: string, deps: Record<string, unknown>) {
+  const t0 = performance.now();
+  const prev = useRef<Record<string, unknown> | null>(null);
+  const n = useRef(0);
+  const p = prev.current;
+  const changed = p ? Object.keys(deps).filter((k) => p[k] !== deps[k]) : null;
+  prev.current = deps;
+  n.current++;
+  useLayoutEffect(() => {
+    const dt = performance.now() - t0;
+    if (dt < 50 || justResumed()) return;
+    const why = changed == null ? 'lần đầu' : changed.length ? `đổi: ${changed.join(', ')}` : 'trang cha vẽ lại / state riêng';
+    log('jank', `vẽ lại ${name}: ${Math.round(dt)}ms (lần ${n.current}) · ${why}`);
+  });
 }
 
 // ---------------- Đo từng chuyển động (mục "Chuyển động" trong Nhật ký) ----------------

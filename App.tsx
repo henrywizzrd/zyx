@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { installAppLog, log, setLogContext } from './src/data/applog';
-import { JankMonitor } from './src/components/JankMonitor';
+import { JankMonitor, useRenderProbe } from './src/components/JankMonitor';
 import { updateCoverTint } from './src/theme/coverTint';
 import { LogScreen } from './src/screens/LogScreen';
 import { StatsScreen } from './src/screens/StatsScreen';
@@ -229,6 +229,7 @@ function Root() {
     setLogContext(tab === 'player' ? 'player' : page ? `${tab} › ${page.type}${'title' in page ? ` "${page.title}"` : 'name' in page ? ` "${page.name}"` : ''}` : tab);
   }, [tab, page]);
   const shown = tab === 'player' ? lastTab : tab; // đang mở player thì vẫn vẽ tab phía sau
+  useRenderProbe('khung app', { tab, lastTab, playerUp, ambientOff, stack: nav.stack, theme, landscape });
   // Tab đã mở thì giữ lại (chỉ ẩn đi), không dựng lại từ đầu mỗi lần bấm dock.
   // Trước đây mỗi lần đổi tab là dựng lại cả màn hình (Home, Thư viện...), luồng JS bận một lúc nên bấm dock tiếp bị "đơ"
   const visited = useRef(new Set<TabId>()).current;

@@ -1,3 +1,4 @@
+import { useRenderProbe } from '../components/JankMonitor';
 import { SplitPane } from '../components/SplitPane';
 import { GlassFill, glassShadow } from '../components/Glass';
 import { ScalePressable } from '../components/PressScale';
@@ -738,6 +739,7 @@ export function HomeScreen() {
   });
   useDockCollapse(homeY);
   const offline = useOffline();
+  useRenderProbe('Home', { theme, landscape, t, pad, push, offline });
   // Offline: chỉ giữ các mục đọc được từ máy (playlist của mình, nghe gần đây), thêm "Nhạc đã tải" lên đầu
   const visible = theme.home.sections.filter((s) => !theme.home.hidden.includes(s) && (!offline || s === 'myPlaylists' || s === 'recent'));
 
