@@ -108,6 +108,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   const ox = useSharedValue(0), oy = useSharedValue(0), ow = useSharedValue(1), oh = useSharedValue(1), or = useSharedValue(0);
   // ô xuất phát của ảnh bìa bay (mặc định trùng khung player)
   const sized = useSharedValue(0); // 1 = khung thật sự đổi kích thước (xuất phát từ viên thuốc dẹt)
+  const liveSV = useSharedValue(0); // 1 = player đang mở / đang thu về (mounted); 0 = đang ẩn chờ (kể cả lúc hâm nóng)
   const ax = useSharedValue(0), ay = useSharedValue(0), aw = useSharedValue(1), ar = useSharedValue(0);
 
   const openSize = useRef({ W, H }); // kích thước màn hình lúc mở player
@@ -260,7 +261,6 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
     return interpolate(pv, [0, 0.97, 1], [ar.value, 48, 0], 'clamp');
   };
 
-  const ctx = useMemo<Ctx>(() => ({ reportCover, closeCfg, moving, active: mounted }), [reportCover, closeCfg, moving, mounted]);
 
   // Ô cửa sổ: từ khung ảnh album ở mini player lớn dần tới toàn màn hình
   // Ô cửa sổ: từ khung ảnh album ở mini player lớn dần tới toàn màn hình.
@@ -319,7 +319,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   // Trước đây khung player (cỡ viên mini player, phủ lớp nhoè) còn nằm đè lên viên mini player vài giây → thấy viên bị nhoè
   // Chỉ áp cho kiểu viên mini player (dock Apple Music): viên thật hiện dần theo độ mở trên luồng giao diện nên không hở.
   // Bong bóng thì chỉ hiện lại khi JS báo (onClosed) → giấu sớm ở đây là hở một nhịp không có gì (bong bóng nháy)
-  const rootVis = useAnimatedStyle(() => ({ opacity: sized.value && p.value < 0.003 ? 0 : 1 }));
+  const rootVis = useAnimatedStyle(() => ({ opacity: (sized.value || !liveSV.value) && p.value < 0.003 ? 0 : 1 }));
   const screen = useAnimatedStyle(() => ({ opacity: interpolate(p.value, [0.22, 0.55], [0, 1], 'clamp') }));
 
   // Ảnh album (vuông, ở đầu) phủ lên, mờ dần để lộ màn player (đóng lại thì hiện dần trở lại).
@@ -384,10 +384,18 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
     const id = setTimeout(() => setFrozen(true), 1200);
     return () => clearTimeout(id);
   }, [mounted]);
+  useEffect(() => {
+    liveSV.value = mounted ? 1 : 0;
+  }, [mounted, liveSV]);
+  // Hâm nóng (vừa chạm vào mini player, chưa nhấc tay): làm sẵn mọi việc nặng TRƯỚC khi hiệu ứng mở chạy —
+  // bỏ đóng băng, hiện lại cả cây màn player (trong suốt, chưa thấy gì), bật active (đồng hồ lời, nền xoay...).
+  // Trước đây những việc này dồn vào đúng lúc player bắt đầu nở ra → một khung hình 50–130ms giữa hiệu ứng (~65fps)
+  const ready = mounted || warm;
+  const ctx = useMemo<Ctx>(() => ({ reportCover, closeCfg, moving, active: ready }), [reportCover, closeCfg, moving, ready]);
   if (!everRef.current) return null;
 
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 50 }, !mounted && styles.gone, rootVis]} pointerEvents={open ? 'auto' : 'box-none'}>
+    <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 50 }, !ready && styles.gone, rootVis]} pointerEvents={open ? 'auto' : 'box-none'}>
       {/* Không tô nền cho khung: nền của khung bị kéo méo theo hai chiều nên ở cuối hiệu ứng thu về thành hình vuông vuông
           (đó là cái ô vuông thấy được trước khi thành hình tròn). Màn player đã có nền riêng bên trong */}
       <Animated.View pointerEvents={open ? 'auto' : 'none'} style={[styles.frame, { width: W, height: H }, win]}>
