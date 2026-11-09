@@ -92,7 +92,12 @@ export function JankMonitor() {
   useFrameCallback((f) => {
     'worklet';
     const d = f.timeSincePreviousFrame;
-    if (d != null && d > 4 && d < M.base.value) M.base.value = d; // dò nhịp màn hình thật
+    // Dò nhịp màn hình thật, làm tròn về 120 / 90 / 60Hz: một khung lệch nhịp (4ms) từng làm nhịp thành 225Hz
+    // → mọi khung 8ms đều bị tính là "rớt" dù chạy đủ 120fps
+    if (d != null && d > 4) {
+      const snap = d < 9.7 ? 1000 / 120 : d < 12.6 ? 1000 / 90 : 1000 / 60;
+      if (snap < M.base.value) M.base.value = snap;
+    }
     if (d != null && d > 100 && d < 3000) scheduleOnRN(report, Math.round(d));
     if (M.on.value) {
       const t = f.timestamp;
