@@ -446,6 +446,10 @@ export const vi = {
   'stats.empty': "Chưa có gì để thống kê. Nghe vài bài rồi quay lại đây nhé.",
   'settings.dockRim': "Ánh sáng viền dock",
   'log.f.motion': "Chuyển động",
+  'offline.section': "Đang offline — mục này cần mạng",
+  'offline.downloaded': "Nhạc đã tải",
+  'offline.none': "Chưa tải bài nào. Có mạng thì bấm ••• ở một bài → Tải về để nghe offline.",
+  'offline.banner': "Đang offline · chỉ phát được bài đã tải",
 };
 
 export type StringKey = keyof typeof vi;
@@ -875,4 +879,8 @@ export const en: Record<StringKey, string> = {
   'stats.empty': "Nothing to show yet. Play a few songs and come back.",
   'settings.dockRim': "Dock edge light",
   'log.f.motion': "Motion",
+  'offline.section': "You're offline — this needs a connection",
+  'offline.downloaded': "Downloaded",
+  'offline.none': "Nothing downloaded yet. When you're online, tap ••• on a song → Download to listen offline.",
+  'offline.banner': "Offline · only downloaded songs can play",
 };

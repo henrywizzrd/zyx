@@ -25,7 +25,8 @@ import type { HomeSection, TrendingRange, TrendingRegion } from '../theme/types'
 import type { Track } from '../data/mock';
 import { useT } from '../i18n';
 import { SmartImage } from '../components/Cover';
-import { cacheGet, cacheSet, createPlaylist, getPlaylists, getRecent, getTopArtists, RecentItem, useDbVersion } from '../data/db';
+import { checkNetwork, useOffline } from '../data/net';
+import { cacheGet, cacheSet, createPlaylist, getDownloadedTracks, getPlaylists, getRecent, getTopArtists, RecentItem, useDbVersion } from '../data/db';
 
 const PAD = 16;
 type ScrollViewRef = React.ComponentRef<typeof ScrollView>;
@@ -253,10 +254,50 @@ function Skeleton() {
 function Failed({ onRetry, text }: { onRetry: () => void; text?: string }) {
   const { theme } = useTheme();
   const t = useT();
+  const offline = useOffline();
+  // tải lỗi: xem có phải do mất mạng không (mất mạng thì báo rõ, có mạng lại là tự tải lại được)
+  useEffect(() => {
+    checkNetwork();
+  }, []);
   return (
     <Pressable onPress={onRetry} style={{ paddingVertical: 10 }}>
-      <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>{text ?? t('common.loadFailed')}</Text>
+      <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>{offline ? t('offline.section') : text ?? t('common.loadFailed')}</Text>
     </Pressable>
+  );
+}
+
+// Offline: mục "Nhạc đã tải" hiện đầu Home — bấm là phát ngay từ file trong máy
+function Downloaded() {
+  const { theme } = useTheme();
+  const t = useT();
+  useDbVersion();
+  const { playTrack } = usePlayerPick('playTrack');
+  const list = getDownloadedTracks(50);
+  const { text, textSecondary, surface } = theme.colors;
+  return (
+    <View>
+      <SectionTitle title={t('offline.downloaded')} />
+      {list.length === 0 ? (
+        <Text style={{ color: textSecondary, fontSize: 14, paddingVertical: 6 }}>{t('offline.none')}</Text>
+      ) : (
+        list.slice(0, 12).map((s) => (
+          <Pressable
+            key={s.id}
+            onPress={() => playTrack(s, list, { kind: 'mix', id: 'downloads', title: t('offline.downloaded') })}
+            style={styles.rankRow}
+          >
+            <View style={[styles.rankThumb, { backgroundColor: surface, overflow: 'hidden' }]}>
+              {s.thumb ? <SmartImage url={s.thumb} size={120} style={StyleSheet.absoluteFill} /> : null}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text numberOfLines={1} style={{ color: text, fontSize: 15, fontWeight: '600' }}>{s.title}</Text>
+              <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>{s.artist}</Text>
+            </View>
+            <Ionicons name="arrow-down-circle" size={18} color={theme.colors.accent} />
+          </Pressable>
+        ))
+      )}
+    </View>
   );
 }
 
@@ -696,7 +737,9 @@ export function HomeScreen() {
     homeY.value = e.contentOffset.y;
   });
   useDockCollapse(homeY);
-  const visible = theme.home.sections.filter((s) => !theme.home.hidden.includes(s));
+  const offline = useOffline();
+  // Offline: chỉ giữ các mục đọc được từ máy (playlist của mình, nghe gần đây), thêm "Nhạc đã tải" lên đầu
+  const visible = theme.home.sections.filter((s) => !theme.home.hidden.includes(s) && (!offline || s === 'myPlaylists' || s === 'recent'));
 
   const render = (s: HomeSection) => {
     switch (s) {
@@ -760,6 +803,7 @@ export function HomeScreen() {
         left={
           <>
             {header}
+            {offline && <Downloaded />}
             {blocks(leftList)}
             {visible.length === 0 && <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>{t('home.allHidden')}</Text>}
           </>
@@ -783,6 +827,11 @@ export function HomeScreen() {
     >
       {header}
 
+      {offline && (
+        <View style={{ marginBottom: 30 }}>
+          <Downloaded />
+        </View>
+      )}
       {visible.map((s, i) => (
         <View key={s} style={{ marginTop: i === 0 ? 0 : 30 }}>
           {render(s)}

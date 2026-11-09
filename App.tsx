@@ -5,6 +5,7 @@ import { updateCoverTint } from './src/theme/coverTint';
 import { LogScreen } from './src/screens/LogScreen';
 import { StatsScreen } from './src/screens/StatsScreen';
 import { AppleDock } from './src/components/AppleDock';
+import { OfflineBanner } from './src/components/OfflineBanner';
 import { ActivityIndicator, Animated, Platform, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -295,6 +296,7 @@ function Root() {
         {/* Bấm mở player: nền phía sau (tab + hiệu ứng) mờ dần theo độ mở; đóng thì từ mờ trở lại rõ dần */}
         {/* Luôn nằm sẵn (trong suốt khi player đóng): không phải dựng / gỡ lớp kính mờ mỗi lần mở, đóng player */}
         <BackdropBlur />
+        <OfflineBanner />
         {/* Dock Apple Music có mini player riêng (viên thuốc) → không dựng bong bóng mini player */}
         {!(theme.dock.mode === 'apple' && !landscape) && <MiniPlayer hidden={tab === 'player' || playerUp} onOpen={() => setTab('player')} />}
           {/* Dock: kiểu Apple Music hoặc dạng thanh (kéo đổi chỗ được) — Cài đặt → Kiểu dock */}

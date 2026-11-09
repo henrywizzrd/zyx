@@ -330,6 +330,14 @@ export function playlistHas(id: string, trackId: string): boolean {
 export function getDownloads(): Map<string, string> {
   return safe(new Map(), (d) => new Map(d.getAllSync<{ track_id: string; file: string }>('SELECT track_id, file FROM downloads').map((r) => [r.track_id, r.file])));
 }
+// Bài đã tải về máy (mới tải trước) — cho mục "Nhạc đã tải" lúc offline
+export function getDownloadedTracks(limit = 200): Track[] {
+  return safe([], (d) =>
+    d
+      .getAllSync<TrackRow>('SELECT t.* FROM downloads x JOIN tracks t ON t.id = x.track_id ORDER BY x.downloaded_at DESC LIMIT ?', [limit])
+      .map(rowToTrack)
+  );
+}
 export function setDownload(t: Track, file: string | null) {
   safe(undefined, (d) => {
     if (file) {

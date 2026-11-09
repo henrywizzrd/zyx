@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useOffline } from '../data/net';
 import { isDownloaded, setOnlyDownloaded, useDownloads, useOnlyDownloaded } from '../data/downloads';
 import { Stagger } from '../components/Stagger';
 import { loadTrendingSummed, parseTrendingId } from '../data/trending';
@@ -62,7 +63,9 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
 
   const [allRows, setRows] = useState<Row[]>([]);
   // Nút "Đã tải" ở Thư viện đang bật: chỉ hiện (và chỉ phát) các bài đã tải về máy
-  const onlyDl = useOnlyDownloaded();
+  // Offline: tự chỉ hiện bài đã tải (không đổi lựa chọn đã lưu của nút "Đã tải")
+  const offlineNow = useOffline();
+  const onlyDl = useOnlyDownloaded() || offlineNow;
   useDownloads();
   const rows = onlyDl ? allRows.filter((r) => isDownloaded(r.id)) : allRows;
   const [info, setInfo] = useState<Info>({ title: page.title, subtitle: '', thumb: page.thumb });

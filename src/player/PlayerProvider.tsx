@@ -9,6 +9,7 @@ import { getLikedIds, PlayContext, recordPlay, setLastPlaySecs, setLiked as save
 import { localUri } from '../data/downloads';
 import { Image as ExpoImage } from 'expo-image';
 import { showToast } from '../components/toastBridge';
+import { isOnline, useOffline as useOfflineState } from '../data/net';
 import { engineOn, flog, fxPrefetch, fxTick, getLiveRate, setFxResolver } from './fxEngine';
 import './crossfade'; // nạp cài đặt Chuyển bài mượt
 import { bgStats } from '../data/applog';
@@ -72,18 +73,6 @@ type SavedSession = { queue: QueueItem[]; index: number; position: number; shuff
 const nowPlayingMeta = (t: Track) => ({ title: t.title, artist: t.artist, artworkUrl: t.thumb ? bigThumb(t.thumb, 600) : undefined });
 
 // Còn mạng không: hỏi một địa chỉ siêu nhẹ của Google (trả về rỗng), quá 3 giây coi như mất mạng
-async function isOnline(): Promise<boolean> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 3000);
-  try {
-    const r = await fetch('https://www.gstatic.com/generate_204', { method: 'HEAD', signal: ctrl.signal });
-    return r.ok || r.status === 204;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 interface PlayerContextValue {
   track: Track;
@@ -429,6 +418,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   // Bài sẽ phát tiếp: lấy sẵn link rồi xếp ngay sau bài đang phát trong trình phát. Nhờ vậy:
   //  - hết bài là chuyển ngay, kể cả khi tắt màn hình (không có khoảng im lặng để iPhone cho app "ngủ")
   //  - nút Bài sau ở màn hình khoá / Dynamic Island dùng được
+  const offline = useOfflineState();
   const nextItem = (() => {
     if (queue.length < 2 || repeat === 'one') return null;
     if (shuffle) {
@@ -438,6 +428,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       while (n === index) n = Math.floor(Math.random() * queue.length);
       shuffleNext.current = { from: index, to: n };
       return queue[n];
+    }
+    // Offline: bài sau là bài ĐÃ TẢI gần nhất phía sau (bài chưa tải không phát được, bỏ qua luôn)
+    if (offline) {
+      for (let j = 1; j < queue.length; j++) {
+        const c = index + j;
+        if (c >= queue.length && repeat !== 'all') break;
+        const it = queue[c % queue.length];
+        if (localUri(it.id)) return it;
+      }
+      return null;
     }
     if (index + 1 < queue.length) return queue[index + 1];
     return repeat === 'all' ? queue[0] : null;

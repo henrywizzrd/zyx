@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useOffline } from '../data/net';
 import { isDownloaded, setOnlyDownloaded, useDownloads, useOnlyDownloaded } from '../data/downloads';
 import { getLikedTracks, getPlaylistTracks } from '../data/db';
 import { Alert, Image, PixelRatio, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -178,7 +179,9 @@ export function LibraryScreen() {
 
   // Nút "Đã tải": chỉ giữ Bài hát đã thích / playlist của mình có ít nhất một bài đã tải
   // (album / playlist YouTube đã lưu và nghệ sĩ không có bài nào nằm trong máy nên ẩn đi)
-  const onlyDl = useOnlyDownloaded();
+  // Offline: tự chỉ hiện bài đã tải (không đổi lựa chọn đã lưu của nút "Đã tải")
+  const offlineNow = useOffline();
+  const onlyDl = useOnlyDownloaded() || offlineNow;
   useDownloads(); // tải xong / xoá bài thì vẽ lại, danh sách lọc theo trạng thái mới
   const hasDownloads = (i: Item) => {
     if (i.kind === 'liked') return getLikedTracks().some((x) => isDownloaded(x.id));
