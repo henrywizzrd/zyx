@@ -5,6 +5,10 @@ appId: com.henrywizzrd.zyx
 - launchApp:
     stopApp: true
 - startRecording: zyx-run
+# Hộp thoại "... isn't responding" (máy ảo chậm) nếu có: chọn Wait
+- tapOn:
+    text: "Wait"
+    optional: true
 # Màn đăng nhập hiện chậm trên máy ảo: đợi nó (tối đa 60s) rồi chọn "Khách"
 - extendedWaitUntil:
     visible: "Guest|Khách"

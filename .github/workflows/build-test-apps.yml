@@ -172,7 +172,8 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -memory 4096 -cores 4
+          ram-size: 4096M
           script: bash .maestro/run.sh
       - uses: actions/upload-artifact@v5
         if: always()

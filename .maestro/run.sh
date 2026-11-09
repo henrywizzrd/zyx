@@ -5,6 +5,11 @@ set -x
 PKG=com.henrywizzrd.zyx
 OUT="$PWD/ui-out"
 mkdir -p "$OUT"
+# Máy ảo trên GitHub chạy đồ hoạ bằng CPU nên rất chậm: tắt hộp thoại "… isn't responding" (nó che mất app),
+# và đợi máy ảo khởi động xong hẳn rồi mới chạy
+adb shell settings put global hide_error_dialogs 1
+adb shell settings put secure anr_show_background 0
+sleep 45
 adb install -r apk/Zyx.apk
 # 2 lần mở: lần 1 tải bản cập nhật, lần 2 chạy bản đó
 for i in 1 2; do
