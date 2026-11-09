@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { useT } from '../i18n';
 import { TabId } from '../theme/types';
-import { TabIcon } from './TabIcon';
+import { DockGlyph } from './DockIcons';
 import { LABELS } from './FloatingDock';
 import { GlassFill, glassShadow } from './Glass';
 import { SmartImage } from './Cover';
@@ -39,7 +39,7 @@ function Cell({ id, on, labels, width }: { id: Tab; on: boolean; labels: boolean
   const color = on ? theme.colors.accent : theme.colors.text;
   return (
     <View style={{ width, height: AM.H, alignItems: 'center', justifyContent: 'center' }}>
-      <TabIcon id={id} size={labels ? 26 : 28} color={color} />
+      <DockGlyph id={id} size={labels ? 26 : 28} color={color} />
       {labels && (
         <Text numberOfLines={1} style={{ color, fontSize: 10, fontWeight: '600', marginTop: 2 }}>
           {t(LABELS[id])}
@@ -281,7 +281,7 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
             </Animated.View>
           </Animated.View>
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center, iconFade]}>
-            {shown >= 0 && <TabIcon id={tabs[shown]} size={28} color={theme.colors.accent} />}
+            {shown >= 0 && <DockGlyph id={tabs[shown]} size={28} color={theme.colors.accent} />}
           </Animated.View>
         </Animated.View>
 
@@ -295,7 +295,7 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
               onPressOut={() => (searchPress.value = withSpring(1, SQUISH))}
               style={[StyleSheet.absoluteFill, styles.center]}
             >
-              <TabIcon id="search" size={27} color={active === 'search' ? theme.colors.accent : theme.colors.text} />
+              <DockGlyph id="search" size={27} color={active === 'search' ? theme.colors.accent : theme.colors.text} />
             </Pressable>
           </Animated.View>
         )}

@@ -7,9 +7,10 @@ import { Image, Platform, View } from 'react-native';
 // suốt lúc mở player. Ảnh thường thì được chụp bình thường, nhìn y hệt bản Skia.
 const skia = Platform.OS === 'web' ? null : (require('@shopify/react-native-skia') as typeof import('@shopify/react-native-skia'));
 
+// clear: vẽ bằng "tẩy" (đục lỗ trong suốt) — ví dụ nốt nhạc khoét trong hình đặc
 export type VectorOp =
-  | { d: string; fill?: boolean; stroke?: number; round?: boolean } // round: nối / đầu nét bo tròn
-  | { circle: [number, number, number] };
+  | { d: string; fill?: boolean; stroke?: number; round?: boolean; clear?: boolean } // round: nối / đầu nét bo tròn
+  | { circle: [number, number, number]; stroke?: number; clear?: boolean }; // stroke: vòng tròn rỗng thay vì đặc
 
 const cache = new Map<string, string>();
 
@@ -19,7 +20,7 @@ function render(ops: VectorOp[], box: number, px: number, color: string): string
   const hit = cache.get(key);
   if (hit) return hit;
   try {
-    const { Skia, PaintStyle, StrokeJoin, StrokeCap } = skia;
+    const { Skia, PaintStyle, StrokeJoin, StrokeCap, BlendMode } = skia;
     const surface = Skia.Surface.Make(px, px);
     if (!surface) return null;
     const c = surface.getCanvas();
@@ -29,7 +30,12 @@ function render(ops: VectorOp[], box: number, px: number, color: string): string
       const paint = Skia.Paint();
       paint.setAntiAlias(true);
       paint.setColor(col);
+      if (op.clear) paint.setBlendMode(BlendMode.Clear);
       if ('circle' in op) {
+        if (op.stroke) {
+          paint.setStyle(PaintStyle.Stroke);
+          paint.setStrokeWidth(op.stroke);
+        }
         c.drawCircle(op.circle[0], op.circle[1], op.circle[2], paint);
         continue;
       }
@@ -40,6 +46,7 @@ function render(ops: VectorOp[], box: number, px: number, color: string): string
         const s = Skia.Paint();
         s.setAntiAlias(true);
         s.setColor(col);
+        if (op.clear) s.setBlendMode(BlendMode.Clear);
         s.setStyle(PaintStyle.Stroke);
         s.setStrokeWidth(op.stroke);
         if (op.round !== false) {

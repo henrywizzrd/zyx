@@ -296,7 +296,8 @@ function Root() {
         {/* Bấm mở player: nền phía sau (tab + hiệu ứng) mờ dần theo độ mở; đóng thì từ mờ trở lại rõ dần */}
         {/* Luôn nằm sẵn (trong suốt khi player đóng): không phải dựng / gỡ lớp kính mờ mỗi lần mở, đóng player */}
         <BackdropBlur />
-        <MiniPlayer hidden={tab === 'player' || playerUp} onOpen={() => setTab('player')} />
+        {/* Dock Apple Music có mini player riêng (viên thuốc) → không dựng bong bóng mini player */}
+        {!(theme.dock.mode === 'apple' && !landscape) && <MiniPlayer hidden={tab === 'player' || playerUp} onOpen={() => setTab('player')} />}
           {/* Dock: dạng thanh (kéo đổi chỗ được) hoặc dạng bubble ở góc dưới (Cài đặt → Kiểu dock) */}
           {theme.dock.mode === 'apple' && !landscape ? (
             <AppleDock active={tab} onChange={go} onOpenPlayer={() => setTab('player')} hidden={tab === 'player' || playerUp} />
