@@ -32,7 +32,7 @@ function Chips<T extends string>({ options, value, onSelect, labels }: { options
 }
 
 export function SettingsScreen() {
-  const { theme, landscape, resetTheme, setMerged, setLanguage, setDockLabels, setDockRimLight, setDockMode, setDockBubbleSide } = useTheme();
+  const { theme, landscape, resetTheme, setMerged, setLanguage, setDockLabels, setDockRimLight, setDockMode } = useTheme();
   const t = useT();
   const { push } = useNav();
   const pad = useContentInsets();
@@ -68,35 +68,21 @@ export function SettingsScreen() {
         labels={Object.fromEntries(LANGUAGES.map((l) => [l.id, l.label]))}
       />
 
-      {/* Kiểu dock: thanh (kiểu Apple Music) hoặc bubble ở góc dưới */}
+      {/* Kiểu dock: Apple Music hoặc dạng thanh */}
       <Text style={label}>{t('settings.dockMode')}</Text>
       <Chips
-        options={['bar', 'bubble', 'apple'] as const}
+        options={['apple', 'bar'] as const}
         value={theme.dock.mode}
         onSelect={setDockMode}
-        labels={{ bar: t('settings.dockBar'), bubble: t('settings.dockBubble'), apple: 'Apple Music' }}
+        labels={{ bar: t('settings.dockBar'), apple: 'Apple Music' }}
       />
-      {theme.dock.mode === 'bubble' ? (
-        <>
-          <Text style={label}>{t('settings.bubbleSide')}</Text>
-          <Chips
-            options={['left', 'right'] as const}
-            value={theme.dock.bubbleSide}
-            onSelect={setDockBubbleSide}
-            labels={{ left: t('settings.left'), right: t('settings.right') }}
-          />
-        </>
-      ) : (
-        <>
-          <Text style={label}>{t('settings.dockLabels')}</Text>
-          <Chips
-            options={['on', 'off'] as const}
-            value={theme.dock.labels ? 'on' : 'off'}
-            onSelect={(v) => setDockLabels(v === 'on')}
-            labels={{ on: t('common.on'), off: t('common.off') }}
-          />
-        </>
-      )}
+      <Text style={label}>{t('settings.dockLabels')}</Text>
+      <Chips
+        options={['on', 'off'] as const}
+        value={theme.dock.labels ? 'on' : 'off'}
+        onSelect={(v) => setDockLabels(v === 'on')}
+        labels={{ on: t('common.on'), off: t('common.off') }}
+      />
 
       {/* Ánh sáng viền trên / dưới của tấm kính dock */}
       <Text style={label}>{t('settings.dockRim')}</Text>

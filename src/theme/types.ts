@@ -13,8 +13,8 @@ export type HomeSection = 'myPlaylists' | 'recent' | 'feed' | 'trending' | 'reco
 export type TrendingRange = 'week' | 'month' | 'year';
 export type TrendingRegion = 'ZZ' | 'VN' | 'KR' | 'US'; // ZZ = toàn cầu (mã YouTube Music)
 export type LibraryLayout = 'list' | 'columns' | 'covers2' | 'covers3';
-// Dock dạng thanh (kiểu Apple Music) hoặc dạng bubble ở góc dưới (bấm/giữ mở 1/4 vòng tab)
-export type DockMode = 'bar' | 'bubble' | 'apple'; // apple: kiểu Apple Music (thanh tab + nút tìm kiếm tròn + mini player viên thuốc)
+// Dock dạng thanh hoặc kiểu Apple Music (dạng bubble góc dưới đã bỏ)
+export type DockMode = 'bar' | 'apple'; // apple: kiểu Apple Music (thanh tab + nút tìm kiếm tròn + mini player viên thuốc)
 export type Side = 'left' | 'right';
 // Kiểu hiện lời bài hát: phát sáng (Apple Music), karaoke (tô dần theo nhạc), nảy chữ
 export type LyricLook = 'glow' | 'karaoke' | 'bounce';
@@ -43,7 +43,6 @@ export interface Theme {
     labels: boolean; // hiện chữ dưới icon (Trang chủ, Tìm kiếm...)
     rimLight?: boolean; // ánh sáng ở viền trên / dưới của tấm kính dock (mặc định bật)
     mode: DockMode;
-    bubbleSide: Side; // bubble ở góc dưới bên trái hay phải (mini player sang góc đối diện)
     style: { background: string; radius: number; margin: number };
   };
   miniPlayer: {

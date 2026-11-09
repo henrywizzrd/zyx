@@ -24,7 +24,7 @@ import { usePlayerPick, ViewRef } from '../player/PlayerProvider';
 import { TabId } from '../theme/types';
 import { DOCK_RESIZE, useDraggable } from './useDraggable';
 import {
-  computeLayout, DOCK_GAP, DOCK_PADDING, DOCK_THICKNESS, DOCK_BUBBLE, dockCell,
+  computeLayout, DOCK_GAP, DOCK_PADDING, DOCK_THICKNESS, dockCell,
   isVertical, MP_THICKNESS, STACK_GAP,
 } from './layout';
 
@@ -58,7 +58,7 @@ export function useContentInsets() {
       // vùng nội dung đã chừa sẵn tai thỏ và dock (ContentArea trong App.tsx), các màn hình không phải chừa thêm
       left: 0,
       right: 0,
-      endPadding: theme.dock.mode !== 'bubble' ? MP_THICKNESS + 16 : DOCK_BUBBLE + theme.dock.style.margin * 2 + insets.bottom,
+      endPadding: MP_THICKNESS + 16,
     };
   }
   if (theme.dock.mode === 'apple') return { top: insets.top, bottom: insets.bottom, left: insets.left, right: insets.right, endPadding: amEndPadding(insets.bottom) };

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { installAppLog, setLogContext } from './src/data/applog';
+import { installAppLog, log, setLogContext } from './src/data/applog';
 import { JankMonitor } from './src/components/JankMonitor';
 import { updateCoverTint } from './src/theme/coverTint';
 import { LogScreen } from './src/screens/LogScreen';
@@ -15,7 +15,6 @@ import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
 import { PlayerProvider, usePlayerPick } from './src/player/PlayerProvider';
 import { FloatingDock, useContentInsets } from './src/components/FloatingDock';
 import { MiniPlayer } from './src/components/MiniPlayer';
-import { DockBubble } from './src/components/DockBubble';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { NowPlayingScreen } from './src/screens/NowPlayingScreen';
@@ -298,11 +297,9 @@ function Root() {
         <BackdropBlur />
         {/* Dock Apple Music có mini player riêng (viên thuốc) → không dựng bong bóng mini player */}
         {!(theme.dock.mode === 'apple' && !landscape) && <MiniPlayer hidden={tab === 'player' || playerUp} onOpen={() => setTab('player')} />}
-          {/* Dock: dạng thanh (kéo đổi chỗ được) hoặc dạng bubble ở góc dưới (Cài đặt → Kiểu dock) */}
+          {/* Dock: kiểu Apple Music hoặc dạng thanh (kéo đổi chỗ được) — Cài đặt → Kiểu dock */}
           {theme.dock.mode === 'apple' && !landscape ? (
             <AppleDock active={tab} onChange={go} onOpenPlayer={() => setTab('player')} hidden={tab === 'player' || playerUp} />
-          ) : theme.dock.mode === 'bubble' ? (
-            <DockBubble active={tab} onChange={go} hidden={tab === 'player'} />
           ) : (
             <FloatingDock active={tab} onChange={go} hidden={tab === 'player'} />
           )}
@@ -321,7 +318,7 @@ function Root() {
 function ContentArea({ children }: { children: React.ReactNode }) {
   const { theme, landscape } = useTheme();
   const insets = useSafeAreaInsets();
-  const side = landscape && theme.dock.mode !== 'bubble';
+  const side = landscape;
   const padL = landscape ? insets.left : 0;
   const padR = landscape ? insets.right + (side ? DOCK_THICKNESS + theme.dock.style.margin * 2 : 0) : 0;
   return (
@@ -355,27 +352,53 @@ function SharedSyncer() {
 // Nhờ vậy khi giao diện hiện ra: bấm dock không đơ, bấm bài là phát ngay.
 // Player đã phân tích được lưu vào file, nên từ lần mở app thứ hai thường nhanh hơn hẳn.
 // Chờ tối đa BOOT_MAX_MS (mạng chậm): quá thì vẫn vào app, phần còn lại chạy tiếp phía sau.
-const BOOT_MAX_MS = 4000;
+// Mở app nhanh hơn: chỉ chờ phần CẦN để hiện Home (thư viện youtubei.js + phiên duyệt), tối đa BOOT_MAX_MS.
+// Phiên phát nhạc (tải + phân tích player của YouTube, nặng nhất) chạy SAU khi giao diện đã hiện và đứng yên một chút,
+// nên màn chờ ngắn hơn hẳn; bấm bài sớm quá thì phiên phát tự được tạo lúc đó như bình thường.
+// Thời gian từng phần được ghi vào Nhật ký ("khởi động: ...") để biết phần nào chậm.
+const BOOT_MAX_MS = 2500;
 function Boot({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
   const [ready, setReady] = useState(!musicSupported);
   useEffect(() => {
     if (ready) return;
     let done = false;
-    const finish = () => {
+    const t0 = Date.now();
+    const parts: string[] = [];
+    const finish = (why: string) => {
       if (done) return;
       done = true;
       setReady(true);
+      const shownAt = Date.now() - t0;
+      // phiên phát nhạc: đợi giao diện vẽ xong và đứng yên rồi mới tạo
+      setTimeout(() => {
+        const idle: (cb: () => void) => void = (globalThis as any).requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 0));
+        idle(() => {
+          const s0 = Date.now();
+          try {
+            ytmusic()
+              .getSession()
+              .catch(() => {})
+              .finally(() => log('ui', `khởi động: ${parts.join(', ')}; vào app sau ${shownAt}ms (${why}); phiên phát nhạc ${Date.now() - s0}ms (chạy nền sau khi vào app)`));
+          } catch {}
+        });
+      }, 1200);
     };
-    const cap = setTimeout(finish, BOOT_MAX_MS);
+    const cap = setTimeout(() => finish('hết giờ chờ'), BOOT_MAX_MS);
     // Chờ một khung hình để màn hình chờ hiện ra trước, rồi mới nạp
     const id = setTimeout(() => {
       try {
+        const r0 = Date.now();
         const yt = ytmusic();
-        Promise.all([yt.getBrowseSession(), yt.getSession()]).catch(() => {}).finally(finish);
+        parts.push(`nạp youtubei ${Date.now() - r0}ms`);
+        const b0 = Date.now();
+        yt.getBrowseSession()
+          .then(() => parts.push(`phiên duyệt ${Date.now() - b0}ms`))
+          .catch(() => parts.push('phiên duyệt lỗi'))
+          .finally(() => finish('đủ để hiện Home'));
       } catch (e) {
         console.warn('[boot] preload', e);
-        finish();
+        finish('lỗi nạp');
       }
     }, 16);
     return () => {

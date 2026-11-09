@@ -21,8 +21,6 @@ export function dockCell(position: Position, labels: boolean) {
 }
 // Bề dày lớn nhất của dock (dùng để chừa chỗ cuối danh sách cuộn)
 export const DOCK_THICKNESS = 68 + DOCK_PADDING * 2;
-// Dock dạng bubble: hình tròn ở góc dưới
-export const DOCK_BUBBLE = 62;
 
 export const MP_ALBUM = 44;
 export const MP_BUTTON = 40;
@@ -86,11 +84,6 @@ export function miniSize(edge: Edge, collapsed: boolean) {
 export function dockRect(theme: Theme, insets: EdgeInsets, W: number, H: number): Rect {
   const { dock, miniPlayer } = theme;
   const m = dock.style.margin;
-  if (dock.mode === 'bubble') {
-    const S = DOCK_BUBBLE;
-    const y = H - insets.bottom - m - S;
-    return { x: dock.bubbleSide === 'left' ? insets.left + m : W - insets.right - m - S, y, w: S, h: S };
-  }
   const count = dock.items.length + (miniPlayer.merged ? 1 : 0);
   const { width: w, height: h } = dockSize(count, dock.position, dock.labels);
   const L = insets.left + m, R = W - insets.right - m, T = insets.top + m, B = H - insets.bottom - m;

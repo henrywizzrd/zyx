@@ -16,7 +16,6 @@ export const defaultTheme: Theme = {
     items: ['home', 'search', 'library', 'settings'],
     labels: true,
     mode: 'bar',
-    bubbleSide: 'right',
     style: { background: '#242424F2', radius: 28, margin: 12 },
   },
   miniPlayer: {

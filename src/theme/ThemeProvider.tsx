@@ -110,8 +110,8 @@ function sanitize(t: Theme): Theme {
       ...t.dock,
       position: POSITIONS.includes(t.dock.position) ? t.dock.position : d.dock.position,
       items: items.length ? items : d.dock.items,
-      mode: t.dock.mode === 'bubble' || t.dock.mode === 'apple' ? t.dock.mode : 'bar',
-      bubbleSide: t.dock.bubbleSide === 'left' ? 'left' : 'right',
+      // dock bubble đã bỏ: ai đang dùng bubble chuyển sang kiểu Apple Music (gần nhất: tab gọn ở đáy)
+      mode: (t.dock.mode as string) === 'bubble' || t.dock.mode === 'apple' ? 'apple' : 'bar',
     },
     miniPlayer: {
       ...t.miniPlayer,
@@ -146,7 +146,6 @@ interface ThemeContextValue {
   setDockRimLight: (on: boolean) => void;
   setDockMode: (m: Theme['dock']['mode']) => void;
   setLyricLook: (l: Theme['player']['lyricLook']) => void;
-  setDockBubbleSide: (s: Theme['dock']['bubbleSide']) => void;
   setMiniPlayerAnchor: (a: MiniAnchor) => void;
   setMiniPlayerCollapsed: (c: boolean) => void;
   setMerged: (merged: boolean) => void;
@@ -249,10 +248,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setThemeState((t) => ({ ...t, dock: { ...t.dock, position } })),
       setDockLabels: (labels) => setThemeState((t) => ({ ...t, dock: { ...t.dock, labels } })),
       setDockRimLight: (rimLight) => setThemeState((t) => ({ ...t, dock: { ...t.dock, rimLight } })),
-      // Đổi sang bubble: mini player tách khỏi dock (nếu đang gộp) để nằm ở góc đối diện
+      // Đổi sang Apple Music: mini player tách khỏi dock (dock đó có mini player riêng)
       setDockMode: (mode) => setThemeState((t) => ({ ...t, dock: { ...t.dock, mode }, miniPlayer: mode !== 'bar' ? { ...t.miniPlayer, merged: false } : t.miniPlayer })),
       setLyricLook: (lyricLook) => setThemeState((t) => ({ ...t, player: { ...t.player, lyricLook } })),
-      setDockBubbleSide: (bubbleSide) => setThemeState((t) => ({ ...t, dock: { ...t.dock, bubbleSide } })),
       setMiniPlayerAnchor: (anchor) => patchMini({ anchor }),
       setMiniPlayerCollapsed: (collapsed) => patchMini({ collapsed }),
       setMerged: (merged) => patchMini({ merged }),

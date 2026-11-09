@@ -68,10 +68,8 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
   const INSET = 0;
   const artRadius = bubbleRadius;
 
-  // Dock đang ở dạng bubble (một góc dưới): mini player luôn nằm ở góc dưới đối diện
-  const bubbleDock = theme.dock.mode === 'bubble';
   // Màn hình ngang (dock dạng thanh): góc dưới phải, ngay dưới dock dọc
-  const anchor: MiniAnchor = bubbleDock ? { edge: 'bottom', t: theme.dock.bubbleSide === 'right' ? 0 : 1 } : landscape ? { edge: 'bottom', t: 1 } : live.anchor;
+  const anchor: MiniAnchor = landscape ? { edge: 'bottom', t: 1 } : live.anchor;
 
   // ---- Hình học (tính trước mọi hook dùng tới nó): luôn ở dạng bong bóng
   const rect = resolveMini(theme, insets, frame.width, frame.height, anchor, true);
