@@ -141,6 +141,8 @@ jobs:
       needs.android.result != 'failure' && needs.update.result != 'failure'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v5
       # APK: vừa build xong thì dùng bản đó, không thì lấy APK của bản Release mới nhất (+ bản cập nhật OTA mới nhất)
@@ -177,3 +179,15 @@ jobs:
         with:
           name: ui-check
           path: ui-out
+      # Đẩy kết quả lên nhánh riêng "ui-check" (ghi đè mỗi lần): Claude đọc được qua git (không tải được Artifacts)
+      - name: Đẩy kết quả lên nhánh ui-check
+        if: always()
+        run: |
+          cd ui-out || exit 0
+          git init -q -b ui-check
+          git config user.name "zyx-ui-check"
+          git config user.email "actions@github.com"
+          echo "commit ${GITHUB_SHA} · run ${GITHUB_RUN_ID}" > RUN.txt
+          git add -A
+          git commit -qm "UI check ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" ui-check
