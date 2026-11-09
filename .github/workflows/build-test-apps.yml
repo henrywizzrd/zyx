@@ -130,14 +130,16 @@ jobs:
           npx --yes eas-cli@latest update --channel preview --platform ios --message "$MSG" --non-interactive
           npx --yes eas-cli@latest update --channel preview --platform android --message "$MSG" --non-interactive
 
-  # Kiểm tra giao diện tự động trên máy ảo Android: chạy sau mỗi [update] / [build] (hoặc commit có [check]).
+  # Kiểm tra giao diện tự động trên máy ảo Android: chỉ chạy khi lời nhắn commit có [check].
+  # Lưu ý: máy ảo của GitHub vẽ đồ hoạ bằng CPU (không có GPU) nên app (Skia, kính mờ, hiệu ứng nền) chạy rất chậm,
+  # dễ treo giữa chừng — chưa dùng được để đo độ mượt, chỉ để thử luồng bấm cơ bản.
   # Mở app, bấm theo kịch bản .maestro/flow.yaml (mở / đóng player, đổi dock, thu dock, kính lúp, nhật ký),
   # chụp từng bước + quay video + đo khung hình. Kết quả ở Artifacts → "ui-check" (Claude tự tải về xem)
   ui-check:
     needs: [android, update]
     if: >-
       always() && github.event_name == 'push' &&
-      (contains(github.event.head_commit.message, '[update]') || contains(github.event.head_commit.message, '[build]') || contains(github.event.head_commit.message, '[check]')) &&
+      contains(github.event.head_commit.message, '[check]') &&
       needs.android.result != 'failure' && needs.update.result != 'failure'
     runs-on: ubuntu-latest
     timeout-minutes: 50
