@@ -59,7 +59,8 @@ async function getJson(url: string): Promise<any | null> {
 //  1. Lời có giờ của chính YouTube Music, gắn đúng vào video đang phát (nguồn LyricFind / Musixmatch)
 //  2. Kho SimpMusic theo videoId: lời được cộng đồng canh giờ cho đúng video này
 //  3. LRCLIB theo tên bài + nghệ sĩ + độ dài thật (chỉ nhận bản lệch độ dài ≤ 3 giây)
-//  4. Không có lời chạy theo thời gian thì hiện lời thường (ưu tiên lời của YouTube Music)
+//  4. Zing MP3 theo tên bài + nghệ sĩ (lệch độ dài ≤ 4 giây)
+//  5. Không có lời chạy theo thời gian thì hiện lời thường (ưu tiên lời của YouTube Music)
 export async function fetchLyrics(t: Track, duration: number): Promise<Lyrics | null> {
   let plainFallback: Lyrics | null = null;
   const keepPlain = (l: Lyrics) => {
@@ -117,7 +118,16 @@ export async function fetchLyrics(t: Track, duration: number): Promise<Lyrics | 
     }
   }
 
-  // 4. Lời thường
+  // 4. Zing MP3 (nguồn thứ hai, mạnh về nhạc Việt): chỉ hỏi khi các nguồn trên không có lời chạy theo thời gian
+  try {
+    const { zingLyrics } = require('./zing') as typeof import('./zing');
+    const z = await zingLyrics(title, artist, len || 0);
+    if (z?.synced) return { ...z, source: 'Zing MP3' };
+  } catch (e) {
+    console.warn('[lyrics] zing', e);
+  }
+
+  // 5. Lời thường
   return plainFallback;
 }
 

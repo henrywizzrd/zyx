@@ -33,6 +33,10 @@ jobs:
       - run: npx expo prebuild --platform android --no-install
       - name: Build APK
         working-directory: android
+        # Sentry: gửi bản đồ mã (source map) lên để báo lỗi chỉ đúng dòng code. Lỗi gửi thì bỏ qua, không làm hỏng bản build
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ALLOW_FAILURE: true
         # Chỉ build cho chip arm64 (mọi điện thoại Android vài năm gần đây) cho nhanh và nhẹ.
         # Tắt R8 (thu gọn / làm rối mã Java): bản Expo hiện tại bật sẵn nhưng R8 xoá nhầm một hàm của expo-modules
         # → expo-sqlite không nạp được → app văng ngay khi mở ("Cannot find native module 'ExpoSQLite'")
@@ -59,6 +63,9 @@ jobs:
       - run: npm ci
       - run: npx expo prebuild --platform ios
       - name: Build (không ký)
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ALLOW_FAILURE: true
         run: |
           set -o pipefail
           xcodebuild -version
@@ -124,11 +131,15 @@ jobs:
       - name: Đẩy bản cập nhật lên kênh preview
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           MSG: ${{ github.event.head_commit.message }}
           CI: 1
         run: |
+          # Sau mỗi lần đẩy: gửi source map của bản cập nhật lên Sentry (lỗi thì bỏ qua)
           npx --yes eas-cli@latest update --channel preview --platform ios --message "$MSG" --non-interactive
+          npx sentry-expo-upload-sourcemaps dist || echo "Sentry: không gửi được source map iOS"
           npx --yes eas-cli@latest update --channel preview --platform android --message "$MSG" --non-interactive
+          npx sentry-expo-upload-sourcemaps dist || echo "Sentry: không gửi được source map Android"
 
   # Kiểm tra giao diện tự động trên máy ảo Android: chỉ chạy khi lời nhắn commit có [check].
   # Lưu ý: máy ảo của GitHub vẽ đồ hoạ bằng CPU (không có GPU) nên app (Skia, kính mờ, hiệu ứng nền) chạy rất chậm,
