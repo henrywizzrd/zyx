@@ -141,6 +141,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
       }
       flung.value = 0; // mở lại giữa lúc đang thu theo cú vuốt: lần đóng sau phải chạy bình thường
       let justMounted = false;
+      let from = '';
       if (!mountedRef.current) {
         justMounted = true;
         // Giảm chuyển động: "điểm xuất phát" là cả màn hình → không phóng to / dịch chuyển, chỉ còn mờ dần
@@ -150,13 +151,15 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
         const a = (o as Rect).art ?? o;
         ax.value = a.x; ay.value = a.y; aw.value = a.w; ar.value = a.r;
         sized.value = o.h > 0 && o.w / o.h > 2.2 ? 1 : 0;
+        // Ghi nhật ký bằng số thật: đọc lại giá trị chuyển động ngay sau khi gán thì luồng JS còn trả số cũ ("bong bóng 1×1")
+        from = `${o.h > 0 && o.w / o.h > 2.2 ? 'từ viên mini player' : 'từ bong bóng'} ${Math.round(o.w)}×${Math.round(o.h)}`;
         p.value = 0;
         flung.value = 0;
         openSize.current = { W, H };
         setMounted(true);
       }
       setMoving(true);
-      beginMotion('mở player', `${sized.value ? 'từ viên mini player' : 'từ bong bóng'} ${Math.round(ow.value)}×${Math.round(oh.value)}${mountedRef.current && !justMounted ? ' (mở lại khi chưa gỡ xong)' : ''}${frozenRef.current && !warmRef.current ? ', màn player đang ngủ (phải vẽ lại)' : ''}`);
+      beginMotion('mở player', `${justMounted ? from : 'mở lại khi chưa gỡ xong'}${frozenRef.current && !warmRef.current ? ', màn player đang ngủ (phải vẽ lại)' : ''}`);
       p.value = withSpring(1, SPRING, (done) => {
         if (done) runOnJS(stopMoving)();
       });
@@ -360,6 +363,10 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   // dựng cả màn player tốn ~0,3–0,6 giây luồng JS (mở player bị khựng), gỡ ra cũng khựng ~0,3 giây lúc vừa thu về bong bóng
   const everRef = useRef(false);
   if (mounted) everRef.current = true;
+  // Dựng sẵn màn player lúc rảnh, ~2,5 giây sau khi mở app (trong suốt, không ai thấy), rồi cho ngủ.
+  // Trước đây lần mở player ĐẦU TIÊN sau khi mở app phải dựng cả màn từ đầu → chỉ ~90–100fps; các lần sau đã ~120fps
+  const [pre, setPre] = useState(false);
+  if (pre) everRef.current = true;
   // Đóng băng sau một nhịp: để màn player kịp nhận active = false (dừng xoay nền, dừng đồng hồ lời...) rồi mới đứng im
   const [frozen, setFrozen] = useState(false);
   const [warm, setWarm] = useState(false);
@@ -390,12 +397,29 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   // Hâm nóng (vừa chạm vào mini player, chưa nhấc tay): làm sẵn mọi việc nặng TRƯỚC khi hiệu ứng mở chạy —
   // bỏ đóng băng, hiện lại cả cây màn player (trong suốt, chưa thấy gì), bật active (đồng hồ lời, nền xoay...).
   // Trước đây những việc này dồn vào đúng lúc player bắt đầu nở ra → một khung hình 50–130ms giữa hiệu ứng (~65fps)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const ric = (globalThis as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback;
+      if (ric) ric(() => setPre(true));
+      else setPre(true);
+    }, 2500);
+    return () => clearTimeout(t);
+  }, []);
+  // Vừa dựng sẵn: thức một lúc cho cả cây kịp vẽ ra, rồi ngủ lại (giống lúc vừa đóng player)
+  useEffect(() => {
+    if (!pre || mountedRef.current) return;
+    setFrozen(false);
+    const id = setTimeout(() => {
+      if (!mountedRef.current) setFrozen(true);
+    }, 1500);
+    return () => clearTimeout(id);
+  }, [pre]);
   const ready = mounted || warm;
   const ctx = useMemo<Ctx>(() => ({ reportCover, closeCfg, moving, active: ready }), [reportCover, closeCfg, moving, ready]);
   if (!everRef.current) return null;
 
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 50 }, !ready && styles.gone, rootVis]} pointerEvents={open ? 'auto' : 'box-none'}>
+    <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 50 }, !ready && !pre && styles.gone, rootVis]} pointerEvents={open ? 'auto' : 'box-none'}>
       {/* Không tô nền cho khung: nền của khung bị kéo méo theo hai chiều nên ở cuối hiệu ứng thu về thành hình vuông vuông
           (đó là cái ô vuông thấy được trước khi thành hình tròn). Màn player đã có nền riêng bên trong */}
       <Animated.View pointerEvents={open ? 'auto' : 'none'} style={[styles.frame, { width: W, height: H }, win]}>
