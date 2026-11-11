@@ -452,6 +452,11 @@ export const vi = {
   'offline.banner': "Đang offline · chỉ phát được bài đã tải",
   'preset.starry': "Trời sao",
   'studio.ambient.starry': "Bầu trời đêm có tinh vân tím, dải ngân hà và sao lấp lánh trôi chậm.",
+  'studio.meteorLevel': "Mật độ sao băng",
+  'studio.meteorLevel.0': "Ít",
+  'studio.meteorLevel.1': "Vừa",
+  'studio.meteorLevel.2': "Nhiều",
+  'studio.meteorLevel.3': "Bão sao băng",
 };
 
 export type StringKey = keyof typeof vi;
@@ -887,4 +892,9 @@ export const en: Record<StringKey, string> = {
   'offline.banner': "Offline · only downloaded songs can play",
   'preset.starry': "Starry night",
   'studio.ambient.starry': "A night sky with violet nebulae, the Milky Way and slowly drifting, twinkling stars.",
+  'studio.meteorLevel': "Meteor density",
+  'studio.meteorLevel.0': "Few",
+  'studio.meteorLevel.1': "Normal",
+  'studio.meteorLevel.2': "Many",
+  'studio.meteorLevel.3': "Meteor storm",
 };

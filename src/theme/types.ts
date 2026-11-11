@@ -36,7 +36,8 @@ export interface Theme {
   colors: Palette; // tính tự động từ preset, không tự sửa
   glass: { blur: number; material?: 'clear' | 'frost' | 'smoke' }; // độ mờ kính (0..100) + loại kính: Trong / Mờ / Khói
   // Hiệu ứng nền của từng bộ: tuyết rơi (Snow), lá rơi (Green), bong bóng + cá (Ocean), hạt cà phê (Latte)
-  effects: { ambient: Record<AmbientPresetId, boolean> };
+  // meteorLevel: mật độ sao băng của bộ Mưa sao băng (0 = ít, 1 = vừa, 2 = nhiều, 3 = bão sao băng)
+  effects: { ambient: Record<AmbientPresetId, boolean>; meteorLevel?: number };
   dock: {
     position: Position;
     items: TabId[];

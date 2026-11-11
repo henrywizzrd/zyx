@@ -50,6 +50,7 @@ Known GPU pitfalls (both happened):
 ## 4. Performance budget
 
 - Live effects run on the UI thread only (Reanimated frame callback + Skia). Never `setState` per frame.
+- **Never redraw a full-screen shader every frame.** The app's glass (dock, mini player, tiles, feed cards) re-blurs whatever changes behind it, and a full-screen shader at 3x density is ~3.8M pixels per frame. The first Trời sao version did this at 30 fps → heavy lag on Home with the feed, and the in-app log did NOT show it (it measures JS/UI threads, not the GPU). Pattern that works: draw the expensive shader **once** (static), and animate only cheap things on top — e.g. ~150 star sprites in **one `drawAtlas` call** whose positions change each frame (see `StarryDrift`).
 - Use `useAmbientClock(true)` (30 fps) for slow motion (skies, aurora); 60 fps clock only for falling particles.
 - Full-screen shaders: keep per-pixel work small — loop 3×3 neighbours only for layers whose glow crosses cells; the far layer checks only its own cell.
 - The still scene must render without the live layer (effect switched off, Player open): draw the same shader with `time = 0`, no twinkle.

@@ -158,6 +158,7 @@ interface ThemeContextValue {
   setGlassBlur: (blur: number) => void;
   setGlassMaterial: (m: 'clear' | 'frost' | 'smoke') => void;
   setAmbient: (preset: AmbientPresetId, on: boolean) => void;
+  setMeteorLevel: (level: number) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -270,6 +271,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setGlassMaterial: (material) => setThemeState((t) => ({ ...t, glass: { ...t.glass, material } })),
       setAmbient: (preset, on) =>
         setThemeState((t) => ({ ...t, effects: { ...t.effects, ambient: { ...t.effects.ambient, [preset]: on } } })),
+      setMeteorLevel: (level) => setThemeState((t) => ({ ...t, effects: { ...t.effects, meteorLevel: Math.max(0, Math.min(3, Math.round(level))) } })),
     };
   }, [theme, landscape, coverTint]);
 

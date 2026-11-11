@@ -3,6 +3,8 @@
 //  - tinh vân chàm–tím pha xanh ngọc + vệt bụi tối dọc dải ngân hà (nhiễu fbm)
 //  - 3 lớp sao xa / vừa / gần: sao có lõi sáng + quầng mềm, đa số mờ, vài ngôi rất sáng có tia nhiễu xạ mảnh;
 //    sao dày dần về phía dải ngân hà; lớp gần trôi nhanh hơn lớp xa (có chiều sâu)
+// Trời trôi mà không lag: shader chỉ vẽ MỘT LẦN (nền + tinh vân + lớp sao xa). Hai lớp sao vừa / gần là các "sprite" vẽ bằng
+// drawAtlas (một lệnh vẽ cho cả trăm ngôi), chỉ dịch vị trí mỗi khung → GPU gần như không tốn gì (xem StarryDrift trong Ambient.tsx)
 // Bản xem trước trên web (WebGL) cùng thuật toán: artifact "ZYX – Theme Trời sao".
 // Hai lỗi đã gặp khi làm bản web, giữ nguyên cách sửa ở đây:
 //  1. smoothstep(a, b, x) phải có a < b (đảo ngược là "không xác định" trên GPU → sao bị cắt thành vệt). Cần đảo thì 1 - smoothstep
@@ -14,6 +16,7 @@ uniform float2 res;   // kích thước vùng vẽ (điểm)
 uniform float time;   // giây
 uniform float tw;     // độ lấp lánh 0..1 (0 = đứng yên)
 uniform float drift;  // tốc độ trời trôi
+uniform float full;   // 1 = vẽ cả 3 lớp sao; 0 = chỉ lớp xa (2 lớp vừa / gần vẽ riêng để trôi được, xem StarryDrift)
 
 float h21(float2 p) { p = fract(p * float2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float noise(float2 p) {
@@ -91,8 +94,10 @@ half4 main(float2 pos) {
   // 3 lớp sao. Lớp xa: sao rất nhỏ, chỉ xét chính ô của nó (đỡ 8/9 công tính)
   float2 g0 = (uv + float2(dr * 0.3, 0.0)) * 90.0;
   float3 s = star(floor(g0), float2(0.0), fract(g0), 90.0, 1.0, 0.47, 1.0, t, 0.0, 0.15) * 0.7;
-  s += layer9(uv + float2(dr * 0.6, 0.0), 42.0, 0.9, 0.27, 1.0, t, 40.0);
-  s += layer9(uv + float2(dr, 0.0), 16.0, 0.7, 0.14, 0.5, t, 80.0) * 1.15;
+  if (full > 0.5) {
+    s += layer9(uv + float2(dr * 0.6, 0.0), 42.0, 0.9, 0.27, 1.0, t, 40.0);
+    s += layer9(uv + float2(dr, 0.0), 16.0, 0.7, 0.14, 0.5, t, 80.0) * 1.15;
+  }
   col += s;
 
   col = 1.0 - exp(-col * 1.15);                     // nén sáng mềm
@@ -108,4 +113,13 @@ export function starryShader(): SkRuntimeEffect | null {
     if (!cached) console.warn('[theme] shader compile failed: starry');
   }
   return cached;
+}
+
+// Mật độ dải ngân hà tại một điểm (tính giống shader), để rải sao trôi dày hơn ở dải. x, y theo phần màn hình (y: 0 = trên)
+export function starryBand(x: number, y: number, asp: number) {
+  const ux = x * asp - asp * 0.5;
+  const uy = 1 - y - 0.55;
+  const n = Math.hypot(0.42, 1);
+  const dl = (ux * 0.42 + uy) / n;
+  return Math.exp((-dl * dl) / 0.018);
 }

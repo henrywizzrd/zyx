@@ -159,7 +159,7 @@ function PresetCard({ id, selected, width, onPress }: {
 
 // Trang Giao diện: bộ màu, nền (màu / ảnh / GIF / video), độ tối nền, độ mờ kính
 export function ThemeStudioScreen() {
-  const { theme, setBackground, setGlassBlur, setGlassMaterial, setAmbient } = useTheme();
+  const { theme, setBackground, setGlassBlur, setGlassMaterial, setAmbient, setMeteorLevel } = useTheme();
   const { changePreset } = useThemeTransition();
   const scheme = useColorScheme();
   const t = useT();
@@ -277,6 +277,23 @@ export function ThemeStudioScreen() {
               trackColor={{ true: accent, false: theme.colors.switchOff }}
             />
           </View>
+        )}
+
+        {/* Bộ Mưa sao băng: chọn mật độ sao băng */}
+        {theme.preset === 'meteor' && theme.effects.ambient.meteor && (
+          <>
+            <Text style={[styles.label, { color: text, marginTop: 16 }]}>{t('studio.meteorLevel')}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+              {([0, 1, 2, 3] as const).map((lv) => {
+                const on = (theme.effects.meteorLevel ?? 1) === lv;
+                return (
+                  <Pressable key={lv} onPress={() => setMeteorLevel(lv)} style={[styles.chip, { backgroundColor: on ? accent : surface, borderColor: border }]}>
+                    <Text style={{ color: on ? onAccent : text, fontWeight: '700', fontSize: 13 }}>{t(`studio.meteorLevel.${lv}`)}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
         )}
 
         {theme.preset === 'cover' && <Text style={{ color: textSecondary, fontSize: 12, marginTop: 14 }}>{t('studio.coverHint')}</Text>}

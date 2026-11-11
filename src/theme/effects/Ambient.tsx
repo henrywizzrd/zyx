@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
-import { Canvas, Fill, ImageSVG, Picture, Shader, Skia } from '@shopify/react-native-skia';
+import { BlendMode, Canvas, Fill, ImageSVG, Picture, Shader, Skia, TileMode, type SkImage } from '@shopify/react-native-skia';
 import { makeMutable, useDerivedValue, useFrameCallback } from 'react-native-reanimated';
 
 // Đồng hồ chung cho mọi lớp hiệu ứng: hạt rơi / sao băng tính hoàn toàn theo thời gian t, nên hai lớp cùng một t
@@ -34,7 +34,7 @@ import { drawLeaf, LEAF_COLORS, LEAF_SVGS, makeLeafPaths } from './leaves';
 import { BEAN_COLORS, BEAN_SVG } from './beans';
 import { drawBubble, drawFish, FISH_BODY, FISH_COLORS, FISH_FIN, FISH_TAIL } from './ocean';
 import { useScreenSize } from '../../components/ScreenSize';
-import { starryShader } from './starry';
+import { starryBand, starryShader } from './starry';
 import { auroraSkySvg, LOOSE_PETAL_PATH, meteorSkySvg, neonSkySvg, PETAL_PATH, rainGlassSvg } from './scenes';
 
 // Hiệu ứng rơi nhẹ liên tục phía sau nội dung (bật/tắt trong trang Giao diện):
@@ -86,8 +86,8 @@ function pickEffect(theme: ReturnType<typeof useTheme>['theme']): React.ReactEle
   if (theme.preset === 'ocean' && on.ocean) return <OceanCanvas onMedia={onMedia} />;
   if (theme.preset === 'latte' && on.latte) return <CoffeeBeans />;
   if (theme.preset === 'sakura' && on.sakura) return <SakuraPetals />;
-  if (theme.preset === 'meteor' && on.meteor) return <MeteorShower />;
-  if (theme.preset === 'starry' && on.starry) return <StarryTwinkles />;
+  if (theme.preset === 'meteor' && on.meteor) return <MeteorShower level={theme.effects.meteorLevel ?? 1} />;
+  if (theme.preset === 'starry' && on.starry) return <StarryDrift />;
   if (theme.preset === 'aurora' && on.aurora) return <AuroraRibbons />;
   if (theme.preset === 'rain' && on.rain) return <RainOnGlass />;
   if (theme.preset === 'neon' && on.neon) return <NeonGrid />;
@@ -99,7 +99,8 @@ function pickEffect(theme: ReturnType<typeof useTheme>['theme']): React.ReactEle
 export function ThemeScene() {
   const { theme } = useTheme();
   // Trời sao: bản đứng yên của cùng shader (sao không lấp lánh, không trôi). Bật hiệu ứng thì bản chạy được vẽ đè lên
-  if (theme.preset === 'starry' && theme.background.type === 'preset') return <StarrySky />;
+  // Bật hiệu ứng: nền chỉ có lớp sao xa, hai lớp vừa / gần do StarryDrift vẽ và cho trôi
+  if (theme.preset === 'starry' && theme.background.type === 'preset') return <StarrySky full={!theme.effects.ambient.starry} />;
   return <SvgScene />;
 }
 
@@ -128,11 +129,10 @@ function SvgScene() {
   );
 }
 
-// Bộ Trời sao: cả bầu trời là một shader (xem starry.ts), vẽ MỘT LẦN rồi đứng yên.
-// Bản đầu cho cả bầu trời chạy (lấp lánh + trôi) 30 lần/giây: GPU phải tính lại ~3,8 triệu điểm ảnh mỗi lần, VÀ mọi tấm kính
-// (dock, mini player, ô playlist, thẻ feed) phải làm mờ lại phần nền đang đổi phía sau → Home có feed lag nặng.
-// Giờ: bầu trời đứng yên, chỉ một ít sao sáng lấp lánh vẽ riêng (StarryTwinkles, như bộ Mưa sao băng)
-function StarrySky() {
+// Bộ Trời sao: nền là một shader (xem starry.ts) vẽ MỘT LẦN rồi đứng yên (nền chàm, tinh vân, lớp sao xa).
+// Bản đầu cho cả shader chạy 30 lần/giây: GPU tính lại ~3,8 triệu điểm ảnh mỗi lần → lag nặng (nhất là Home có feed).
+// full = false: không vẽ 2 lớp sao vừa / gần (StarryDrift vẽ chúng và cho trôi)
+function StarrySky({ full = true }: { full?: boolean }) {
   const { width, height } = useScreenSize();
   const effect = useMemo(() => starryShader(), []);
   if (!effect || width < 1 || height < 1) return null;
@@ -140,47 +140,123 @@ function StarrySky() {
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <Canvas style={StyleSheet.absoluteFill}>
         <Fill>
-          <Shader source={effect} uniforms={{ res: [width, height], time: 0, tw: 0, drift: 0 }} />
+          <Shader source={effect} uniforms={{ res: [width, height], time: 0, tw: 0, drift: 0, full: full ? 1 : 0 }} />
         </Fill>
       </Canvas>
     </View>
   );
 }
 
-// Vài chục ngôi sao sáng lấp lánh trên bầu trời đứng yên: quầng mờ + lõi sáng, màu trắng xanh / vài ngôi ngả vàng.
-// Chỉ tô vài chục chấm nhỏ mỗi lần (rất nhẹ), đồng hồ chậm 30 khung/giây
-function StarryTwinkles() {
+// Ảnh mẫu của một ngôi sao (vẽ một lần): ô trái = sao tròn (lõi sáng + quầng mềm), ô phải = sao sáng có tia nhiễu xạ mảnh
+const SPRITE = 64;
+const SPRITE_CORE = 1.9; // bán kính lõi sáng (điểm) khi vẽ ở tỉ lệ 1
+let starSprites: SkImage | null | undefined;
+function getStarSprites(): SkImage | null {
+  if (starSprites !== undefined) return starSprites;
+  starSprites = null;
+  try {
+    const surf = Skia.Surface.Make(SPRITE * 2, SPRITE);
+    if (!surf) return null;
+    const c = surf.getCanvas();
+    const h = SPRITE / 2;
+    for (let k = 0; k < 2; k++) {
+      const cx = SPRITE * k + h;
+      const glow = Skia.Paint();
+      glow.setAntiAlias(true);
+      glow.setShader(
+        Skia.Shader.MakeRadialGradient(
+          { x: cx, y: h },
+          h,
+          ['rgba(255,255,255,1)', 'rgba(255,255,255,0.6)', 'rgba(255,255,255,0.13)', 'rgba(255,255,255,0.04)', 'rgba(255,255,255,0)'].map((x) => Skia.Color(x)),
+          [0, 0.05, 0.16, 0.45, 1],
+          TileMode.Clamp
+        )
+      );
+      c.drawCircle(cx, h, h, glow);
+      if (k === 1) {
+        const ray = Skia.Paint();
+        ray.setAntiAlias(true);
+        const stops = ['rgba(255,255,255,0)', 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0)'].map((x) => Skia.Color(x));
+        const L = h * 0.6; // tia ngắn, mảnh
+        ray.setShader(Skia.Shader.MakeLinearGradient({ x: cx - L, y: h }, { x: cx + L, y: h }, stops, null, TileMode.Clamp));
+        c.drawRect(Skia.XYWHRect(cx - L, h - 0.5, L * 2, 1), ray);
+        ray.setShader(Skia.Shader.MakeLinearGradient({ x: cx, y: h - L }, { x: cx, y: h + L }, stops, null, TileMode.Clamp));
+        c.drawRect(Skia.XYWHRect(cx - 0.5, h - L, 1, L * 2), ray);
+      }
+    }
+    surf.flush();
+    starSprites = surf.makeImageSnapshot();
+  } catch (e) {
+    console.warn('[theme] star sprites', e);
+  }
+  return starSprites;
+}
+
+// Hai lớp sao vừa / gần trôi chậm sang trái (lớp gần trôi nhanh hơn → có chiều sâu) và lấp lánh.
+// Cả ~200 ngôi vẽ bằng MỘT lệnh drawAtlas (dán ảnh mẫu ở trên, mỗi ngôi một vị trí / cỡ / màu) → rất nhẹ cho GPU.
+// Sao dày dần về phía dải ngân hà giống shader. Đồng hồ chậm 30 khung/giây
+const STARRY_DRIFT = 3; // tốc độ trôi (giống thanh "Trời trôi" ở bản web)
+function StarryDrift() {
   const { width, height } = useScreenSize();
   const clock = useAmbientClock(true);
-  // x, y, bán kính, tốc độ nhấp nháy, pha, ấm (1 = ngả vàng)
-  const stars = useMemo(() => {
+  const sprites = useMemo(() => getStarSprites(), []);
+  const data = useMemo(() => {
+    const asp = width / Math.max(1, height);
+    // mỗi ngôi: x (0..1), y (điểm), cỡ, tốc độ trôi (điểm/giây), tốc độ lấp lánh, pha, ấm, có tia, độ sáng
     const out: number[] = [];
-    for (let i = 0; i < scaled(30, width, height); i++) out.push(rnd(i, 71), rnd(i, 72), 0.7 + rnd(i, 73) * 1.0, 0.35 + rnd(i, 74) * 0.9, rnd(i, 75) * 6.28, rnd(i, 76) < 0.18 ? 1 : 0);
-    return out;
+    const srcs = [];
+    const speed = STARRY_DRIFT * 0.006 * height;
+    const layers: [number, number, number, number][] = [
+      // số sao, cỡ ô (phần chiều cao), hệ số cỡ, hệ số tốc độ
+      [scaled(110, width, height), 1 / 42, 0.8, 0.6],
+      [scaled(30, width, height), 1 / 16, 0.6, 1],
+    ];
+    let k = 0;
+    for (const [n, cell, sizeK, sp] of layers) {
+      let made = 0;
+      for (let tries = 0; made < n && tries < n * 6; tries++, k++) {
+        const x = rnd(k, 81);
+        const y = rnd(k, 82);
+        if (rnd(k, 83) > (0.35 + 1.1 * starryBand(x, y, asp)) / 1.45) continue;
+        made++;
+        const b = Math.pow(rnd(k, 84), 5);
+        const r = (0.035 + 0.11 * b) * sizeK * cell * height; // bán kính lõi (điểm), giống shader
+        const spiky = b > 0.75 ? 1 : 0;
+        out.push(x, y * height, r / SPRITE_CORE, speed * sp, 0.6 + 2.2 * rnd(k, 85), 6.283 * rnd(k, 86), rnd(k, 87) > 0.82 ? 1 : 0, spiky, b);
+        srcs.push(Skia.XYWHRect(spiky ? SPRITE : 0, 0, SPRITE, SPRITE));
+      }
+    }
+    return { stars: out, srcs };
   }, [width, height]);
   const picture = useDerivedValue(() => {
     const t = clock.value / 1000;
     const rec = Skia.PictureRecorder();
     const canvas = rec.beginRecording(Skia.XYWHRect(0, 0, width, height));
-    const paint = Skia.Paint();
-    paint.setAntiAlias(true);
-    const cool = Skia.Color('#DCE4FF');
-    const warm = Skia.Color('#FFE6CC');
-    for (let i = 0; i < stars.length; i += 6) {
-      const a = 0.5 + 0.5 * Math.sin(t * stars[i + 3] * 2.2 + stars[i + 4]);
-      const x = stars[i] * width;
-      const y = stars[i + 1] * height;
-      const r = stars[i + 2];
-      paint.setColor(stars[i + 5] ? warm : cool);
-      paint.setAlphaf(0.1 * a);
-      canvas.drawCircle(x, y, r * 4, paint);
-      paint.setAlphaf(0.25 * a);
-      canvas.drawCircle(x, y, r * 2, paint);
-      paint.setAlphaf(0.35 + 0.65 * a);
-      canvas.drawCircle(x, y, r, paint);
+    if (sprites) {
+      const { stars, srcs } = data;
+      const margin = 48;
+      const span = width + margin * 2;
+      const xf = [];
+      const cols = [];
+      for (let i = 0; i < stars.length; i += 9) {
+        const sc = stars[i + 2];
+        // trôi sang trái, ra khỏi mép trái (ngoài màn hình) thì vòng lại từ mép phải
+        let x = (stars[i] * span - t * stars[i + 3]) % span;
+        if (x < 0) x += span;
+        x -= margin;
+        const half = (SPRITE / 2) * sc;
+        xf.push(Skia.RSXform(sc, 0, x - half, stars[i + 1] - half));
+        const tw = 1 - 0.36 * (0.5 + 0.5 * Math.sin(t * stars[i + 4] + stars[i + 5]));
+        const a = Math.min(1, (0.22 + 0.7 * stars[i + 8]) * tw);
+        // trắng xanh / vài ngôi ngả vàng (pha 45% trắng như shader)
+        cols.push(stars[i + 6] ? Float32Array.of(1, 0.92, 0.85, a) : Float32Array.of(0.85, 0.89, 1, a));
+      }
+      const paint = Skia.Paint();
+      canvas.drawAtlas(sprites, srcs, xf, paint, BlendMode.Modulate, cols);
     }
     return rec.finishRecordingAsPicture();
   });
+  if (!sprites) return null;
   return <Layer picture={picture} />;
 }
 
@@ -518,7 +594,14 @@ function SakuraPetals() {
 // Bộ Mưa sao băng: vài ngôi sao lấp lánh, và cứ khoảng 8 giây lại có một đợt 5-6 sao băng vạch chéo xuống bên trái
 // (thêm một ngôi lẻ ở giữa hai đợt). Trời sao + dải ngân hà là cảnh đứng yên (ThemeScene)
 const SHOWER_EVERY = 8;
-function MeteorShower() {
+// Mật độ sao băng (Ít / Vừa / Nhiều / Bão): mấy giây một đợt, mỗi đợt mấy ngôi
+const SHOWER_LEVELS: [number, number][] = [
+  [14, 3],
+  [SHOWER_EVERY, 6],
+  [5, 9],
+  [3.2, 14],
+];
+function MeteorShower({ level = 1 }: { level?: number }) {
   const { width, height } = useScreenSize();
   const clock = useAmbientClock();
   // Sao lấp lánh: x, y, bán kính, tốc độ nhấp nháy, pha
@@ -555,8 +638,9 @@ function MeteorShower() {
       const dx = -Math.cos(0.66);
       const dy = Math.sin(0.66);
       const diag = Math.hypot(width, height);
-      const cycle = Math.floor(t / SHOWER_EVERY);
-      const local = t - cycle * SHOWER_EVERY;
+      const [every, count] = SHOWER_LEVELS[Math.max(0, Math.min(3, level))];
+      const cycle = Math.floor(t / every);
+      const local = t - cycle * every;
       const trail = Skia.Paint();
       trail.setAntiAlias(true);
       trail.setStyle(1);
@@ -564,11 +648,12 @@ function MeteorShower() {
       const head = Skia.Paint();
       head.setAntiAlias(true);
       head.setColor(Skia.Color('#FFFFFF'));
-      // 6 ngôi trong đợt + 1 ngôi lẻ giữa hai đợt
-      for (let m = 0; m < 7; m++) {
-        const lone = m === 6;
-        const seed = cycle * 7 + m;
-        const start = lone ? SHOWER_EVERY * 0.55 + rnd(seed, 41) * 0.8 : rnd(seed, 42) * 1.8 + (m === 5 && rnd(seed, 43) < 0.4 ? 99 : 0); // đợt có 5 hoặc 6 ngôi
+      // count ngôi trong đợt (đôi khi thiếu 1) + 1 ngôi lẻ giữa hai đợt; đợt đông thì các ngôi rải ra lâu hơn
+      const spread = 1.8 + Math.max(0, count - 6) * 0.15;
+      for (let m = 0; m <= count; m++) {
+        const lone = m === count;
+        const seed = cycle * 31 + m;
+        const start = lone ? every * 0.55 + rnd(seed, 41) * 0.8 : rnd(seed, 42) * spread + (m === count - 1 && rnd(seed, 43) < 0.4 ? 99 : 0);
         const dur = 0.9 + rnd(seed, 44) * 0.6;
         const p = (local - start) / dur;
         if (p < 0 || p > 1) continue;
