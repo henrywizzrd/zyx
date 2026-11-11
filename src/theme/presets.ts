@@ -1,11 +1,11 @@
 // Các bộ màu có sẵn. Mọi màn hình (trừ Player) lấy màu từ đây qua theme.colors.
 // Thêm bộ màu mới: thêm id vào ThemePresetId, thêm một mục vào PRESETS và tên vào PRESET_ORDER.
 
-export type ThemePresetId = 'dark' | 'light' | 'green' | 'ocean' | 'latte' | 'snow' | 'sakura' | 'meteor' | 'aurora' | 'rain' | 'neon' | 'cover';
+export type ThemePresetId = 'dark' | 'light' | 'green' | 'ocean' | 'latte' | 'snow' | 'sakura' | 'meteor' | 'starry' | 'aurora' | 'rain' | 'neon' | 'cover';
 
 // Các bộ có hiệu ứng nền chạy liên tục (bật/tắt bằng công tắc Hiệu ứng nền, nhớ riêng từng bộ)
-export type AmbientPresetId = 'snow' | 'green' | 'ocean' | 'latte' | 'sakura' | 'meteor' | 'aurora' | 'rain' | 'neon';
-export const AMBIENT_PRESETS: AmbientPresetId[] = ['snow', 'green', 'ocean', 'latte', 'sakura', 'meteor', 'aurora', 'rain', 'neon'];
+export type AmbientPresetId = 'snow' | 'green' | 'ocean' | 'latte' | 'sakura' | 'meteor' | 'starry' | 'aurora' | 'rain' | 'neon';
+export const AMBIENT_PRESETS: AmbientPresetId[] = ['snow', 'green', 'ocean', 'latte', 'sakura', 'meteor', 'starry', 'aurora', 'rain', 'neon'];
 
 export interface Palette {
   bg: string; // nền của app
@@ -155,6 +155,23 @@ export const PRESETS: Record<ThemePresetId, Palette> = {
     statusBar: 'light-content',
     switchOff: '#2A3458',
   },
+  // Trời sao (kiểu thiên văn): trời chàm có tinh vân tím, nhấn xanh lavender như ánh sao
+  starry: {
+    bg: '#0B0F2E',
+    surface: '#161B45',
+    card: 'rgba(22,27,69,0.6)',
+    text: '#EEF0FF',
+    textSecondary: '#A3A9D6',
+    accent: '#AFC0FF',
+    onAccent: '#0B0F2E',
+    border: 'rgba(175,192,255,0.14)',
+    skeleton: 'rgba(175,192,255,0.08)',
+    glass: 'rgba(18,22,60,0.55)',
+    glassRgb: '18,22,60',
+    glassTint: 'dark',
+    statusBar: 'light-content',
+    switchOff: '#2A3060',
+  },
   // Cực quang: trời đêm xanh đen, nhấn xanh lá ngọc như dải cực quang
   aurora: {
     bg: '#04101A',
@@ -225,4 +242,4 @@ export const PRESETS: Record<ThemePresetId, Palette> = {
   },
 };
 
-export const PRESET_ORDER: ThemePresetId[] = ['dark', 'light', 'green', 'ocean', 'latte', 'snow', 'sakura', 'meteor', 'aurora', 'rain', 'neon', 'cover'];
+export const PRESET_ORDER: ThemePresetId[] = ['dark', 'light', 'green', 'ocean', 'latte', 'snow', 'sakura', 'meteor', 'starry', 'aurora', 'rain', 'neon', 'cover'];

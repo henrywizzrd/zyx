@@ -57,6 +57,15 @@ function MiniScreen({ p, id, width, h }: { p: Palette; id: ThemePresetId; width:
           <View style={{ position: 'absolute', left: width * 0.45, top: h * 0.22, width: width * 0.3, height: 1.2, backgroundColor: 'rgba(255,255,255,0.7)', transform: [{ rotate: '-38deg' }] }} />
         </>
       )}
+      {id === 'starry' && (
+        <>
+          {/* dải ngân hà tím mờ chéo qua + vài ngôi sao có quầng */}
+          <View style={{ position: 'absolute', left: -width * 0.2, top: h * 0.38, width: width * 1.4, height: h * 0.16, borderRadius: h, backgroundColor: 'rgba(140,110,230,0.22)', transform: [{ rotate: '-22deg' }] }} />
+          {[[0.15, 0.12, 2], [0.78, 0.1, 3], [0.55, 0.36, 2], [0.3, 0.52, 2], [0.86, 0.48, 2], [0.62, 0.68, 3], [0.1, 0.78, 2]].map(([x, y, r], i) => (
+            <View key={`st${i}`} style={{ position: 'absolute', left: x * width, top: y * h, width: r, height: r, borderRadius: r, backgroundColor: '#FFFFFF', shadowColor: '#C9D4FF', shadowOpacity: 0.9, shadowRadius: 3, shadowOffset: { width: 0, height: 0 } }} />
+          ))}
+        </>
+      )}
       {id === 'aurora' && (
         <>
           <View style={{ position: 'absolute', left: -width * 0.1, top: h * 0.14, width: width * 1.2, height: h * 0.12, borderRadius: h, backgroundColor: 'rgba(61,245,160,0.35)', transform: [{ rotate: '-8deg' }] }} />

@@ -450,6 +450,8 @@ export const vi = {
   'offline.downloaded': "Nhạc đã tải",
   'offline.none': "Chưa tải bài nào. Có mạng thì bấm ••• ở một bài → Tải về để nghe offline.",
   'offline.banner': "Đang offline · chỉ phát được bài đã tải",
+  'preset.starry': "Trời sao",
+  'studio.ambient.starry': "Bầu trời đêm có tinh vân tím, dải ngân hà và sao lấp lánh trôi chậm.",
 };
 
 export type StringKey = keyof typeof vi;
@@ -883,4 +885,6 @@ export const en: Record<StringKey, string> = {
   'offline.downloaded': "Downloaded",
   'offline.none': "Nothing downloaded yet. When you're online, tap ••• on a song → Download to listen offline.",
   'offline.banner': "Offline · only downloaded songs can play",
+  'preset.starry': "Starry night",
+  'studio.ambient.starry': "A night sky with violet nebulae, the Milky Way and slowly drifting, twinkling stars.",
 };

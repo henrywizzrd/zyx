@@ -11,7 +11,7 @@ const FADE_MS = 650;
 
 // Hiệu ứng riêng của từng bộ màu (Skia lỗi hoặc web thì mờ dần)
 const EFFECT_OF: Record<ThemePresetId, ThemeEffect> = {
-  dark: 'ink', light: 'sun', green: 'leaves', ocean: 'ripple', latte: 'coffee', snow: 'snow', sakura: 'sun', meteor: 'ink', aurora: 'ink', rain: 'ripple', neon: 'ink', cover: 'ink',
+  dark: 'ink', light: 'sun', green: 'leaves', ocean: 'ripple', latte: 'coffee', snow: 'snow', sakura: 'sun', meteor: 'ink', starry: 'ink', aurora: 'ink', rain: 'ripple', neon: 'ink', cover: 'ink',
 };
 
 // Skia chỉ nạp trên iOS/Android (web chưa cài CanvasKit)

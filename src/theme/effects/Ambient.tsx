@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { AppState, StyleSheet, View } from 'react-native';
-import { Canvas, ImageSVG, Picture, Skia } from '@shopify/react-native-skia';
+import { Canvas, Fill, ImageSVG, Picture, Shader, Skia } from '@shopify/react-native-skia';
 import { makeMutable, useDerivedValue, useFrameCallback } from 'react-native-reanimated';
 
 // Đồng hồ chung cho mọi lớp hiệu ứng: hạt rơi / sao băng tính hoàn toàn theo thời gian t, nên hai lớp cùng một t
@@ -34,6 +34,7 @@ import { drawLeaf, LEAF_COLORS, LEAF_SVGS, makeLeafPaths } from './leaves';
 import { BEAN_COLORS, BEAN_SVG } from './beans';
 import { drawBubble, drawFish, FISH_BODY, FISH_COLORS, FISH_FIN, FISH_TAIL } from './ocean';
 import { useScreenSize } from '../../components/ScreenSize';
+import { starryShader } from './starry';
 import { auroraSkySvg, LOOSE_PETAL_PATH, meteorSkySvg, neonSkySvg, PETAL_PATH, rainGlassSvg } from './scenes';
 
 // Hiệu ứng rơi nhẹ liên tục phía sau nội dung (bật/tắt trong trang Giao diện):
@@ -86,6 +87,7 @@ function pickEffect(theme: ReturnType<typeof useTheme>['theme']): React.ReactEle
   if (theme.preset === 'latte' && on.latte) return <CoffeeBeans />;
   if (theme.preset === 'sakura' && on.sakura) return <SakuraPetals />;
   if (theme.preset === 'meteor' && on.meteor) return <MeteorShower />;
+  if (theme.preset === 'starry' && on.starry) return <StarrySky live />;
   if (theme.preset === 'aurora' && on.aurora) return <AuroraRibbons />;
   if (theme.preset === 'rain' && on.rain) return <RainOnGlass />;
   if (theme.preset === 'neon' && on.neon) return <NeonGrid />;
@@ -95,6 +97,13 @@ function pickEffect(theme: ReturnType<typeof useTheme>['theme']): React.ReactEle
 // Cảnh nền đứng yên của bộ Mưa sao băng (trời sao) (vẽ một lần, không chạy liên tục nên luôn hiện, kể cả khi tắt hiệu ứng).
 // Người dùng đặt ảnh / video làm nền thì không vẽ cảnh (để thấy ảnh của họ)
 export function ThemeScene() {
+  const { theme } = useTheme();
+  // Trời sao: bản đứng yên của cùng shader (sao không lấp lánh, không trôi). Bật hiệu ứng thì bản chạy được vẽ đè lên
+  if (theme.preset === 'starry' && theme.background.type === 'preset') return <StarrySky />;
+  return <SvgScene />;
+}
+
+function SvgScene() {
   const { theme } = useTheme();
   const { width, height } = useScreenSize();
   const p = theme.preset;
@@ -117,6 +126,28 @@ export function ThemeScene() {
       </Canvas>
     </View>
   );
+}
+
+// Bộ Trời sao: cả bầu trời là một shader (xem starry.ts). live = chạy (lấp lánh + trôi chậm) theo đồng hồ chậm 30 khung/giây
+// — chuyển động rất chậm nên không cần 60/120; bản đứng yên (ThemeScene) chỉ vẽ một lần
+const STARRY_TW = 0.6;
+const STARRY_DRIFT = 2.5;
+function StarrySky({ live = false }: { live?: boolean }) {
+  const { width, height } = useScreenSize();
+  const effect = useMemo(() => starryShader(), []);
+  if (!effect || width < 1 || height < 1) return null;
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Canvas style={StyleSheet.absoluteFill}>
+        <Fill>{live ? <StarryLive effect={effect} width={width} height={height} /> : <Shader source={effect} uniforms={{ res: [width, height], time: 0, tw: 0, drift: 0 }} />}</Fill>
+      </Canvas>
+    </View>
+  );
+}
+function StarryLive({ effect, width, height }: { effect: NonNullable<ReturnType<typeof starryShader>>; width: number; height: number }) {
+  const clock = useAmbientClock(true);
+  const uniforms = useDerivedValue(() => ({ res: [width, height], time: clock.value / 1000, tw: STARRY_TW, drift: STARRY_DRIFT }));
+  return <Shader source={effect} uniforms={uniforms} />;
 }
 
 const rnd = (i: number, k: number) => {
