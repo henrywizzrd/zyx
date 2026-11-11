@@ -87,7 +87,7 @@ function pickEffect(theme: ReturnType<typeof useTheme>['theme']): React.ReactEle
   if (theme.preset === 'latte' && on.latte) return <CoffeeBeans />;
   if (theme.preset === 'sakura' && on.sakura) return <SakuraPetals />;
   if (theme.preset === 'meteor' && on.meteor) return <MeteorShower />;
-  if (theme.preset === 'starry' && on.starry) return <StarrySky live />;
+  if (theme.preset === 'starry' && on.starry) return <StarryTwinkles />;
   if (theme.preset === 'aurora' && on.aurora) return <AuroraRibbons />;
   if (theme.preset === 'rain' && on.rain) return <RainOnGlass />;
   if (theme.preset === 'neon' && on.neon) return <NeonGrid />;
@@ -128,26 +128,60 @@ function SvgScene() {
   );
 }
 
-// Bộ Trời sao: cả bầu trời là một shader (xem starry.ts). live = chạy (lấp lánh + trôi chậm) theo đồng hồ chậm 30 khung/giây
-// — chuyển động rất chậm nên không cần 60/120; bản đứng yên (ThemeScene) chỉ vẽ một lần
-const STARRY_TW = 0.6;
-const STARRY_DRIFT = 2.5;
-function StarrySky({ live = false }: { live?: boolean }) {
+// Bộ Trời sao: cả bầu trời là một shader (xem starry.ts), vẽ MỘT LẦN rồi đứng yên.
+// Bản đầu cho cả bầu trời chạy (lấp lánh + trôi) 30 lần/giây: GPU phải tính lại ~3,8 triệu điểm ảnh mỗi lần, VÀ mọi tấm kính
+// (dock, mini player, ô playlist, thẻ feed) phải làm mờ lại phần nền đang đổi phía sau → Home có feed lag nặng.
+// Giờ: bầu trời đứng yên, chỉ một ít sao sáng lấp lánh vẽ riêng (StarryTwinkles, như bộ Mưa sao băng)
+function StarrySky() {
   const { width, height } = useScreenSize();
   const effect = useMemo(() => starryShader(), []);
   if (!effect || width < 1 || height < 1) return null;
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <Canvas style={StyleSheet.absoluteFill}>
-        <Fill>{live ? <StarryLive effect={effect} width={width} height={height} /> : <Shader source={effect} uniforms={{ res: [width, height], time: 0, tw: 0, drift: 0 }} />}</Fill>
+        <Fill>
+          <Shader source={effect} uniforms={{ res: [width, height], time: 0, tw: 0, drift: 0 }} />
+        </Fill>
       </Canvas>
     </View>
   );
 }
-function StarryLive({ effect, width, height }: { effect: NonNullable<ReturnType<typeof starryShader>>; width: number; height: number }) {
+
+// Vài chục ngôi sao sáng lấp lánh trên bầu trời đứng yên: quầng mờ + lõi sáng, màu trắng xanh / vài ngôi ngả vàng.
+// Chỉ tô vài chục chấm nhỏ mỗi lần (rất nhẹ), đồng hồ chậm 30 khung/giây
+function StarryTwinkles() {
+  const { width, height } = useScreenSize();
   const clock = useAmbientClock(true);
-  const uniforms = useDerivedValue(() => ({ res: [width, height], time: clock.value / 1000, tw: STARRY_TW, drift: STARRY_DRIFT }));
-  return <Shader source={effect} uniforms={uniforms} />;
+  // x, y, bán kính, tốc độ nhấp nháy, pha, ấm (1 = ngả vàng)
+  const stars = useMemo(() => {
+    const out: number[] = [];
+    for (let i = 0; i < scaled(30, width, height); i++) out.push(rnd(i, 71), rnd(i, 72), 0.7 + rnd(i, 73) * 1.0, 0.35 + rnd(i, 74) * 0.9, rnd(i, 75) * 6.28, rnd(i, 76) < 0.18 ? 1 : 0);
+    return out;
+  }, [width, height]);
+  const picture = useDerivedValue(() => {
+    const t = clock.value / 1000;
+    const rec = Skia.PictureRecorder();
+    const canvas = rec.beginRecording(Skia.XYWHRect(0, 0, width, height));
+    const paint = Skia.Paint();
+    paint.setAntiAlias(true);
+    const cool = Skia.Color('#DCE4FF');
+    const warm = Skia.Color('#FFE6CC');
+    for (let i = 0; i < stars.length; i += 6) {
+      const a = 0.5 + 0.5 * Math.sin(t * stars[i + 3] * 2.2 + stars[i + 4]);
+      const x = stars[i] * width;
+      const y = stars[i + 1] * height;
+      const r = stars[i + 2];
+      paint.setColor(stars[i + 5] ? warm : cool);
+      paint.setAlphaf(0.1 * a);
+      canvas.drawCircle(x, y, r * 4, paint);
+      paint.setAlphaf(0.25 * a);
+      canvas.drawCircle(x, y, r * 2, paint);
+      paint.setAlphaf(0.35 + 0.65 * a);
+      canvas.drawCircle(x, y, r, paint);
+    }
+    return rec.finishRecordingAsPicture();
+  });
+  return <Layer picture={picture} />;
 }
 
 const rnd = (i: number, k: number) => {
