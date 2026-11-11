@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { installAppLog, log, setLogContext } from './src/data/applog';
 import { JankMonitor, useRenderProbe } from './src/components/JankMonitor';
 import { updateCoverTint } from './src/theme/coverTint';
@@ -94,17 +94,18 @@ const TAB_SHIFT = 30;
 const TAB_IN = { duration: 280, easing: REasing.out(REasing.cubic) };
 const TAB_OUT = { duration: 200, easing: REasing.out(REasing.quad) };
 
-function TabPane({ o, x, visible, active, children }: { o: SharedValue<number>; x: SharedValue<number>; visible: boolean; active: boolean; children: React.ReactNode }) {
+function TabPane({ o, x, visible, active, pre, children }: { o: SharedValue<number>; x: SharedValue<number>; visible: boolean; active: boolean; pre?: boolean; children: React.ReactNode }) {
   const style = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateX: x.value }] }));
   return (
     <RAnimated.View pointerEvents={active ? 'auto' : 'none'} style={[StyleSheet.absoluteFill, { display: visible ? 'flex' : 'none' }, style]}>
       {/* Tab đang ẩn: đóng băng, không vẽ lại cho tới khi quay lại tab đó */}
-      <Freeze freeze={!visible}>{children}</Freeze>
+      {/* pre: đang được dựng sẵn lúc rảnh → cho vẽ một lần (vẫn ẩn), xong thì đóng băng như tab ẩn khác */}
+      <Freeze freeze={!visible && !pre}>{children}</Freeze>
     </RAnimated.View>
   );
 }
 
-function TabStage({ shown, render }: { shown: PageTab; render: (id: PageTab) => React.ReactNode }) {
+function TabStage({ shown, render, pre }: { shown: PageTab; render: (id: PageTab) => React.ReactNode; pre?: PageTab | null }) {
   const sv = {
     home: { o: useSharedValue(shown === 'home' ? 1 : 0), x: useSharedValue(0) },
     search: { o: useSharedValue(shown === 'search' ? 1 : 0), x: useSharedValue(0) },
@@ -159,7 +160,7 @@ function TabStage({ shown, render }: { shown: PageTab; render: (id: PageTab) => 
         const el = render(id);
         if (!el) return null;
         return (
-          <TabPane key={id} o={sv[id].o} x={sv[id].x} visible={visible.has(id)} active={id === shown}>
+          <TabPane key={id} o={sv[id].o} x={sv[id].x} visible={visible.has(id)} active={id === shown} pre={pre === id}>
             {el}
           </TabPane>
         );
@@ -241,6 +242,32 @@ function Root() {
   // Trước đây mỗi lần đổi tab là dựng lại cả màn hình (Home, Thư viện...), luồng JS bận một lúc nên bấm dock tiếp bị "đơ"
   const visited = useRef(new Set<TabId>()).current;
   visited.add(shown);
+  // Dựng sẵn các tab chưa mở lúc app rảnh (từ ~4 giây sau khi mở app, mỗi tab cách nhau ~1 giây), để lần đầu bấm dock
+  // sang Thư viện / Tìm kiếm / Cài đặt không phải đợi dựng cả trang (Thư viện lần đầu từng mất ~1,1 giây).
+  // startTransition: React dựng từng chút một, nhường máy khi cậu đang chạm / cuộn → không gây khựng
+  const [preTab, setPreTab] = useState<PageTab | null>(null);
+  useEffect(() => {
+    let off = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const ric = (cb: () => void) => {
+      const r = (globalThis as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback;
+      if (r) r(cb);
+      else cb();
+    };
+    const step = () => {
+      if (off) return;
+      const id = TAB_ORDER.find((t) => !visited.has(t));
+      if (!id) return startTransition(() => setPreTab(null));
+      visited.add(id);
+      startTransition(() => setPreTab(id));
+      timer = setTimeout(() => ric(step), 1000);
+    };
+    timer = setTimeout(() => ric(step), 4000);
+    return () => {
+      off = true;
+      clearTimeout(timer);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const tabEl = (id: PageTab) =>
     !visited.has(id) ? null : id === 'home' ? <HomeTab /> : id === 'search' ? <SearchTab /> : id === 'library' ? <LibraryTab /> : <SettingsTab />;
 
@@ -260,7 +287,7 @@ function Root() {
         {/* Tab hiện tại. Có trang mở chồng thì tab mờ dần đi theo vị trí trang (vuốt quay lại thì hiện lại dần),
             để trang trong suốt phía trên chỉ thấy nền chung, không thấy chữ của tab chồng lên */}
         <FadeLayer value={tabFade} pointerEvents={page ? 'none' : 'auto'} style={{ flex: 1 }}>
-          <TabStage shown={shown as PageTab} render={tabEl} />
+          <TabStage shown={shown as PageTab} render={tabEl} pre={preTab} />
         </FadeLayer>
         {/* Các trang mở chồng lên tab (playlist, album, nghệ sĩ, thể loại...). Dock và mini player vẫn nằm trên.
             Mọi trang trong chồng đều được giữ lại (không dựng lại khi quay về), nhưng chỉ trang trên cùng hiện rõ:
