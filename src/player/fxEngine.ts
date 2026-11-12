@@ -304,7 +304,9 @@ function fileFor(id: string): Promise<string> {
     const { File } = fs();
     const target = new File(cacheDir(), safeName(id));
     if (!(target.exists && (target.size ?? 0) > 0)) {
-      await File.downloadFileAsync(uri, target, { idempotent: true });
+      // tải từng khúc: xin cả file một lần thì máy chủ nhạc YouTube trả 403
+      const { rangeDownload } = require('../data/rangeDownload') as typeof import('../data/rangeDownload');
+      await rangeDownload(uri, target);
     }
     const k = fileOrder.indexOf(id);
     if (k >= 0) fileOrder.splice(k, 1);

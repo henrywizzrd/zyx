@@ -3,6 +3,8 @@ import { Platform } from 'react-native';
 import type { Track } from './mock';
 import { getDownloads, kvGet, kvSet, setDownload } from './db';
 import { ytmusic } from '../music/lazy';
+import { log } from './applog';
+import { rangeDownload } from './rangeDownload';
 
 // Tải bài về máy để nghe không cần mạng.
 // File lưu trong thư mục Documents/downloads của app (iOS không tự xoá như thư mục cache).
@@ -52,15 +54,28 @@ export async function download(t: Track): Promise<boolean> {
   emit();
   try {
     // Chỉ tải âm thanh (mp4a), không tải hình: nhẹ hơn 3-4 lần so với bản video 360p, tiếng cũng tốt hơn
-    const info = await ytmusic().getAudio(t.id);
+    const t0 = Date.now();
     const name = `${t.id.replace(/[^a-zA-Z0-9_-]/g, '_')}.mp4`;
     const target = new (fs().File)(dir(), name);
-    await fs().File.downloadFileAsync(info.url, target, { idempotent: true });
+    let bytes = 0;
+    // Tải từng khúc (xem rangeDownload.ts). Link bị từ chối / hết hạn giữa chừng thì lấy link mới, thử thêm 1 lần
+    for (let attempt = 0; ; attempt++) {
+      const info = await ytmusic().getAudio(t.id);
+      try {
+        bytes = await rangeDownload(info.url, target);
+        break;
+      } catch (e) {
+        if (attempt >= 1 || !(e as { status?: number })?.status) throw e;
+        log('music', `tải bài: link bị từ chối (${(e as Error).message}), lấy link mới — ${t.title}`);
+      }
+    }
     known().set(t.id, name);
     setDownload(t, name);
+    log('music', `đã tải xong: ${t.title} (${(bytes / 1e6).toFixed(1)} MB, ${((Date.now() - t0) / 1000).toFixed(1)} giây)`);
     return true;
   } catch (e) {
     console.warn('[download]', t.title, e);
+    log('error', `tải bài lỗi: ${t.title} — ${e instanceof Error ? e.message : String(e)}`);
     return false;
   } finally {
     busy.delete(t.id);
