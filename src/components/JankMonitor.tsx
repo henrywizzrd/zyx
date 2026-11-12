@@ -5,10 +5,26 @@ import { getLogContext, justResumed, log } from '../data/applog';
 
 // Khựng ở luồng giao diện (UI thread: hiệu ứng, cuộn, kéo thả): khung hình cách nhau quá lâu thì ghi vào nhật ký.
 // Bỏ qua khoảng cách rất dài (> 3s) vì đó là lúc app vào nền / màn hình tắt chứ không phải giật.
+// Mốc "vừa vẽ lại" của các phần (màn có useRenderProbe + vài phần hay vẽ lại như thanh thời gian): khi giao diện khựng thì ghi
+// kèm phần nào vừa vẽ lại ngay trước đó — để tìm thủ phạm của các lần khựng ~130ms đều đều ở player đĩa than
+const marks: Record<string, number> = {};
+export function markRender(name: string) {
+  marks[name] = performance.now();
+}
+function recent(ms: number) {
+  const now = performance.now();
+  const win = ms + 400; // khung khựng + 0,4s trước đó
+  const list = Object.entries(marks)
+    .map(([k, t]) => [k, Math.round(now - t)] as const)
+    .filter(([, a]) => a <= win)
+    .sort((a, b) => a[1] - b[1])
+    .map(([k, a]) => `${k} ${a}ms trước`);
+  return list.length ? ` · vừa vẽ lại: ${list.join(', ')}` : ' · không phần nào vừa vẽ lại';
+}
 function report(ms: number) {
   if (justResumed()) return;
   const c = getLogContext();
-  log('jank', `giao diện khựng ${ms}ms${c ? ` · ${c}` : ''}`);
+  log('jank', `giao diện khựng ${ms}ms${c ? ` · ${c}` : ''}${recent(ms)}`);
 }
 
 // ---------------- Đo thời gian vẽ lại của một màn hình ----------------
@@ -23,6 +39,7 @@ export function useRenderProbe(name: string, deps: Record<string, unknown>) {
   prev.current = deps;
   n.current++;
   useLayoutEffect(() => {
+    markRender(name);
     const dt = performance.now() - t0;
     // > 1,5s: màn đang ẩn (đóng băng) được vẽ sẵn, tới lúc mở lại mới hiện ra — không phải khựng thật, bỏ qua
     if (dt < 50 || dt > 1500 || justResumed()) return;

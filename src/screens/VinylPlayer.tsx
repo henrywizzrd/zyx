@@ -12,15 +12,16 @@
 // Mọi thứ đi theo một giá trị lp (0 = đĩa, 1 = lời) chạy trên luồng giao diện.
 // Chỉ dùng cho màn hình dọc; xoay ngang thì dùng bố cục player thường
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, PanResponder, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, PanResponder, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import Animated, {
-  cancelAnimation, Easing, interpolate, interpolateColor, useAnimatedStyle, useDerivedValue, useReducedMotion, useSharedValue, withRepeat, withTiming, type SharedValue,
+  cancelAnimation, Easing, interpolate, interpolateColor, useFrameCallback, useAnimatedStyle, useDerivedValue, useReducedMotion, useSharedValue, withRepeat, withTiming, type SharedValue,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
-import { Canvas, Circle, Group, Path, RadialGradient, Skia, SweepGradient, TextPath, matchFont, vec, type SkFont } from '@shopify/react-native-skia';
+import { Canvas, Circle, Fill, Group, Path, RadialGradient, Shader, Skia, SweepGradient, TextPath, matchFont, vec, type SkFont } from '@shopify/react-native-skia';
+import { smokeShader } from '../theme/effects/smoke';
+import { markRender } from '../components/JankMonitor';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Image } from 'expo-image';
 import { BlurView } from 'expo-blur';
 import { useCoverGradient, type CoverGradient } from '../theme/coverGradient';
 import { useT } from '../i18n';
@@ -155,6 +156,17 @@ export function VinylPlayer(p: VinylProps) {
     }
   }, [spinning]); // eslint-disable-line react-hooks/exhaustive-deps
   const run = !swipe.moving && swipe.active && !reduced;
+  // Hai khung Skia vẽ đĩa (rãnh, viền) chỉ vẽ MỘT lần. Player được dựng sẵn lúc đang ẩn (vài giây sau khi mở app) → khung Skia
+  // lúc đó chưa có kích thước, vẽ ra trống, và không bao giờ vẽ lại → mất đĩa (ảnh 13/11 03:44). Mỗi lần player hiện ra /
+  // app quay lại từ nền thì dựng lại hai khung đó (rất nhẹ)
+  const [epoch, setEpoch] = useState(0);
+  useEffect(() => {
+    if (swipe.active) setEpoch((e) => e + 1);
+  }, [swipe.active]);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => st === 'active' && setEpoch((e) => e + 1));
+    return () => sub.remove();
+  }, []);
 
   // ---- màu theo ảnh bìa: thanh thời gian + nút phát. Đổi bài thì màu chuyển dần sang màu mới (~0,7s)
   const grad = useCoverGradient(p.track.thumb?.replace(/=(w\d+-h\d+|s\d+)/, '=w120-h120'));
@@ -220,9 +232,9 @@ export function VinylPlayer(p: VinylProps) {
 
       {/* Đĩa (chỉ để nhìn, không nhận chạm) */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <DiscBase W={W} H={H} g={g} lp={lp} />
+        <DiscBase key={`b${epoch}`} W={W} H={H} g={g} lp={lp} />
         <VinylLabel id={p.track.id} thumb={p.track.thumb} color={p.track.color} LR={LR} g={g} lp={lp} rot={rot} />
-        <DiscTop W={W} H={H} g={g} lp={lp} />
+        <DiscTop key={`t${epoch}`} W={W} H={H} g={g} lp={lp} />
       </View>
 
       {/* Lớp nhận cử chỉ ở chỗ trống */}
@@ -316,44 +328,87 @@ function Frost({ radius }: { radius: number }) {
   );
 }
 
-// Nền: gradient tách màu từ ảnh bìa (ảnh nhỏ 48×48 phóng to), 2 lớp xoay ngược chiều + "thở" to nhỏ chậm → màu loang liên tục.
-// Chỉ xoay / phóng ảnh trên luồng giao diện, không vẽ lại gradient mỗi khung hình. Tạm dừng khi player đang mở / đóng hoặc đang ẩn
+// Nền: khói màu tách từ ảnh bìa (theme/effects/smoke.ts), cuộn liên tục với nhịp vừa phải. Đổi bài: màu khói chuyển dần (~1s)
+const SMOKE_DIV = 5; // vẽ ở 1/5 kích thước rồi phóng to
+const FALLBACK: number[][] = [
+  [0.16, 0.2, 0.4],
+  [0.45, 0.3, 0.6],
+  [0.2, 0.42, 0.62],
+  [0.1, 0.12, 0.24],
+];
 const VinylBackdrop = React.memo(function VinylBackdrop({ color, grad, run }: { color?: string; grad: CoverGradient | null; run: boolean }) {
   const win = useScreenSize();
-  const a = useSharedValue(0);
-  const b = useSharedValue(0);
-  const br = useSharedValue(0);
+  const effect = useMemo(() => smokeShader(), []);
+  const cw = Math.ceil(win.width / SMOKE_DIV);
+  const ch = Math.ceil(win.height / SMOKE_DIV);
+  // đồng hồ 30 khung / giây, chỉ chạy khi player đang hiện
+  const time = useSharedValue(0);
+  const last = useSharedValue(0);
+  const clock = useFrameCallback((f) => {
+    'worklet';
+    const d = f.timeSincePreviousFrame ?? 0;
+    last.value += d;
+    if (last.value >= 33) {
+      time.value += last.value / 1000;
+      last.value = 0;
+    }
+  }, false);
   useEffect(() => {
-    cancelAnimation(a);
-    cancelAnimation(b);
-    cancelAnimation(br);
-    if (!run) return;
-    const a0 = a.value % 360;
-    const b0 = b.value % 360;
-    a.value = a0;
-    b.value = b0;
-    a.value = withRepeat(withTiming(a0 + 360, { duration: 46000, easing: Easing.linear }), -1, false);
-    b.value = withRepeat(withTiming(b0 - 360, { duration: 71000, easing: Easing.linear }), -1, false);
-    br.value = withRepeat(withTiming(br.value > 0.5 ? 0 : 1, { duration: 9000, easing: Easing.inOut(Easing.sin) }), -1, true);
+    clock.setActive(run);
   }, [run]); // eslint-disable-line react-hooks/exhaustive-deps
-  const size = Math.max(win.width, win.height) * 1.7;
-  const box = { position: 'absolute' as const, width: size, height: size, left: (win.width - size) / 2, top: (win.height - size) / 2 };
-  const sa = useAnimatedStyle(() => ({ transform: [{ rotate: `${a.value}deg` }, { scale: 1 + 0.14 * br.value }] }));
-  const sb = useAnimatedStyle(() => ({ transform: [{ rotate: `${b.value}deg` }, { scaleX: -1 }, { scale: 1.12 - 0.12 * br.value }] }));
+  // 4 màu: nền tối của màu chính, rồi 3 màu nổi bật
+  const target = useMemo(() => {
+    const c = grad?.rgb?.length ? grad.rgb : FALLBACK;
+    const g = (i: number) => c[i % c.length];
+    return [g(0).map((v) => v * 0.42), g(1), g(0), g(2)].flat();
+  }, [grad]);
+  const from = useSharedValue(target);
+  const to = useSharedValue(target);
+  const k = useSharedValue(1);
+  const shown = useRef(target);
+  useEffect(() => {
+    if (shown.current === target) return;
+    // chuyển từ màu đang hiện (tính đúng chỗ đang dở nếu đổi bài liên tiếp)
+    const kk = k.value;
+    from.value = from.value.map((v, i) => v + (to.value[i] - v) * kk);
+    to.value = target;
+    shown.current = target;
+    k.value = 0;
+    k.value = withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.cubic) });
+  }, [target]); // eslint-disable-line react-hooks/exhaustive-deps
+  const uniforms = useDerivedValue(() => {
+    const a = from.value;
+    const b = to.value;
+    const m = (i: number) => a[i] + (b[i] - a[i]) * k.value;
+    return {
+      res: [cw, ch],
+      time: time.value,
+      c0: [m(0), m(1), m(2)],
+      c1: [m(3), m(4), m(5)],
+      c2: [m(6), m(7), m(8)],
+      c3: [m(9), m(10), m(11)],
+    };
+  });
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: 'hidden', backgroundColor: color || '#1a1820' }]}>
-      {grad && (
-        <>
-          <Animated.View style={[box, sa]}>
-            <Image source={{ uri: grad.uri }} contentFit="fill" transition={700} style={StyleSheet.absoluteFill} />
-          </Animated.View>
-          <Animated.View style={[box, { opacity: 0.6 }, sb]}>
-            <Image source={{ uri: grad.uri }} contentFit="fill" transition={700} style={StyleSheet.absoluteFill} />
-          </Animated.View>
-        </>
+      {effect && (
+        <Canvas
+          style={{
+            position: 'absolute',
+            width: cw,
+            height: ch,
+            left: (win.width - cw) / 2,
+            top: (win.height - ch) / 2,
+            transform: [{ scale: SMOKE_DIV * 1.02 }],
+          }}
+        >
+          <Fill>
+            <Shader source={effect} uniforms={uniforms} />
+          </Fill>
+        </Canvas>
       )}
       {/* tối nhẹ để chữ trắng luôn đọc được */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.22)' }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.18)' }]} />
     </View>
   );
 });
@@ -463,6 +518,7 @@ const VinylArc = React.memo(function VinylArc({
 }: { g: Geo; W: number; lp: SharedValue<number>; accent: SharedValue<string>; lyrics: boolean; duration: number; loading: boolean; failed: boolean; seekTo: (s: number) => void }) {
   const t = useT();
   const progress = useProgress();
+  markRender('thanh thời gian');
   const [scrub, setScrub] = useState<number | null>(null);
   const pct = scrub ?? (duration > 0 ? Math.min(1, progress / duration) : 0);
   const font = getTimeFont();

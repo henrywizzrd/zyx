@@ -1,15 +1,13 @@
-// Nền gradient "tách màu từ ảnh bìa" cho player Đĩa than:
-//  1. ảnh bìa thu nhỏ còn 16×16 điểm bằng Skia, gom điểm ảnh theo dải màu → lấy tối đa 4 màu nổi bật
-//  2. vẽ 4 đốm màu loang (radial gradient) lên một ảnh RẤT NHỎ 48×48 rồi xuất ra PNG
-//  3. màn player phóng ảnh nhỏ đó lên to cả màn hình (phóng to = mềm như gradient) và cho 2 lớp xoay ngược chiều nhau
-//     → màu cứ trôi loang liên tục mà máy gần như không tốn gì (chỉ xoay ảnh, không vẽ lại gradient mỗi khung hình)
+// Màu "tách từ ảnh bìa" cho player Đĩa than: ảnh bìa thu nhỏ còn 16×16 điểm bằng Skia, gom điểm ảnh theo dải màu → lấy 4 màu
+// nổi bật (cho nền khói — theme/effects/smoke.ts) + 1 màu nhấn sáng (thanh thời gian, nút phát)
 // Mỗi ảnh bìa chỉ tính một lần (nhớ lại 40 ảnh gần nhất). Tính mất vài mili giây, chạy lúc rảnh
 import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { log } from '../data/applog';
 
 type Rgb = [number, number, number];
-export type CoverGradient = { uri: string; colors: string[]; accent: string }; // accent: màu sáng của ảnh bìa cho thanh thời gian / nút phát
+// rgb: 4 màu (0..1) cho shader nền khói · accent: màu sáng của ảnh bìa cho thanh thời gian / nút phát
+export type CoverGradient = { rgb: number[][]; colors: string[]; accent: string };
 
 const cache = new Map<string, CoverGradient>();
 
@@ -83,36 +81,6 @@ function accentOf(colors: Rgb[]): string {
   return css(rgb);
 }
 
-function render(colors: Rgb[]): string | null {
-  const S = require('@shopify/react-native-skia') as typeof import('@shopify/react-native-skia');
-  const N = 48;
-  const surf = S.Skia.Surface.Make(N, N);
-  if (!surf) return null;
-  const c = surf.getCanvas();
-  // nền: màu đầu tiên tối hẳn xuống
-  const { h, s } = toHsl(...colors[0]);
-  const deep = fromHsl(h, Math.min(0.5, s), 0.11);
-  const bg = S.Skia.Paint();
-  bg.setColor(S.Skia.Color(css(deep)));
-  c.drawRect(S.Skia.XYWHRect(0, 0, N, N), bg);
-  const spots: [number, number, number][] = [
-    [0.22, 0.24, 0.62],
-    [0.82, 0.3, 0.55],
-    [0.3, 0.82, 0.58],
-    [0.84, 0.86, 0.5],
-  ];
-  colors.slice(0, 4).forEach((col, i) => {
-    const [x, y, r] = spots[i];
-    const p = S.Skia.Paint();
-    p.setShader(
-      S.Skia.Shader.MakeRadialGradient(S.vec(x * N, y * N), r * N, [S.Skia.Color(css(col, 0.95)), S.Skia.Color(css(col, 0.45)), S.Skia.Color(css(col, 0))], [0, 0.45, 1], S.TileMode.Clamp)
-    );
-    c.drawRect(S.Skia.XYWHRect(0, 0, N, N), p);
-  });
-  surf.flush();
-  return `data:image/png;base64,${surf.makeImageSnapshot().encodeToBase64()}`;
-}
-
 export async function coverGradient(url: string): Promise<CoverGradient | null> {
   if (Platform.OS === 'web') return null;
   const hit = cache.get(url);
@@ -132,9 +100,7 @@ export async function coverGradient(url: string): Promise<CoverGradient | null> 
     const px = surf.makeImageSnapshot().readPixels(0, 0, { width: N, height: N, colorType: S.ColorType.RGBA_8888, alphaType: S.AlphaType.Unpremul });
     if (!px) return null;
     const cols = palette(px instanceof Uint8Array ? px : Uint8Array.from(px, (v) => Math.round(v * 255)));
-    const uri = render(cols);
-    if (!uri) return null;
-    const g = { uri, colors: cols.map((c) => css(c)), accent: accentOf(cols) };
+    const g = { rgb: cols.map((c) => c.map((v) => v / 255)), colors: cols.map((c) => css(c)), accent: accentOf(cols) };
     cache.set(url, g);
     if (cache.size > 40) cache.delete(cache.keys().next().value as string);
     log('ui', `nền gradient ảnh bìa: ${cols.length} màu (${Date.now() - t0}ms)`);
