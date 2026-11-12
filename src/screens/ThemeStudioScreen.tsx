@@ -12,6 +12,7 @@ import { useAnimatedBack } from '../nav/SwipeBack';
 import { useT } from '../i18n';
 import { copyIntoApp, deleteAppFile } from '../data/files';
 import { useScreenSize } from '../components/ScreenSize';
+import { useRenderProbe } from '../components/JankMonitor';
 
 const PAD = 16;
 const GAP = 12;
@@ -171,6 +172,7 @@ export function ThemeStudioScreen() {
   const { text, textSecondary, accent, onAccent, surface, border } = theme.colors;
   const bg = theme.background;
   const hasMedia = bg.type !== 'preset' && !!bg.uri;
+  useRenderProbe('Giao diện (studio)', { theme, width, picking, pad });
 
   const dimS = useThrottle((v: number) => setBackground({ dim: Math.round(v * 0.8 * 100) / 100 }));
   const blurS = useThrottle((v: number) => setGlassBlur(Math.round(v * 100)));

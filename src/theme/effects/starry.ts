@@ -109,8 +109,12 @@ half4 main(float2 pos) {
 let cached: SkRuntimeEffect | null | undefined;
 export function starryShader(): SkRuntimeEffect | null {
   if (cached === undefined) {
+    const t0 = Date.now();
     cached = Skia.RuntimeEffect.Make(STARRY_SKSL);
     if (!cached) console.warn('[theme] shader compile failed: starry');
+    // ghi lại thời gian biên dịch shader (chạy trên luồng JS, một lần) — để biết có phải nó gây khựng không
+    const { log } = require('../../data/applog') as typeof import('../../data/applog');
+    log('jank', `Trời sao: biên dịch shader ${Date.now() - t0}ms`);
   }
   return cached;
 }

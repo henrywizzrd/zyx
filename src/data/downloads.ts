@@ -58,20 +58,25 @@ export async function download(t: Track): Promise<boolean> {
     const name = `${t.id.replace(/[^a-zA-Z0-9_-]/g, '_')}.mp4`;
     const target = new (fs().File)(dir(), name);
     let bytes = 0;
-    // Tải từng khúc (xem rangeDownload.ts). Link bị từ chối / hết hạn giữa chừng thì lấy link mới, thử thêm 1 lần
+    // Tải từng khúc (xem rangeDownload.ts).
+    // Lần 1: bản CHỈ ÂM THANH (nhẹ hơn 3–4 lần). YouTube hay chặn tải loại này (403) dù vẫn cho phát.
+    // Lần 2: đúng bản trình phát đang dùng (mp4 360p có cả hình + tiếng) — nghe online được thì tải loại này được
+    let kind = 'âm thanh';
     for (let attempt = 0; ; attempt++) {
-      const info = await ytmusic().getAudio(t.id);
+      const muxed = attempt > 0;
+      const info = await ytmusic().getAudio(t.id, undefined, muxed);
       try {
         bytes = await rangeDownload(info.url, target);
+        kind = muxed ? 'bản trình phát (mp4 360p)' : 'âm thanh';
         break;
       } catch (e) {
         if (attempt >= 1 || !(e as { status?: number })?.status) throw e;
-        log('music', `tải bài: link bị từ chối (${(e as Error).message}), lấy link mới — ${t.title}`);
+        log('music', `tải bài: bản chỉ âm thanh bị chặn (${(e as Error).message}), tải bản trình phát — ${t.title}`);
       }
     }
     known().set(t.id, name);
     setDownload(t, name);
-    log('music', `đã tải xong: ${t.title} (${(bytes / 1e6).toFixed(1)} MB, ${((Date.now() - t0) / 1000).toFixed(1)} giây)`);
+    log('music', `đã tải xong: ${t.title} (${kind}, ${(bytes / 1e6).toFixed(1)} MB, ${((Date.now() - t0) / 1000).toFixed(1)} giây)`);
     return true;
   } catch (e) {
     console.warn('[download]', t.title, e);
