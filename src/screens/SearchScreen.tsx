@@ -1,5 +1,6 @@
 import { SplitPane } from '../components/SplitPane';
 import { onSearchFocusRequest } from './searchFocus';
+import { useRenderProbe } from '../components/JankMonitor';
 import { ScalePressable } from '../components/PressScale';
 import { Stagger } from '../components/Stagger';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -161,6 +162,8 @@ export function SearchScreen() {
   const [focused, setFocused] = useState(false);
   const dbv = useDbVersion();
   const history = useMemo(() => kvGet<string[]>(HISTORY) ?? [], [dbv]); // eslint-disable-line react-hooks/exhaustive-deps
+  // đo thời gian vẽ lại (vào trang + bật bàn phím từng làm luồng JS đứng 2,5 giây)
+  useRenderProbe('Tìm kiếm', { focused, query, mode, suggest, results, users, track, dbv, kind });
 
   // Từ khoá mới nhất: kết quả về muộn của từ khoá cũ thì bỏ qua.
   // Tách riêng cho gợi ý (lúc gõ) và kết quả (sau khi bấm Search): trước đây dùng chung một biến,

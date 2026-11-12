@@ -167,8 +167,9 @@ export function ZyxDock({ active, onChange, onOpenPlayer, hidden }: { active: Ta
         </Animated.View>
 
         {/* bong bóng mini player cố định ở góc phải */}
-        <Animated.View style={[styles.abs, { right: M, bottom: (H - B) / 2, width: B, height: B }, track ? bubbleOut : null]}>
-          <Animated.View ref={bubbleRef} collapsable={false} style={[{ width: B, height: B, borderRadius: BR, borderCurve: 'continuous' }, glassShadow(track ? 1.15 : 1, light), bubbleStyle]}>
+        {/* đo vị trí ở khung NGOÀI (không co khi nhấn): đo khung đang co thì player nở ra / thu về sai cỡ (62 thay vì 66) */}
+        <Animated.View ref={bubbleRef} collapsable={false} style={[styles.abs, { right: M, bottom: (H - B) / 2, width: B, height: B }, track ? bubbleOut : null]}>
+          <Animated.View style={[{ width: B, height: B, borderRadius: BR, borderCurve: 'continuous' }, glassShadow(track ? 1.15 : 1, light), bubbleStyle]}>
             <Pressable
               testID="zyx-bubble"
               accessibilityLabel={track ? `${track.title} — ${track.artist}` : t('tab.search')}

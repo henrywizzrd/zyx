@@ -966,7 +966,8 @@ function sync(force = false) {
   const hard = bg ? drift > 4 || lag > 1.5 : drift > 1.5;
   if (src.playing && lag > 0.6 && now - lastLagLog > 3000) {
     lastLagLog = now;
-    flog(`nguồn chạy chậm hơn nhạc ${lag.toFixed(2)}s (máy bận / thiếu dữ liệu)`);
+    // lệch vài chục giây ngay lúc mở bài = trình phát chính vừa nhảy tới chỗ nghe dở (không phải máy bận)
+    flog(lag > 5 ? `nhạc vừa nhảy tới ${want.toFixed(1)}s (nghe tiếp chỗ cũ / tua) → nguồn hiệu ứng theo` : `nguồn chạy chậm hơn nhạc ${lag.toFixed(2)}s (máy bận / thiếu dữ liệu)`);
   }
   if (!src.playing || force || ((hard || driftCount >= 2) && !settling)) {
     if (src.playing) flog(`tua lại: lệch ${drift.toFixed(2)}s`);
