@@ -83,7 +83,9 @@ export function ZyxDock({ active, onChange, onOpenPlayer, hidden }: { active: Ta
     opacity: interpolate(pp.value, [0, 0.7], [1, 0], 'clamp'),
     transform: [{ translateY: interpolate(pp.value, [0, 1], [0, sink]) }],
   }));
-  const bubbleOut = useAnimatedStyle(() => ({ opacity: interpolate(pp.value, [0, 0.22], [1, 0], 'clamp') }));
+  // Bong bóng thật tắt hẳn ngay khi player bắt đầu mở và chỉ hiện lại khi ảnh bìa đã đáp đúng chỗ (pp ≈ 0):
+  // trước đây nó hiện dần từ pp 0,22 trong lúc ảnh bìa còn đang bay → thấy hai ảnh cùng lúc ("dư ảnh")
+  const bubbleOut = useAnimatedStyle(() => ({ opacity: pp.value < 0.003 ? 1 : 0 }));
 
   // ---- bong bóng mini player
   const { track, togglePlay } = usePlayerPick('track', 'togglePlay');
@@ -92,7 +94,9 @@ export function ZyxDock({ active, onChange, onOpenPlayer, hidden }: { active: Ta
   const held = useRef(false);
   const openPlayer = () => {
     bubbleRef.current?.measureInWindow((x, y, w, h) => {
-      if (w > 0) playerOrigin.current = { x, y, w, h, r: BR, art: { x, y, w, h, r: BR } };
+      // sized: player thu về đúng khung bong bóng rồi lớp hiệu ứng tắt ngay, bong bóng thật hiện lên đúng chỗ đó
+      // (trước đây lớp hiệu ứng còn đọng lại ~0,6s: thấy ảnh bìa trơn không viền đè lên bong bóng, rồi giật một cái)
+      if (w > 0) playerOrigin.current = { x, y, w, h, r: BR, sized: true, art: { x, y, w, h, r: BR } };
       onOpenPlayer();
     });
   };

@@ -16,6 +16,9 @@ import { useScreenSize } from './ScreenSize';
 export type Rect = {
   x: number; y: number; w: number; h: number; r: number;
   slab?: boolean; // điểm xuất phát là bong bóng kiểu khối kính
+  // sized: khung player thật sự co / giãn về đúng khung này, và lớp hiệu ứng biến mất NGAY khi thu về xong
+  // (nút thật nằm đúng chỗ đó hiện lên thay) — mặc định chỉ bật cho viên thuốc dẹt (dài > 2,2 lần cao)
+  sized?: boolean;
   // Khung player nở ra từ (x,y,w,h,r) — vd cả viên mini player; còn ảnh bìa bay riêng từ ô ảnh nhỏ này (nếu có)
   art?: { x: number; y: number; w: number; h: number; r: number };
 }; // slab: điểm xuất phát là bong bóng kiểu khối kính
@@ -150,9 +153,10 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
         ox.value = o.x; oy.value = o.y; ow.value = o.w; oh.value = o.h; or.value = o.r;
         const a = (o as Rect).art ?? o;
         ax.value = a.x; ay.value = a.y; aw.value = a.w; ar.value = a.r;
-        sized.value = o.h > 0 && o.w / o.h > 2.2 ? 1 : 0;
+        const isSized = o.sized ?? (o.h > 0 && o.w / o.h > 2.2);
+        sized.value = isSized ? 1 : 0;
         // Ghi nhật ký bằng số thật: đọc lại giá trị chuyển động ngay sau khi gán thì luồng JS còn trả số cũ ("bong bóng 1×1")
-        from = `${o.h > 0 && o.w / o.h > 2.2 ? 'từ viên mini player' : 'từ bong bóng'} ${Math.round(o.w)}×${Math.round(o.h)}`;
+        from = `${o.h > 0 && o.w / o.h > 2.2 ? 'từ viên mini player' : isSized ? 'từ bong bóng dock ZYX' : 'từ bong bóng'} ${Math.round(o.w)}×${Math.round(o.h)}`;
         p.value = 0;
         flung.value = 0;
         openSize.current = { W, H };
