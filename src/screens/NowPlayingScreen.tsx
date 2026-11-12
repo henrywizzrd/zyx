@@ -54,8 +54,8 @@ function onColor(hex: string) {
 
 // Nút lặp: hai mũi tên chạy vòng quanh thành hình vuông bo góc (vẽ bằng Skia, khung 24×24).
 //  - tắt: trắng mờ
-//  - lặp cả danh sách: xanh lá + chấm bên dưới
-//  - lặp 1 bài: xanh lá + số 1 nằm chính giữa hình vuông + chấm bên dưới
+//  - lặp cả danh sách: sáng màu nhấn
+//  - lặp 1 bài: sáng màu nhấn + số 1 nằm chính giữa hình vuông
 const REPEAT_PATH = 'M4 12.5V8.5A3.5 3.5 0 0 1 7.5 5H18.5M15.5 2L18.5 5L15.5 8M20 11.5V15.5A3.5 3.5 0 0 1 16.5 19H5.5M8.5 22L5.5 19L8.5 16';
 const skia = Platform.OS === 'web' ? null : (require('@shopify/react-native-skia') as typeof import('@shopify/react-native-skia'));
 // Mọi icon ở hàng dưới cùng dùng chung một cỡ khung để nhìn đều nhau
@@ -64,11 +64,12 @@ const TITLE_SCALE = 0.72; // tên bài khi bay lên đầu (cạnh ảnh nhỏ) 
 const PLAY = 66; // đường kính nút phát
 const REPEAT_SIZE = ICON;
 
-// Nút lời bài hát: ba vạch ngắn dần + nốt nhạc bên phải (theo mẫu Tyson gửi; trang thử "ZYX – Icon lời & hàng chờ")
+// Nút lời bài hát: ba vạch (vạch cuối ngắn) + nốt nhạc móc đơn bên phải (theo mẫu Tyson gửi; trang thử "ZYX – Icon lời & hàng chờ").
+// Thân nốt + móc là MỘT nét liền (không ghép mảnh), đầu nốt tiếp xúc đúng mép thân
 const LYRICS_OPS: VectorOp[] = [
-  { d: 'M2.5 8H10.5M2.5 12H10.5M2.5 16H10.5', stroke: 1.8, round: true },
-  { d: 'M18.3 17.6V3.6C18.3 6.2 21.4 6.6 21.4 9.6', stroke: 1.8, round: true },
-  { circle: [15.6, 17.6, 2.8] },
+  { d: 'M2.5 5H12.5M2.5 8.6H12.5M2.5 12.2H8', stroke: 1.8, round: true },
+  { d: 'M16 17.8V4.2A4.9 4.9 0 0 1 20.9 9.1', stroke: 1.8, round: true },
+  { circle: [13.2, 17.8, 3.7] },
 ];
 // Nút hàng chờ: viên thuốc (bài đang phát) + hai vạch + dấu cộng (canh giữa theo hai vạch)
 const QUEUE_OPS: VectorOp[] = [
@@ -234,7 +235,6 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const FxButton = (
     <Pressable onPress={pickFx} hitSlop={10} style={styles.sideBtn}>
       <Ionicons name={fxOn ? 'headset' : 'headset-outline'} size={22} color={fxOn ? ON : SOFT} />
-      {fxOn && <View style={[styles.dot, { backgroundColor: ON }]} />}
     </Pressable>
   );
   const pad = useContentInsets();
@@ -472,13 +472,12 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   );
 
   // Hàng điều khiển kiểu mới: trộn | ◀◀ | ▶ to (không vòng tròn) | ▶▶ | lặp.
-  // Nút đang bật đổi sang màu nhấn của theme + chấm nhỏ bên dưới; lặp 1 bài có số 1. Bấm nút nào cũng nảy nhẹ
+  // Nút đang bật chỉ sáng lên màu nhấn của theme (không còn chấm bên dưới); lặp 1 bài có số 1. Bấm nút nào cũng nảy nhẹ
   const controlRow = (k: number) => (
     <>
       <CtlBtn onPress={toggleShuffle} style={styles.sideBtn}>
         <Ionicons name="shuffle" size={Math.round(26 * k)} color={shuffle ? ON : '#FFFFFF'} />
       </CtlBtn>
-      {shuffle ? <View style={[styles.dot, styles.dotLeft, { backgroundColor: ON }]} pointerEvents="none" /> : null}
       <CtlBtn
         onPress={() => {
           swapDir = -1;
@@ -497,7 +496,6 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
       <CtlBtn onPress={cycleRepeat} style={styles.sideBtn}>
         <RepeatIcon mode={repeat} color={repeat !== 'off' ? ON : '#FFFFFF'} />
       </CtlBtn>
-      {repeat !== 'off' ? <View style={[styles.dot, styles.dotRight, { backgroundColor: ON }]} pointerEvents="none" /> : null}
     </>
   );
   const spotifyControls = <View style={styles.spotRow}>{controlRow(1)}</View>;
@@ -724,7 +722,6 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         <View style={styles.sideBtn} />
         <Pressable onPress={() => setShowLyrics((v) => !v)} hitSlop={10} style={styles.skipSlot}>
           <LyricsIcon on={showLyrics} />
-          {showLyrics && <View style={[styles.dot, { backgroundColor: ON }]} />}
         </Pressable>
         {/* Chế độ âm thanh: giữa nút lời và nút hàng chờ, thẳng dưới nút phát */}
         <View style={{ width: PLAY, alignItems: 'center' }}>{FxButton}</View>

@@ -25,7 +25,15 @@ function render(ops: VectorOp[], box: number, px: number, color: string): string
     if (!surface) return null;
     const c = surface.getCanvas();
     c.scale(px / box, px / box);
-    const col = Skia.Color(color);
+    // Vẽ bằng màu ĐẶC trong một lớp riêng rồi mới làm trong suốt cả lớp một lần: nếu tô từng nét bằng màu trong suốt thì chỗ
+    // các nét chồng lên nhau (đầu nốt nhạc đè thân nốt...) bị đậm hơn → nhìn như ghép từ nhiều mảnh, không liền mạch
+    const src = Skia.Color(color);
+    const alpha = src[3];
+    const col = Float32Array.from(src);
+    col[3] = 1;
+    const layer = Skia.Paint();
+    layer.setAlphaf(alpha);
+    c.saveLayer(layer);
     for (const op of ops) {
       const paint = Skia.Paint();
       paint.setAntiAlias(true);
@@ -56,6 +64,7 @@ function render(ops: VectorOp[], box: number, px: number, color: string): string
         c.drawPath(path, s);
       }
     }
+    c.restore();
     surface.flush();
     const uri = `data:image/png;base64,${surface.makeImageSnapshot().encodeToBase64()}`;
     cache.set(key, uri);
