@@ -14,7 +14,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, PanResponder, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import Animated, {
-  cancelAnimation, Easing, interpolate, useAnimatedStyle, useDerivedValue, useReducedMotion, useSharedValue, withRepeat, withTiming, type SharedValue,
+  cancelAnimation, Easing, interpolate, interpolateColor, useAnimatedStyle, useDerivedValue, useReducedMotion, useSharedValue, withRepeat, withTiming, type SharedValue,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
@@ -22,7 +22,7 @@ import { Canvas, Circle, Group, Path, RadialGradient, Skia, SweepGradient, TextP
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { BlurView } from 'expo-blur';
-import { useCoverGradient } from '../theme/coverGradient';
+import { useCoverGradient, type CoverGradient } from '../theme/coverGradient';
 import { useT } from '../i18n';
 import { useProgress } from '../player/PlayerProvider';
 import type { Track } from '../data/mock';
@@ -154,24 +154,25 @@ export function VinylPlayer(p: VinylProps) {
       rot.value = withTiming(from + 10, { duration: 1400, easing: Easing.out(Easing.cubic) });
     }
   }, [spinning]); // eslint-disable-line react-hooks/exhaustive-deps
-  const { cx1, cy1 } = g;
   const run = !swipe.moving && swipe.active && !reduced;
-  const labelStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: lp.value * cx1 }, { translateY: lp.value * cy1 }, { rotate: `${rot.value}deg` }],
-  }));
 
-  // đổi bài: nhãn mờ đi rồi hiện ảnh mới
-  const fade = useSharedValue(1);
-  const firstId = useRef(true);
+  // ---- màu theo ảnh bìa: thanh thời gian + nút phát. Đổi bài thì màu chuyển dần sang màu mới (~0,7s)
+  const grad = useCoverGradient(p.track.thumb?.replace(/=(w\d+-h\d+|s\d+)/, '=w120-h120'));
+  const accentTo = grad?.accent ?? ACCENT;
+  const cFrom = useSharedValue(accentTo);
+  const cTo = useSharedValue(accentTo);
+  const cT = useSharedValue(1);
+  const lastAccent = useRef(accentTo);
   useEffect(() => {
-    if (firstId.current) {
-      firstId.current = false;
-      return;
-    }
-    fade.value = 0.25;
-    fade.value = withTiming(1, { duration: 380, easing: Easing.out(Easing.cubic) });
-  }, [p.track.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const fadeStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+    if (lastAccent.current === accentTo) return;
+    cFrom.value = lastAccent.current;
+    cTo.value = accentTo;
+    lastAccent.current = accentTo;
+    cT.value = 0;
+    cT.value = withTiming(1, { duration: 700, easing: Easing.inOut(Easing.cubic) });
+  }, [accentTo]); // eslint-disable-line react-hooks/exhaustive-deps
+  const accent = useDerivedValue(() => interpolateColor(cT.value, [0, 1], [cFrom.value, cTo.value]) as string);
+  const playBg = useAnimatedStyle(() => ({ backgroundColor: accent.value }));
 
   const ctlBottom = insets.bottom + 12;
   const iconsTop = g.yLeft + 38;
@@ -183,44 +184,44 @@ export function VinylPlayer(p: VinylProps) {
 
   // ---- cử chỉ ở chỗ trống: đang xem đĩa → vuốt LÊN mở lời (vuốt xuống vẫn là thu player, xem CloseZone);
   // đang xem lời → vuốt XUỐNG đưa đĩa về chỗ cũ
-  const open = () => p.setLyricsOpen(true);
-  const close = () => p.setLyricsOpen(false);
-  const up = usePanGesture({
-    activeOffsetY: -12,
-    failOffsetX: [-24, 24],
-    onDeactivate: (e) => {
-      'worklet';
-      if (e.translationY < -40 || e.velocityY < -500) scheduleOnRN(open);
-    },
-  });
-  const down = usePanGesture({
-    activeOffsetY: 12,
-    failOffsetX: [-24, 24],
-    onDeactivate: (e) => {
-      'worklet';
-      if (e.translationY > 40 || e.velocityY > 500) scheduleOnRN(close);
-    },
-  });
+  // Cấu hình cử chỉ dựng MỘT lần (useMemo): trước đây mỗi lần màn player vẽ lại là tạo cấu hình mới → bộ nhận cử chỉ được
+  // dựng lại trên luồng giao diện mỗi lần (nghi góp phần vào các lần giao diện khựng ~130ms ngay sau khi player vẽ lại)
+  const setLyr = useRef(p.setLyricsOpen);
+  setLyr.current = p.setLyricsOpen;
+  const gest = useMemo(() => {
+    const open = () => setLyr.current(true);
+    const close = () => setLyr.current(false);
+    return {
+      up: {
+        activeOffsetY: -12,
+        failOffsetX: [-24, 24] as [number, number],
+        onDeactivate: (e: { translationY: number; velocityY: number }) => {
+          'worklet';
+          if (e.translationY < -40 || e.velocityY < -500) scheduleOnRN(open);
+        },
+      },
+      down: {
+        activeOffsetY: 12,
+        failOffsetX: [-24, 24] as [number, number],
+        onDeactivate: (e: { translationY: number; velocityY: number }) => {
+          'worklet';
+          if (e.translationY > 40 || e.velocityY > 500) scheduleOnRN(close);
+        },
+      },
+    };
+  }, []);
+  const up = usePanGesture(gest.up);
+  const down = usePanGesture(gest.down);
 
   return (
     <View style={{ flex: 1 }}>
-      <VinylBackdrop track={p.track} run={run} />
+      <VinylBackdrop color={p.track.color} grad={grad} run={run} />
       <StatusBar barStyle="light-content" />
 
       {/* Đĩa (chỉ để nhìn, không nhận chạm) */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         <DiscBase W={W} H={H} g={g} lp={lp} />
-        {/* Nhãn KHÔNG bọc khung cắt (overflow: hidden): một lớp to ~1000 điểm vừa bị cắt tròn vừa xoay liên tục thì iPhone phải vẽ
-            lại cả lớp ra bộ nhớ riêng MỖI khung hình (nghi là nguyên nhân giao diện khựng ~150ms đều đều ở player đĩa than).
-            Giờ chỉ ảnh tự bo tròn, nền màu là một hình tròn riêng */}
-        <Animated.View style={[{ position: 'absolute', left: -LR, top: -LR, width: LR * 2, height: LR * 2 }, labelStyle]}>
-          <View style={[StyleSheet.absoluteFill, { borderRadius: LR, backgroundColor: p.track.color || '#333' }]} />
-          {!!p.track.thumb && (
-            <Animated.View style={[StyleSheet.absoluteFill, fadeStyle]}>
-              <SmartImage url={p.track.thumb} size={1200} style={{ width: LR * 2, height: LR * 2, borderRadius: LR }} />
-            </Animated.View>
-          )}
-        </Animated.View>
+        <VinylLabel id={p.track.id} thumb={p.track.thumb} color={p.track.color} LR={LR} g={g} lp={lp} rot={rot} />
         <DiscTop W={W} H={H} g={g} lp={lp} />
       </View>
 
@@ -239,7 +240,7 @@ export function VinylPlayer(p: VinylProps) {
         </CloseZone>
       )}
 
-      <VinylArc g={g} W={W} lp={lp} lyrics={p.lyricsOpen} duration={p.duration} loading={p.loading} failed={p.failed} seekTo={p.seekTo} />
+      <VinylArc g={g} W={W} lp={lp} accent={accent} lyrics={p.lyricsOpen} duration={p.duration} loading={p.loading} failed={p.failed} seekTo={p.seekTo} />
 
       {lyricsMounted && (
         <Animated.View
@@ -289,7 +290,7 @@ export function VinylPlayer(p: VinylProps) {
           <Btn onPress={p.prev}>
             <SkipGlyph dir="back" size={26} color={TEXT} />
           </Btn>
-          <Btn onPress={p.togglePlay} play>
+          <Btn onPress={p.togglePlay} bg={playBg}>
             {p.loading ? <ActivityIndicator color="#1b1510" /> : <PlayPauseGlyph playing={p.isPlaying} size={28} color="#1b1510" />}
           </Btn>
           <Btn onPress={p.next}>
@@ -317,10 +318,8 @@ function Frost({ radius }: { radius: number }) {
 
 // Nền: gradient tách màu từ ảnh bìa (ảnh nhỏ 48×48 phóng to), 2 lớp xoay ngược chiều + "thở" to nhỏ chậm → màu loang liên tục.
 // Chỉ xoay / phóng ảnh trên luồng giao diện, không vẽ lại gradient mỗi khung hình. Tạm dừng khi player đang mở / đóng hoặc đang ẩn
-const VinylBackdrop = React.memo(function VinylBackdrop({ track, run }: { track: Track; run: boolean }) {
+const VinylBackdrop = React.memo(function VinylBackdrop({ color, grad, run }: { color?: string; grad: CoverGradient | null; run: boolean }) {
   const win = useScreenSize();
-  const url = track.thumb?.replace(/=(w\d+-h\d+|s\d+)/, '=w120-h120');
-  const grad = useCoverGradient(url);
   const a = useSharedValue(0);
   const b = useSharedValue(0);
   const br = useSharedValue(0);
@@ -342,7 +341,7 @@ const VinylBackdrop = React.memo(function VinylBackdrop({ track, run }: { track:
   const sa = useAnimatedStyle(() => ({ transform: [{ rotate: `${a.value}deg` }, { scale: 1 + 0.14 * br.value }] }));
   const sb = useAnimatedStyle(() => ({ transform: [{ rotate: `${b.value}deg` }, { scaleX: -1 }, { scale: 1.12 - 0.12 * br.value }] }));
   return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: 'hidden', backgroundColor: track.color || '#1a1820' }]}>
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: 'hidden', backgroundColor: color || '#1a1820' }]}>
       {grad && (
         <>
           <Animated.View style={[box, sa]}>
@@ -359,11 +358,45 @@ const VinylBackdrop = React.memo(function VinylBackdrop({ track, run }: { track:
   );
 });
 
-function Btn({ onPress, play, children }: { onPress: () => void; play?: boolean; children: React.ReactNode }) {
+// Nhãn giữa đĩa = ảnh bìa, xoay. Tách riêng + memo: màn player vẽ lại (vài lần mỗi giây khi đang phát) không đụng tới ảnh to này.
+// KHÔNG bọc khung cắt (overflow: hidden): lớp ~1000 điểm vừa bị cắt tròn vừa xoay thì iPhone phải vẽ lại cả lớp mỗi khung hình
+const VinylLabel = React.memo(function VinylLabel({
+  id, thumb, color, LR, g, lp, rot,
+}: { id: string; thumb?: string; color?: string; LR: number; g: Geo; lp: SharedValue<number>; rot: SharedValue<number> }) {
+  const { cx1, cy1 } = g;
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateX: lp.value * cx1 }, { translateY: lp.value * cy1 }, { rotate: `${rot.value}deg` }],
+  }));
+  // đổi bài: nhãn mờ đi rồi hiện ảnh mới
+  const fade = useSharedValue(1);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    fade.value = 0.25;
+    fade.value = withTiming(1, { duration: 380, easing: Easing.out(Easing.cubic) });
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fadeStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+  const imgStyle = useMemo(() => ({ width: LR * 2, height: LR * 2, borderRadius: LR }), [LR]);
+  return (
+    <Animated.View style={[{ position: 'absolute', left: -LR, top: -LR, width: LR * 2, height: LR * 2 }, style]}>
+      <View style={[StyleSheet.absoluteFill, { borderRadius: LR, backgroundColor: color || '#333' }]} />
+      {!!thumb && (
+        <Animated.View style={[StyleSheet.absoluteFill, fadeStyle]}>
+          <SmartImage url={thumb} size={1200} style={imgStyle} />
+        </Animated.View>
+      )}
+    </Animated.View>
+  );
+});
+
+function Btn({ onPress, bg, children }: { onPress: () => void; bg?: ReturnType<typeof useAnimatedStyle>; children: React.ReactNode }) {
   const b = useBounce();
   return (
     <Pressable onPress={onPress} onPressIn={b.onPressIn} onPressOut={b.onPressOut} hitSlop={6}>
-      <Animated.View style={[styles.btn, play && { backgroundColor: ACCENT }, b.style]}>{children}</Animated.View>
+      <Animated.View style={[styles.btn, bg, b.style]}>{children}</Animated.View>
     </Pressable>
   );
 }
@@ -426,8 +459,8 @@ const DiscTop = React.memo(function DiscTop({ g, lp }: { W: number; H: number; g
 
 // Thanh thời gian cong: chỉ phần này đọc thời gian đã phát (đổi vài lần mỗi giây). Đi theo đĩa khi chuyển sang lời
 const VinylArc = React.memo(function VinylArc({
-  g, W, lp, lyrics, duration, loading, failed, seekTo,
-}: { g: Geo; W: number; lp: SharedValue<number>; lyrics: boolean; duration: number; loading: boolean; failed: boolean; seekTo: (s: number) => void }) {
+  g, W, lp, accent, lyrics, duration, loading, failed, seekTo,
+}: { g: Geo; W: number; lp: SharedValue<number>; accent: SharedValue<string>; lyrics: boolean; duration: number; loading: boolean; failed: boolean; seekTo: (s: number) => void }) {
   const t = useT();
   const progress = useProgress();
   const [scrub, setScrub] = useState<number | null>(null);
@@ -514,7 +547,7 @@ const VinylArc = React.memo(function VinylArc({
     <>
       <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
         <Path path={bar} style="stroke" strokeWidth={3} strokeCap="round" color="rgba(255,255,255,0.18)" />
-        <Path path={bar} style="stroke" strokeWidth={3} strokeCap="round" color={ACCENT} start={0} end={pct} />
+        <Path path={bar} style="stroke" strokeWidth={3} strokeCap="round" color={accent} start={0} end={pct} />
         <Circle cx={knobX} cy={knobY} r={scrub != null ? 9 : 6.5} color="#FFFFFF" />
         <TextPath path={textPath} font={font} text={cur} initialOffset={0} color={TEXT2} />
         <TextPath path={textPath} font={font} text={right} initialOffset={rightOff} color={failed ? '#FF8A80' : TEXT2} />

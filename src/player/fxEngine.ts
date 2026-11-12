@@ -772,6 +772,10 @@ let lastLog = 0; // lúc bộ âm thanh bắt đầu không chạy (0 = đang ch
 let last = { playing: false, time: 0, at: 0 };
 let lastSeekAt = 0;
 let lastLagLog = 0; // lần báo gần nhất của trình phát chính
+// Nguồn hiệu ứng đã thật sự chạy chưa (vị trí nhích lên đều, không phải nhảy do tua). Chưa chạy thì KHÔNG chuyển tiếng sang
+// bộ hiệu ứng: trước đây (log 13/11 03:36) bấm phát lúc app đang chuyển xuống nền, nguồn mới mở đứng im ở 0s mà tiếng vẫn bị
+// chuyển sang nó → im lặng ~10 giây cho tới khi mở lại nguồn quá 4 lần mới trả tiếng về trình phát chính
+let prog: { src: FxSource | null; p: number; ok: boolean } = { src: null, p: -1, ok: false };
 
 // Vị trí trong bài lúc này theo trình phát chính (đang đổi tốc độ thì thời gian trong bài chạy nhanh / chậm hơn đồng hồ)
 const expected = () => (last.playing ? last.time + ((Date.now() - last.at) / 1000) * liveRate : last.time);
@@ -988,6 +992,12 @@ function sync(force = false) {
   // Nguồn không nhích suốt 2,5 giây trong khi nhạc vẫn chạy (kể cả sau khi đã bảo nó phát / tua) → hỏng: mở lại nguồn.
   // (Bản trước mỗi lần tua lại là đặt lại mốc, nên nguồn kẹt cứng mà không bao giờ bị phát hiện)
   const p = src.pos();
+  if (prog.src !== src) prog = { src, p, ok: false };
+  else {
+    const dp = p - prog.p;
+    if (dp > 0.02 && dp < 3) prog.ok = true;
+    prog.p = p;
+  }
   if (Math.abs(p - stuck.p) > 0.05) stuck = { p, at: now };
   else if (now - stuck.at > 2500) {
     flog(`nguồn đứng im ở ${p.toFixed(1)}s → mở lại nguồn`);
@@ -998,6 +1008,14 @@ function sync(force = false) {
   if (now - lastLog > (bg ? 10000 : 2000)) { // app ở nền: ghi thưa hơn cho nhẹ máy
     lastLog = now;
     flog(`ctx=${c.state} t=${c.currentTime.toFixed(1)} pos=${p.toFixed(1)} want=${want.toFixed(1)} mix=${mix.toFixed(2)} duck=${duck.toFixed(2)} vol=${audio().getUserVolume().toFixed(2)}`);
+  }
+  if (wantMix !== 1 && !prog.ok) {
+    // nguồn chưa chạy: tiếng vẫn ở trình phát chính (lần sau đồng bộ, nguồn nhích rồi mới chuyển)
+    if (wantMix !== 0) {
+      wantMix = 0;
+      setMix(0, 0.15);
+    }
+    return;
   }
   if (wantMix !== 1) {
     flog('→ chuyển sang bộ hiệu ứng');

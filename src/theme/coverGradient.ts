@@ -9,7 +9,7 @@ import { Platform } from 'react-native';
 import { log } from '../data/applog';
 
 type Rgb = [number, number, number];
-export type CoverGradient = { uri: string; colors: string[] };
+export type CoverGradient = { uri: string; colors: string[]; accent: string }; // accent: màu sáng của ảnh bìa cho thanh thời gian / nút phát
 
 const cache = new Map<string, CoverGradient>();
 
@@ -72,6 +72,17 @@ function palette(px: Uint8Array): Rgb[] {
   return out;
 }
 
+// Màu nhấn: màu đậm (bão hoà) nhất trong bảng màu, kéo sáng lên để nổi trên nền tối. Ảnh đen trắng → trắng ngà
+function accentOf(colors: Rgb[]): string {
+  let best = toHsl(...colors[0]);
+  for (const c of colors) {
+    const x = toHsl(...c);
+    if (x.s > best.s) best = x;
+  }
+  const rgb = best.s < 0.2 ? fromHsl(best.h, 0.12, 0.88) : fromHsl(best.h, Math.min(0.85, Math.max(0.5, best.s)), 0.74);
+  return css(rgb);
+}
+
 function render(colors: Rgb[]): string | null {
   const S = require('@shopify/react-native-skia') as typeof import('@shopify/react-native-skia');
   const N = 48;
@@ -123,7 +134,7 @@ export async function coverGradient(url: string): Promise<CoverGradient | null> 
     const cols = palette(px instanceof Uint8Array ? px : Uint8Array.from(px, (v) => Math.round(v * 255)));
     const uri = render(cols);
     if (!uri) return null;
-    const g = { uri, colors: cols.map((c) => css(c)) };
+    const g = { uri, colors: cols.map((c) => css(c)), accent: accentOf(cols) };
     cache.set(url, g);
     if (cache.size > 40) cache.delete(cache.keys().next().value as string);
     log('ui', `nền gradient ảnh bìa: ${cols.length} màu (${Date.now() - t0}ms)`);
