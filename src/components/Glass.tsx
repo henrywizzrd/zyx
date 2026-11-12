@@ -47,6 +47,8 @@ const LG: LGModule | null = (() => {
 export const hasLiquidGlass = !!LG;
 
 // Ba loại kính (Theme Studio): Trong / Mờ / Khói. Thanh "Độ mờ kính" chỉnh độ đậm bên trong loại đó
+// Mờ (frost) làm theo kính của màn đa nhiệm iOS: nhoè đậm, phủ màu theme dày hơn (ngả tối với theme tối),
+// chữ / ảnh phía sau chỉ còn là mảng màu, không đọc được
 export type GlassMaterial = 'clear' | 'frost' | 'smoke';
 
 // Bóng hai lớp của tấm kính đặt nổi trên mặt bàn (công thức chốt từ trang thử kính):
@@ -81,7 +83,7 @@ export function GlassFill({ radius = 0, solid = 0, slab = false, dark: forceDark
       material === 'smoke'
         ? `rgba(0,0,0,${(0.22 + 0.33 * g.level).toFixed(2)})`
         : material === 'frost'
-        ? `rgba(${glassRgb},${(0.12 + 0.4 * g.level + solid * 0.15).toFixed(2)})`
+        ? `rgba(${glassRgb},${Math.min(0.85, 0.34 + 0.36 * g.level + solid * 0.12).toFixed(2)})`
         : g.level > 0.02 || solid > 0
         ? `rgba(${glassRgb},${(0.22 * g.level + solid * 0.08).toFixed(2)})`
         : undefined;
@@ -97,12 +99,12 @@ export function GlassFill({ radius = 0, solid = 0, slab = false, dark: forceDark
   }
 
   // ---- Kính tự vẽ: làm mờ + lớp màu + mép dày (vệt sáng trên, tối dưới) + vệt phản chiếu chéo
-  const blurBy = material === 'frost' ? 25 + g.level * 55 : material === 'smoke' ? 8 + g.level * 30 : 4 + g.level * 40;
+  const blurBy = material === 'frost' ? 45 + g.level * 50 : material === 'smoke' ? 8 + g.level * 30 : 4 + g.level * 40;
   const androidBoost = Platform.OS === 'android' ? 0.2 : 0;
   const a =
     material === 'smoke'
       ? 0
-      : Math.max(solid * (0.55 + 0.45 * g.level), (material === 'frost' ? 0.2 : 0.06) + androidBoost + g.level * (material === 'frost' ? 0.5 : 0.45));
+      : Math.max(solid * (0.55 + 0.45 * g.level), (material === 'frost' ? 0.38 : 0.06) + androidBoost + g.level * (material === 'frost' ? 0.4 : 0.45));
   const tint = material === 'smoke' ? `rgba(6,8,14,${(0.32 + 0.35 * g.level + androidBoost).toFixed(2)})` : `rgba(${glassRgb},${Math.min(0.92, a).toFixed(2)})`;
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, overflow: 'hidden' }]}>

@@ -78,10 +78,10 @@ export function SettingsScreen() {
       {/* Kiểu dock: Apple Music hoặc dạng thanh */}
       <Text style={label}>{t('settings.dockMode')}</Text>
       <Chips
-        options={['apple', 'bar'] as const}
+        options={['apple', 'zyx', 'bar'] as const}
         value={theme.dock.mode}
         onSelect={setDockMode}
-        labels={{ bar: t('settings.dockBar'), apple: 'Apple Music' }}
+        labels={{ bar: t('settings.dockBar'), apple: 'Apple Music', zyx: 'ZYX' }}
       />
       <Text style={label}>{t('settings.dockLabels')}</Text>
       <Chips

@@ -14,7 +14,8 @@ export type TrendingRange = 'week' | 'month' | 'year';
 export type TrendingRegion = 'ZZ' | 'VN' | 'KR' | 'US'; // ZZ = toàn cầu (mã YouTube Music)
 export type LibraryLayout = 'list' | 'columns' | 'covers2' | 'covers3';
 // Dock dạng thanh hoặc kiểu Apple Music (dạng bubble góc dưới đã bỏ)
-export type DockMode = 'bar' | 'apple'; // apple: kiểu Apple Music (thanh tab + nút tìm kiếm tròn + mini player viên thuốc)
+export type DockMode = 'bar' | 'apple' | 'zyx'; // zyx: thanh tab bo góc vuông + bong bóng mini player cố định + thanh Search nhỏ phía trên
+export type _DockModeNote = never; // apple: kiểu Apple Music (thanh tab + nút tìm kiếm tròn + mini player viên thuốc)
 export type Side = 'left' | 'right';
 // Kiểu hiện lời bài hát: phát sáng (Apple Music), karaoke (tô dần theo nhạc), nảy chữ
 export type LyricLook = 'glow' | 'karaoke' | 'bounce';

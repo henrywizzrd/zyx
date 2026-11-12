@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { TabIcon } from './TabIcon';
 import { amEndPadding } from './AppleDock';
+import { zxEndPadding } from './ZyxDock';
 import { Cover } from './Cover';
 import { playerOrigin } from './PlayerTransition';
 import { Animated, Easing, LayoutAnimation, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -62,6 +63,7 @@ export function useContentInsets() {
     };
   }
   if (theme.dock.mode === 'apple') return { top: insets.top, bottom: insets.bottom, left: insets.left, right: insets.right, endPadding: amEndPadding(insets.bottom) };
+  if (theme.dock.mode === 'zyx') return { top: insets.top, bottom: insets.bottom, left: insets.left, right: insets.right, endPadding: zxEndPadding(insets.bottom) };
   return {
     top: insets.top,
     bottom: insets.bottom,

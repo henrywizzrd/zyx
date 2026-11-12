@@ -159,7 +159,7 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
   }, [theme.miniPlayer.merged, hidden]);
 
   if (theme.miniPlayer.merged) return null;
-  if (theme.dock.mode === 'apple' && !landscape) return null; // dock Apple Music có mini player riêng (viên thuốc trên thanh tab)
+  if ((theme.dock.mode === 'apple' || theme.dock.mode === 'zyx') && !landscape) return null; // dock Apple Music có mini player riêng (viên thuốc trên thanh tab)
   // Lúc player đang mở: bong bóng vẫn nằm đó (ẩn đi), không gỡ ra. Đóng player thì chỉ việc hiện lại — ảnh bìa, viền kính
   // đã vẽ sẵn. Trước đây gỡ ra rồi dựng lại nên ảnh hiện trước, viền kính hiện sau một nhịp (thấy "giật" lúc đóng)
 

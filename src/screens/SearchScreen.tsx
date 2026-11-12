@@ -1,4 +1,5 @@
 import { SplitPane } from '../components/SplitPane';
+import { onSearchFocusRequest } from './searchFocus';
 import { ScalePressable } from '../components/PressScale';
 import { Stagger } from '../components/Stagger';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -120,6 +121,9 @@ function warmUp() {
 }
 
 export function SearchScreen() {
+  // dock ZYX: chạm thanh "Search" → sang đây và bật bàn phím
+  const inputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  useEffect(() => onSearchFocusRequest(() => inputRef.current?.focus()), []);
   // dock Apple Music: cuộn xuống thì thu dock, cuộn lên thì mở lại
   const searchY = useRShared(0);
   const dockScroll = useAnimatedScrollHandler((e) => {
@@ -362,6 +366,7 @@ export function SearchScreen() {
           <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: 16, borderCurve: 'continuous', borderWidth: 1.4, borderColor: focused ? accent : accent.slice(0, 7) + '88' }]} />
           <Ionicons name="search" size={20} color={text} />
           <TextInput
+            ref={inputRef}
             value={query}
             onChangeText={onChangeText}
             onSubmitEditing={() => (userMode ? runUsers(query) : runSearch(query))}

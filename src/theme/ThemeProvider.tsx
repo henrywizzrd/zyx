@@ -111,7 +111,7 @@ function sanitize(t: Theme): Theme {
       position: POSITIONS.includes(t.dock.position) ? t.dock.position : d.dock.position,
       items: items.length ? items : d.dock.items,
       // dock bubble đã bỏ: ai đang dùng bubble chuyển sang kiểu Apple Music (gần nhất: tab gọn ở đáy)
-      mode: (t.dock.mode as string) === 'bubble' || t.dock.mode === 'apple' ? 'apple' : 'bar',
+      mode: (t.dock.mode as string) === 'bubble' || t.dock.mode === 'apple' ? 'apple' : t.dock.mode === 'zyx' ? 'zyx' : 'bar',
     },
     miniPlayer: {
       ...t.miniPlayer,
