@@ -19,6 +19,9 @@ export type Rect = {
   // sized: khung player thật sự co / giãn về đúng khung này, và lớp hiệu ứng biến mất NGAY khi thu về xong
   // (nút thật nằm đúng chỗ đó hiện lên thay) — mặc định chỉ bật cho viên thuốc dẹt (dài > 2,2 lần cao)
   sized?: boolean;
+  // fade: đoạn cuối lúc thu về, lớp hiệu ứng (ảnh bìa trơn) mờ dần lộ ra nút thật bên dưới (bong bóng có viền kim loại)
+  // thay vì biến mất cái rụp — hai thứ trùng khít nhau nên chỉ thấy viền "hiện dần" lên ảnh, không thấy hai ảnh
+  fade?: boolean;
   // Khung player nở ra từ (x,y,w,h,r) — vd cả viên mini player; còn ảnh bìa bay riêng từ ô ảnh nhỏ này (nếu có)
   art?: { x: number; y: number; w: number; h: number; r: number };
 }; // slab: điểm xuất phát là bong bóng kiểu khối kính
@@ -33,6 +36,8 @@ export const playerOrigin: {
 
 // Độ mở của player (0 = mini player, 1 = đầy đủ), dùng chung cho lớp làm mờ nền phía sau (BackdropBlur trong App)
 export const playerProgress = makeMutable(0);
+// Rect.fade: lớp hiệu ứng mờ dần trong đoạn p 0,08 → 0 (lúc này player đã gần bằng đúng khung nút, lệch vài điểm)
+export const FADE_LAND = 0.08;
 
 // Đánh thức màn player TRƯỚC khi mở: ngón tay vừa chạm bong bóng (chưa nhấc lên) là màn player đang ngủ được vẽ lại
 // ngay (vẫn ẩn), tới lúc nhấc tay mở ra thì đã sẵn sàng — không còn cảnh nở ra mà thiếu nút, đợi phóng to xong mới hiện
@@ -111,6 +116,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   const ox = useSharedValue(0), oy = useSharedValue(0), ow = useSharedValue(1), oh = useSharedValue(1), or = useSharedValue(0);
   // ô xuất phát của ảnh bìa bay (mặc định trùng khung player)
   const sized = useSharedValue(0); // 1 = khung thật sự đổi kích thước (xuất phát từ viên thuốc dẹt)
+  const fadeSV = useSharedValue(0); // 1 = mờ dần ở đoạn cuối (xem Rect.fade)
   const liveSV = useSharedValue(0); // 1 = player đang mở / đang thu về (mounted); 0 = đang ẩn chờ (kể cả lúc hâm nóng)
   const ax = useSharedValue(0), ay = useSharedValue(0), aw = useSharedValue(1), ar = useSharedValue(0);
 
@@ -155,6 +161,7 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
         ax.value = a.x; ay.value = a.y; aw.value = a.w; ar.value = a.r;
         const isSized = o.sized ?? (o.h > 0 && o.w / o.h > 2.2);
         sized.value = isSized ? 1 : 0;
+        fadeSV.value = isSized && o.fade ? 1 : 0;
         // Ghi nhật ký bằng số thật: đọc lại giá trị chuyển động ngay sau khi gán thì luồng JS còn trả số cũ ("bong bóng 1×1")
         from = `${o.h > 0 && o.w / o.h > 2.2 ? 'từ viên mini player' : isSized ? 'từ bong bóng dock ZYX' : 'từ bong bóng'} ${Math.round(o.w)}×${Math.round(o.h)}`;
         p.value = 0;
@@ -326,7 +333,10 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   // Trước đây khung player (cỡ viên mini player, phủ lớp nhoè) còn nằm đè lên viên mini player vài giây → thấy viên bị nhoè
   // Chỉ áp cho kiểu viên mini player (dock Apple Music): viên thật hiện dần theo độ mở trên luồng giao diện nên không hở.
   // Bong bóng thì chỉ hiện lại khi JS báo (onClosed) → giấu sớm ở đây là hở một nhịp không có gì (bong bóng nháy)
-  const rootVis = useAnimatedStyle(() => ({ opacity: (sized.value || !liveSV.value) && p.value < 0.003 ? 0 : 1 }));
+  const rootVis = useAnimatedStyle(() => {
+    if (fadeSV.value && sized.value) return { opacity: interpolate(p.value, [0.003, FADE_LAND], [0, 1], 'clamp') };
+    return { opacity: (sized.value || !liveSV.value) && p.value < 0.003 ? 0 : 1 };
+  });
   const screen = useAnimatedStyle(() => ({ opacity: interpolate(p.value, [0.22, 0.55], [0, 1], 'clamp') }));
 
   // Ảnh album (vuông, ở đầu) phủ lên, mờ dần để lộ màn player (đóng lại thì hiện dần trở lại).

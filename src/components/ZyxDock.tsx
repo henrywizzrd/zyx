@@ -18,7 +18,7 @@ import { DockGlyph } from './DockIcons';
 import { LABELS } from './FloatingDock';
 import { ArtSlab, GlassFill, glassShadow } from './Glass';
 import { usePlayerPick, ViewRef } from '../player/PlayerProvider';
-import { playerOrigin, playerProgress, prewarmPlayer } from './PlayerTransition';
+import { FADE_LAND, playerOrigin, playerProgress, prewarmPlayer } from './PlayerTransition';
 import { hapticSnap } from './haptics';
 import { requestSearchFocus } from '../screens/searchFocus';
 
@@ -85,7 +85,8 @@ export function ZyxDock({ active, onChange, onOpenPlayer, hidden }: { active: Ta
   }));
   // Bong bóng thật tắt hẳn ngay khi player bắt đầu mở và chỉ hiện lại khi ảnh bìa đã đáp đúng chỗ (pp ≈ 0):
   // trước đây nó hiện dần từ pp 0,22 trong lúc ảnh bìa còn đang bay → thấy hai ảnh cùng lúc ("dư ảnh")
-  const bubbleOut = useAnimatedStyle(() => ({ opacity: pp.value < 0.003 ? 1 : 0 }));
+  // ...và trong đoạn cuối (pp < FADE_LAND) bong bóng thật đã nằm sẵn bên dưới để lớp hiệu ứng mờ dần lộ nó ra (Rect.fade)
+  const bubbleOut = useAnimatedStyle(() => ({ opacity: pp.value < FADE_LAND ? 1 : 0 }));
 
   // ---- bong bóng mini player
   const { track, togglePlay } = usePlayerPick('track', 'togglePlay');
@@ -96,7 +97,7 @@ export function ZyxDock({ active, onChange, onOpenPlayer, hidden }: { active: Ta
     bubbleRef.current?.measureInWindow((x, y, w, h) => {
       // sized: player thu về đúng khung bong bóng rồi lớp hiệu ứng tắt ngay, bong bóng thật hiện lên đúng chỗ đó
       // (trước đây lớp hiệu ứng còn đọng lại ~0,6s: thấy ảnh bìa trơn không viền đè lên bong bóng, rồi giật một cái)
-      if (w > 0) playerOrigin.current = { x, y, w, h, r: BR, sized: true, art: { x, y, w, h, r: BR } };
+      if (w > 0) playerOrigin.current = { x, y, w, h, r: BR, sized: true, fade: true, art: { x, y, w, h, r: BR } };
       onOpenPlayer();
     });
   };
