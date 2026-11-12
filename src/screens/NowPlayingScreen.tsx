@@ -66,14 +66,14 @@ const REPEAT_SIZE = ICON;
 
 // Nút lời bài hát: ba vạch ngắn dần + nốt nhạc bên phải (theo mẫu Tyson gửi; trang thử "ZYX – Icon lời & hàng chờ")
 const LYRICS_OPS: VectorOp[] = [
-  { d: 'M3 6.5H11.5M3 11H10.5M3 15.5H8', stroke: 2, round: true },
-  { d: 'M17 17.2V4C17 6.6 19.6 7.2 21 8.8', stroke: 2, round: true },
-  { circle: [14.4, 17.4, 2.6] },
+  { d: 'M2.5 8H10.5M2.5 12H10.5M2.5 16H10.5', stroke: 1.8, round: true },
+  { d: 'M18.3 17.6V3.6C18.3 6.2 21.4 6.6 21.4 9.6', stroke: 1.8, round: true },
+  { circle: [15.6, 17.6, 2.8] },
 ];
-// Nút hàng chờ: viên thuốc (bài đang phát) + hai vạch + dấu cộng
+// Nút hàng chờ: viên thuốc (bài đang phát) + hai vạch + dấu cộng (canh giữa theo hai vạch)
 const QUEUE_OPS: VectorOp[] = [
-  { d: 'M5.5 3.5H18.5A2.75 2.75 0 0 1 18.5 9H5.5A2.75 2.75 0 0 1 5.5 3.5Z', stroke: 1.8, round: true },
-  { d: 'M3 14H12M3 19H12M18 13V21M14 17H22', stroke: 2, round: true },
+  { d: 'M5.75 3.75H18.25A2.75 2.75 0 0 1 18.25 9.25H5.75A2.75 2.75 0 0 1 5.75 3.75Z', stroke: 1.8, round: true },
+  { d: 'M3 14.5H11M3 19.5H11M17.5 13.5V20.5M14 17H21', stroke: 1.8, round: true },
 ];
 function QueueIcon({ size = ICON, color = SOFT }: { size?: number; color?: string }) {
   if (!skia) return <Ionicons name="list" size={size} color={color} />;
