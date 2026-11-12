@@ -64,15 +64,21 @@ const TITLE_SCALE = 0.72; // tên bài khi bay lên đầu (cạnh ảnh nhỏ) 
 const PLAY = 66; // đường kính nút phát
 const REPEAT_SIZE = ICON;
 
-// Nút lời bài hát: khung chat bo góc có đuôi, bên trong là hai dấu ngoặc kép (giống Apple Music)
-const BUBBLE_PATH = 'M6 4H18A3.5 3.5 0 0 1 21.5 7.5V14.5A3.5 3.5 0 0 1 18 18H11L7 21.2V18H6A3.5 3.5 0 0 1 2.5 14.5V7.5A3.5 3.5 0 0 1 6 4Z';
-const QUOTE_TAILS = 'M11.25 9.5c0 1.6-.8 2.6-2 3.1M16.25 9.5c0 1.6-.8 2.6-2 3.1';
+// Nút lời bài hát: ba vạch ngắn dần + nốt nhạc bên phải (theo mẫu Tyson gửi; trang thử "ZYX – Icon lời & hàng chờ")
 const LYRICS_OPS: VectorOp[] = [
-  { d: BUBBLE_PATH, stroke: 1.8 },
-  { circle: [9.75, 9.3, 1.55] },
-  { circle: [14.75, 9.3, 1.55] },
-  { d: QUOTE_TAILS, stroke: 1.4 },
+  { d: 'M3 6.5H11.5M3 11H10.5M3 15.5H8', stroke: 2, round: true },
+  { d: 'M17 17.2V4C17 6.6 19.6 7.2 21 8.8', stroke: 2, round: true },
+  { circle: [14.4, 17.4, 2.6] },
 ];
+// Nút hàng chờ: viên thuốc (bài đang phát) + hai vạch + dấu cộng
+const QUEUE_OPS: VectorOp[] = [
+  { d: 'M5.5 3.5H18.5A2.75 2.75 0 0 1 18.5 9H5.5A2.75 2.75 0 0 1 5.5 3.5Z', stroke: 1.8, round: true },
+  { d: 'M3 14H12M3 19H12M18 13V21M14 17H22', stroke: 2, round: true },
+];
+function QueueIcon({ size = ICON, color = SOFT }: { size?: number; color?: string }) {
+  if (!skia) return <Ionicons name="list" size={size} color={color} />;
+  return <VectorIcon ops={QUEUE_OPS} size={size} color={color} />;
+}
 function LyricsIcon({ on }: { on: boolean }) {
   const color = on ? ON : SOFT;
   if (!skia) return <Ionicons name="chatbox-ellipses-outline" size={ICON} color={color} />;
@@ -520,7 +526,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
           </Pressable>
           {FxButton}
           <Pressable onPress={() => setQueueOpen(true)} hitSlop={8} style={styles.sideBtn}>
-            <Ionicons name="list" size={26} color={SOFT} />
+            <QueueIcon size={26} />
           </Pressable>
         </View>
       </View>
@@ -670,25 +676,32 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         onClose={onClose}
         title={title}
         artist={artist}
-        background={Background}
         lyricsOpen={showLyrics}
         setLyricsOpen={setShowLyrics}
         lyrics={<LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} />}
         volume={<VolumeBar vertical />}
+        like={
+          <Pressable onPress={() => track.id !== 'none' && toggleLike(track.id)} hitSlop={6} style={vIcon}>
+            <LikePop on={isLiked} color={ON}>
+              <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={22} color={isLiked ? ON : '#FFFFFF'} />
+            </LikePop>
+          </Pressable>
+        }
+        fx={FxButton}
         icons={
           <>
-            <Pressable onPress={() => track.id !== 'none' && toggleLike(track.id)} hitSlop={6} style={vIcon}>
-              <LikePop on={isLiked} color={ON}>
-                <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={22} color={isLiked ? ON : SOFT} />
-              </LikePop>
-            </Pressable>
             <Pressable onPress={() => setShowLyrics((v) => !v)} hitSlop={6} style={vIcon}>
               <LyricsIcon on={showLyrics} />
             </Pressable>
             <Pressable onPress={() => setQueueOpen(true)} hitSlop={6} style={vIcon}>
-              <Ionicons name="list" size={ICON} color={SOFT} />
+              <QueueIcon />
             </Pressable>
-            <View style={vIcon}>{FxButton}</View>
+            <CtlBtn onPress={toggleShuffle} style={vIcon}>
+              <Ionicons name="shuffle" size={ICON} color={shuffle ? ON : SOFT} />
+            </CtlBtn>
+            <CtlBtn onPress={cycleRepeat} style={vIcon}>
+              <RepeatIcon mode={repeat} color={repeat !== 'off' ? ON : SOFT} />
+            </CtlBtn>
           </>
         }
       >
@@ -716,7 +729,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         {/* Chế độ âm thanh: giữa nút lời và nút hàng chờ, thẳng dưới nút phát */}
         <View style={{ width: PLAY, alignItems: 'center' }}>{FxButton}</View>
         <Pressable onPress={() => setQueueOpen(true)} hitSlop={10} style={styles.skipSlot}>
-          <Ionicons name="list" size={ICON} color={SOFT} />
+          <QueueIcon />
         </Pressable>
         <View style={styles.sideBtn} />
       </View>

@@ -1,11 +1,11 @@
 // Player kiểu "Đĩa than" (Cài đặt → Kiểu player → Đĩa than), dựng theo trang thử "ZYX – Player Đĩa than":
-//  - nền: màu ảnh bìa nhoè, trôi xoay chậm (dùng chung nền với player thường)
+//  - nền: gradient tách màu từ ảnh bìa (theme/coverGradient), loang trôi liên tục
 //  - đĩa than khổng lồ có tâm ở góc trên trái màn hình, chỉ thấy một phần tư; nhãn giữa đĩa = ảnh bìa bài hát
 //  - đang phát: nhãn xoay rất chậm (3 vòng/phút); dừng: trôi thêm một chút rồi đứng (có quán tính)
 //    (rãnh đĩa là các vòng tròn đồng tâm nên xoay hay không nhìn như nhau → chỉ xoay ẢNH nhãn, rãnh vẽ bằng Skia, rất nhẹ máy)
 //  - thanh thời gian cong theo rìa đĩa, kéo gần sát hai mép màn hình; số giờ cũng chạy theo đường cong; chạm / kéo dọc cung để tua
-//  - cột trái: thích · lời · hàng chờ · hiệu ứng; bên phải: âm lượng dọc
-//  - giữa phía dưới: nghệ sĩ, tên bài (canh giữa) và 3 nút ◀◀ ▶ ▶▶ nằm ngang
+//  - cột trái: lời · hàng chờ · trộn · lặp; bên phải: âm lượng dọc
+//  - giữa phía dưới (từ trên xuống): nghệ sĩ, tên bài, viên kính ( ❤️ | hiệu ứng ), 3 nút ◀◀ ▶ ▶▶ nằm ngang
 // XEM LỜI (bấm nút lời, hoặc vuốt LÊN ở chỗ trống): đĩa vẫn xoay nhưng trượt lên đỉnh màn hình (tâm dời ra giữa, phía trên
 // màn hình) → chỉ còn một vành cong ở trên cùng, quanh Dynamic Island, thấy chút ảnh bìa; thanh thời gian chạy theo đĩa và
 // thành một cung cân đối ở giữa phía trên; lời trượt lên ở khoảng giữa. Phần dưới giữ nguyên. Vuốt XUỐNG → đĩa về chỗ cũ
@@ -20,6 +20,9 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import { Canvas, Circle, Group, Path, RadialGradient, Skia, SweepGradient, TextPath, matchFont, vec, type SkFont } from '@shopify/react-native-skia';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
+import { BlurView } from 'expo-blur';
+import { useCoverGradient } from '../theme/coverGradient';
 import { useT } from '../i18n';
 import { useProgress } from '../player/PlayerProvider';
 import type { Track } from '../data/mock';
@@ -105,8 +108,9 @@ export type VinylProps = {
   onClose: () => void;
   title: string;
   artist: string;
-  background: React.ReactNode; // nền màu ảnh bìa nhoè (dựng ở NowPlayingScreen, giống player thường)
-  icons: React.ReactNode; // cột trái: thích · lời · hàng chờ · hiệu ứng (dựng ở NowPlayingScreen)
+  icons: React.ReactNode; // cột trái: lời · hàng chờ · trộn · lặp (dựng ở NowPlayingScreen)
+  like: React.ReactNode; // nút thích (trái viên kính)
+  fx: React.ReactNode; // nút hiệu ứng âm thanh (phải viên kính)
   volume: React.ReactNode; // thanh âm lượng dọc
   lyricsOpen: boolean;
   setLyricsOpen: (v: boolean) => void;
@@ -151,6 +155,7 @@ export function VinylPlayer(p: VinylProps) {
     }
   }, [spinning]); // eslint-disable-line react-hooks/exhaustive-deps
   const { cx1, cy1 } = g;
+  const run = !swipe.moving && swipe.active && !reduced;
   const labelStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: lp.value * cx1 }, { translateY: lp.value * cy1 }, { rotate: `${rot.value}deg` }],
   }));
@@ -199,15 +204,17 @@ export function VinylPlayer(p: VinylProps) {
 
   return (
     <View style={{ flex: 1 }}>
-      {p.background}
+      <VinylBackdrop track={p.track} run={run} />
       <StatusBar barStyle="light-content" />
 
       {/* Đĩa (chỉ để nhìn, không nhận chạm) */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         <DiscBase W={W} H={H} g={g} lp={lp} />
-        <Animated.View
-          style={[{ position: 'absolute', left: -LR, top: -LR, width: LR * 2, height: LR * 2, borderRadius: LR, overflow: 'hidden', backgroundColor: p.track.color || '#333' }, labelStyle]}
-        >
+        {/* Nhãn KHÔNG bọc khung cắt (overflow: hidden): một lớp to ~1000 điểm vừa bị cắt tròn vừa xoay liên tục thì iPhone phải vẽ
+            lại cả lớp ra bộ nhớ riêng MỖI khung hình (nghi là nguyên nhân giao diện khựng ~150ms đều đều ở player đĩa than).
+            Giờ chỉ ảnh tự bo tròn, nền màu là một hình tròn riêng */}
+        <Animated.View style={[{ position: 'absolute', left: -LR, top: -LR, width: LR * 2, height: LR * 2 }, labelStyle]}>
+          <View style={[StyleSheet.absoluteFill, { borderRadius: LR, backgroundColor: p.track.color || '#333' }]} />
           {!!p.track.thumb && (
             <Animated.View style={[StyleSheet.absoluteFill, fadeStyle]}>
               <SmartImage url={p.track.thumb} size={1200} style={{ width: LR * 2, height: LR * 2, borderRadius: LR }} />
@@ -259,15 +266,26 @@ export function VinylPlayer(p: VinylProps) {
         <Text style={styles.volSign}>−</Text>
       </View>
 
-      {/* nghệ sĩ + tên bài, canh giữa ngay trên 3 nút */}
-      <View pointerEvents="none" style={[styles.info, { bottom: ctlBottom + 68 + 14 }]}>
+      {/* nghệ sĩ + tên bài, canh giữa trên viên kính */}
+      <View pointerEvents="none" style={[styles.info, { bottom: ctlBottom + 68 + 12 + PILL + 16 }]}>
         <Text numberOfLines={1} style={styles.artist}>{p.artist}</Text>
         <Text numberOfLines={1} style={styles.title}>{p.title}</Text>
+      </View>
+
+      {/* viên kính ( ❤️ | hiệu ứng ), ngay trên 3 nút */}
+      <View style={[styles.ctlWrap, { bottom: ctlBottom + 68 + 12 }]} pointerEvents="box-none">
+        <View style={styles.pill}>
+          <Frost radius={PILL / 2} />
+          <View style={styles.pillCell}>{p.like}</View>
+          <View style={styles.pillSep} />
+          <View style={styles.pillCell}>{p.fx}</View>
+        </View>
       </View>
 
       {/* 3 nút nằm ngang, canh giữa */}
       <View style={[styles.ctlWrap, { bottom: ctlBottom }]} pointerEvents="box-none">
         <View style={styles.controls}>
+          <Frost radius={22} />
           <Btn onPress={p.prev}>
             <SkipGlyph dir="back" size={26} color={TEXT} />
           </Btn>
@@ -284,6 +302,62 @@ export function VinylPlayer(p: VinylProps) {
     </View>
   );
 }
+
+const PILL = 46;
+
+// Kính mờ đậm hơn nền một chút (iOS: làm nhoè thật; Android: lớp tối trong suốt)
+function Frost({ radius }: { radius: number }) {
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius, overflow: 'hidden' }]}>
+      {Platform.OS === 'ios' && <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: Platform.OS === 'ios' ? 'rgba(0,0,0,0.16)' : 'rgba(0,0,0,0.34)' }]} />
+    </View>
+  );
+}
+
+// Nền: gradient tách màu từ ảnh bìa (ảnh nhỏ 48×48 phóng to), 2 lớp xoay ngược chiều + "thở" to nhỏ chậm → màu loang liên tục.
+// Chỉ xoay / phóng ảnh trên luồng giao diện, không vẽ lại gradient mỗi khung hình. Tạm dừng khi player đang mở / đóng hoặc đang ẩn
+const VinylBackdrop = React.memo(function VinylBackdrop({ track, run }: { track: Track; run: boolean }) {
+  const win = useScreenSize();
+  const url = track.thumb?.replace(/=(w\d+-h\d+|s\d+)/, '=w120-h120');
+  const grad = useCoverGradient(url);
+  const a = useSharedValue(0);
+  const b = useSharedValue(0);
+  const br = useSharedValue(0);
+  useEffect(() => {
+    cancelAnimation(a);
+    cancelAnimation(b);
+    cancelAnimation(br);
+    if (!run) return;
+    const a0 = a.value % 360;
+    const b0 = b.value % 360;
+    a.value = a0;
+    b.value = b0;
+    a.value = withRepeat(withTiming(a0 + 360, { duration: 46000, easing: Easing.linear }), -1, false);
+    b.value = withRepeat(withTiming(b0 - 360, { duration: 71000, easing: Easing.linear }), -1, false);
+    br.value = withRepeat(withTiming(br.value > 0.5 ? 0 : 1, { duration: 9000, easing: Easing.inOut(Easing.sin) }), -1, true);
+  }, [run]); // eslint-disable-line react-hooks/exhaustive-deps
+  const size = Math.max(win.width, win.height) * 1.7;
+  const box = { position: 'absolute' as const, width: size, height: size, left: (win.width - size) / 2, top: (win.height - size) / 2 };
+  const sa = useAnimatedStyle(() => ({ transform: [{ rotate: `${a.value}deg` }, { scale: 1 + 0.14 * br.value }] }));
+  const sb = useAnimatedStyle(() => ({ transform: [{ rotate: `${b.value}deg` }, { scaleX: -1 }, { scale: 1.12 - 0.12 * br.value }] }));
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: 'hidden', backgroundColor: track.color || '#1a1820' }]}>
+      {grad && (
+        <>
+          <Animated.View style={[box, sa]}>
+            <Image source={{ uri: grad.uri }} contentFit="fill" transition={700} style={StyleSheet.absoluteFill} />
+          </Animated.View>
+          <Animated.View style={[box, { opacity: 0.6 }, sb]}>
+            <Image source={{ uri: grad.uri }} contentFit="fill" transition={700} style={StyleSheet.absoluteFill} />
+          </Animated.View>
+        </>
+      )}
+      {/* tối nhẹ để chữ trắng luôn đọc được */}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.22)' }]} />
+    </View>
+  );
+});
 
 function Btn({ onPress, play, children }: { onPress: () => void; play?: boolean; children: React.ReactNode }) {
   const b = useBounce();
@@ -462,7 +536,13 @@ const styles = StyleSheet.create({
   ctlWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   controls: {
     flexDirection: 'row', alignItems: 'center', gap: 6, padding: 6, borderRadius: 22, borderCurve: 'continuous',
-    backgroundColor: 'rgba(0,0,0,0.22)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.1)',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.12)',
   },
+  pill: {
+    height: PILL, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, borderRadius: PILL / 2, borderCurve: 'continuous',
+    borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.12)',
+  },
+  pillCell: { width: 52, height: PILL, alignItems: 'center', justifyContent: 'center' },
+  pillSep: { width: StyleSheet.hairlineWidth * 2, height: 20, backgroundColor: 'rgba(255,255,255,0.28)' },
   btn: { width: 62, height: 56, borderRadius: 16, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
 });
