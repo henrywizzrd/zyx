@@ -671,6 +671,8 @@ function streamSource(c: Ctx, id: string, uri: string): FxSource | null {
     pos: () => (typeof node.currentTime === 'number' ? node.currentTime : -1),
     ended: () => typeof node.duration === 'number' && node.duration > 0 && node.currentTime >= node.duration - 0.3,
     play(at) {
+      // tua tới sát / quá cuối file thì thôi (nguồn đọc dần có thể kẹt xoay vòng ở cuối file)
+      if (typeof node.duration === 'number' && node.duration > 0 && at >= node.duration - 0.5) return;
       try {
         node.seekToTime(Math.max(0, at));
         node.start(c.currentTime);
@@ -949,6 +951,14 @@ function sync(force = false) {
   const now = Date.now();
   // Nguồn đã phát hết file mà trình phát chính quay lại đầu bài (lặp lại bài, tua lùi sau khi hết...): nguồn đọc dần
   // không tua lại được nữa → mở lại nguồn từ file (đã có sẵn trong máy, rất nhanh). Lúc mở lại tiếng tạm về trình phát chính
+  // Bài đã chạy tới cuối (trình phát chính đứng ở cuối bài, chờ sang bài sau): KHÔNG mở lại nguồn. File của nguồn thường dài hơn
+  // số giây trình phát chính báo một chút (vd 261,4 so với 260,0) nên trước đây chỗ này tưởng là "quay lại đầu bài" → mở lại
+  // nguồn rồi tua tới sát cuối file → luồng JS bận 100% gần một phút, iOS tắt app khi đang nghe nền (cpu_resource_fatal 13/11)
+  const atEnd = lastDuration > 0 && want >= lastDuration - 2;
+  if (atEnd && src.ended()) {
+    if (src.playing) src.pause();
+    return;
+  }
   if (src.ended() && want < src.pos() - 1) {
     flog(`nguồn đã hết file (pos=${src.pos().toFixed(1)}) mà nhạc ở ${want.toFixed(1)}s → mở lại nguồn`);
     reopen();

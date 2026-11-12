@@ -670,7 +670,9 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         onClose={onClose}
         title={title}
         artist={artist}
+        background={Background}
         lyricsOpen={showLyrics}
+        setLyricsOpen={setShowLyrics}
         lyrics={<LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} />}
         volume={<VolumeBar vertical />}
         icons={
