@@ -35,7 +35,7 @@ function Chips<T extends string>({ options, value, onSelect, labels }: { options
 }
 
 export function SettingsScreen() {
-  const { theme, landscape, resetTheme, setMerged, setLanguage, setDockLabels, setDockRimLight, setDockMode } = useTheme();
+  const { theme, landscape, resetTheme, setMerged, setLanguage, setDockLabels, setDockRimLight, setDockMode, setPlayerLook } = useTheme();
   const t = useT();
   const { push } = useNav();
   const pad = useContentInsets();
@@ -73,6 +73,15 @@ export function SettingsScreen() {
         value={theme.language}
         onSelect={setLanguage}
         labels={Object.fromEntries(LANGUAGES.map((l) => [l.id, l.label]))}
+      />
+
+      {/* Kiểu màn player: thường (ảnh bìa lớn) hoặc đĩa than */}
+      <Text style={label}>{t('settings.playerLook')}</Text>
+      <Chips
+        options={['classic', 'vinyl'] as const}
+        value={theme.player.look ?? 'classic'}
+        onSelect={setPlayerLook}
+        labels={{ classic: t('settings.playerClassic'), vinyl: t('settings.playerVinyl') }}
       />
 
       {/* Kiểu dock: Apple Music hoặc dạng thanh */}

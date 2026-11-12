@@ -457,6 +457,9 @@ export const vi = {
   'studio.meteorLevel.1': "Vừa",
   'studio.meteorLevel.2': "Nhiều",
   'studio.meteorLevel.3': "Bão sao băng",
+  'settings.playerLook': "Kiểu player",
+  'settings.playerClassic': "Mặc định",
+  'settings.playerVinyl': "Đĩa than",
 };
 
 export type StringKey = keyof typeof vi;
@@ -897,4 +900,7 @@ export const en: Record<StringKey, string> = {
   'studio.meteorLevel.1': "Normal",
   'studio.meteorLevel.2': "Many",
   'studio.meteorLevel.3': "Meteor storm",
+  'settings.playerLook': "Player style",
+  'settings.playerClassic': "Classic",
+  'settings.playerVinyl': "Vinyl",
 };

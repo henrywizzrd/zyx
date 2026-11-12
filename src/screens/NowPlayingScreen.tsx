@@ -25,6 +25,7 @@ import { PlayPauseGlyph, SkipGlyph, useBounce } from '../components/PlayerIcons'
 import { VectorIcon, type VectorOp } from '../components/VectorIcon';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useScreenSize } from '../components/ScreenSize';
+import { VinylPlayer } from './VinylPlayer';
 
 // Kiểu khai báo của thư viện chưa khớp React 19, ép kiểu để dùng như component bình thường
 const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
@@ -646,6 +647,51 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         {GrabBar}
         <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} inModal />
       </View>
+    );
+  }
+
+  // ================= Màn hình dọc: kiểu Đĩa than (Cài đặt → Kiểu player) =================
+  if (theme.player.look === 'vinyl') {
+    const vIcon = { width: 40, height: 40, alignItems: 'center' as const, justifyContent: 'center' as const };
+    return (
+      <VinylPlayer
+        track={track}
+        isPlaying={isPlaying}
+        loading={loading}
+        failed={failed}
+        duration={duration}
+        togglePlay={togglePlay}
+        next={next}
+        prev={() => {
+          swapDir = -1;
+          prev();
+        }}
+        seekTo={seekTo}
+        onClose={onClose}
+        title={title}
+        artist={artist}
+        lyricsOpen={showLyrics}
+        lyrics={<LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} />}
+        volume={<VolumeBar vertical />}
+        icons={
+          <>
+            <Pressable onPress={() => track.id !== 'none' && toggleLike(track.id)} hitSlop={6} style={vIcon}>
+              <LikePop on={isLiked} color={ON}>
+                <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={22} color={isLiked ? ON : SOFT} />
+              </LikePop>
+            </Pressable>
+            <Pressable onPress={() => setShowLyrics((v) => !v)} hitSlop={6} style={vIcon}>
+              <LyricsIcon on={showLyrics} />
+            </Pressable>
+            <Pressable onPress={() => setQueueOpen(true)} hitSlop={6} style={vIcon}>
+              <Ionicons name="list" size={ICON} color={SOFT} />
+            </Pressable>
+            <View style={vIcon}>{FxButton}</View>
+          </>
+        }
+      >
+        <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} />
+      </VinylPlayer>
     );
   }
 

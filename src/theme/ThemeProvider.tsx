@@ -120,7 +120,10 @@ function sanitize(t: Theme): Theme {
         t: Number.isFinite(t.miniPlayer.anchor.t) ? Math.max(0, Math.min(1, t.miniPlayer.anchor.t)) : d.miniPlayer.anchor.t,
       },
     },
-    player: { lyricLook: (['glow', 'karaoke', 'bounce'] as const).includes(t.player.lyricLook) ? t.player.lyricLook : 'glow' },
+    player: {
+      lyricLook: (['glow', 'karaoke', 'bounce'] as const).includes(t.player.lyricLook) ? t.player.lyricLook : 'glow',
+      look: t.player.look === 'vinyl' ? 'vinyl' : 'classic',
+    },
     library: {
       ...t.library,
       layout: LIBRARY_LAYOUTS.includes(t.library.layout) ? t.library.layout : d.library.layout,
@@ -146,6 +149,7 @@ interface ThemeContextValue {
   setDockRimLight: (on: boolean) => void;
   setDockMode: (m: Theme['dock']['mode']) => void;
   setLyricLook: (l: Theme['player']['lyricLook']) => void;
+  setPlayerLook: (l: NonNullable<Theme['player']['look']>) => void;
   setMiniPlayerAnchor: (a: MiniAnchor) => void;
   setMiniPlayerCollapsed: (c: boolean) => void;
   setMerged: (merged: boolean) => void;
@@ -252,6 +256,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       // Đổi sang Apple Music: mini player tách khỏi dock (dock đó có mini player riêng)
       setDockMode: (mode) => setThemeState((t) => ({ ...t, dock: { ...t.dock, mode }, miniPlayer: mode !== 'bar' ? { ...t.miniPlayer, merged: false } : t.miniPlayer })),
       setLyricLook: (lyricLook) => setThemeState((t) => ({ ...t, player: { ...t.player, lyricLook } })),
+      setPlayerLook: (look) => setThemeState((t) => ({ ...t, player: { ...t.player, look } })),
       setMiniPlayerAnchor: (anchor) => patchMini({ anchor }),
       setMiniPlayerCollapsed: (collapsed) => patchMini({ collapsed }),
       setMerged: (merged) => patchMini({ merged }),

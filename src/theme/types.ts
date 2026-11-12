@@ -19,6 +19,8 @@ export type _DockModeNote = never; // apple: kiểu Apple Music (thanh tab + nú
 export type Side = 'left' | 'right';
 // Kiểu hiện lời bài hát: phát sáng (Apple Music), karaoke (tô dần theo nhạc), nảy chữ
 export type LyricLook = 'glow' | 'karaoke' | 'bounce';
+// Kiểu màn player: classic = ảnh bìa lớn (kiểu Spotify / Apple Music) · vinyl = đĩa than một góc (VinylPlayer)
+export type PlayerLook = 'classic' | 'vinyl';
 
 import type { Language } from '../i18n/strings';
 import type { AmbientPresetId, Palette, ThemePresetId } from './presets';
@@ -54,6 +56,6 @@ export interface Theme {
     style: { background: string; rectRadius: number };
   };
   library: { layout: LibraryLayout; order: string[] };
-  player: { lyricLook: LyricLook };
+  player: { lyricLook: LyricLook; look?: PlayerLook };
   home: { sections: HomeSection[]; hidden: HomeSection[]; trendingRange: TrendingRange; trendingRegion: TrendingRegion };
 }
