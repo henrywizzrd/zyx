@@ -114,6 +114,7 @@ export function LyricsView({
   onSeek,
   focus,
   fade = true,
+  fadeStops,
 }: {
   status: 'idle' | 'loading' | 'done';
   lyrics: Lyrics | null;
@@ -123,6 +124,9 @@ export function LyricsView({
   // Lời toàn màn hình dùng: khung lời luôn to bằng cả màn hình, câu đang hát giữ đúng chỗ cũ khi mở / đóng toàn màn hình
   focus?: number;
   fade?: boolean; // mép trên / dưới mờ dần (tắt khi bên ngoài đã tự làm mép mờ)
+  // [hết vùng mờ trên, bắt đầu vùng mờ dưới] theo phần khung (0..1). Dải mờ dài + mềm → chữ hiện dần từ dưới lên rồi tan dần ở
+  // trên, không thấy "cái hộp" (player Đĩa than dùng). Mặc định dải mờ ngắn 12%
+  fadeStops?: [number, number];
 }) {
   const { track, duration } = usePlayerPick('track', 'duration');
   const { moving, active } = usePlayerTransition();
@@ -271,11 +275,19 @@ export function LyricsView({
       <MaskedView
         style={{ flex: 1 }}
         maskElement={
-          <LinearGradient
-            colors={['transparent', '#000', '#000', 'transparent']}
-            locations={fade ? [0, 0.12, 0.88, 1] : [0, 0, 1, 1]}
-            style={{ flex: 1 }}
-          />
+          fadeStops && fade ? (
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.25)', 'rgba(0,0,0,0.75)', '#000', '#000', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.18)', 'transparent']}
+              locations={[0, fadeStops[0] * 0.4, fadeStops[0] * 0.75, fadeStops[0], fadeStops[1], fadeStops[1] + (1 - fadeStops[1]) * 0.35, fadeStops[1] + (1 - fadeStops[1]) * 0.7, 1]}
+              style={{ flex: 1 }}
+            />
+          ) : (
+            <LinearGradient
+              colors={['transparent', '#000', '#000', 'transparent']}
+              locations={fade ? [0, 0.12, 0.88, 1] : [0, 0, 1, 1]}
+              style={{ flex: 1 }}
+            />
+          )
         }
       >
       <ScrollView

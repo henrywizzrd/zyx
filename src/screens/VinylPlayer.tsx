@@ -223,7 +223,8 @@ export function VinylPlayer(p: VinylProps) {
 
   const ctlBottom = insets.bottom + 12;
   const iconsTop = g.yLeft + 38;
-  const lyricsTop = g.yLow1 + 44;
+  // Khung lời: từ ngay dưới cung thời gian tới sát cột icon; mép trên / dưới mờ dài (LyricsView fadeStops) nên không thấy khung
+  const lyricsTop = g.yLow1 + 26;
   const lyricsStyle = useAnimatedStyle(() => ({
     opacity: interpolate(lp.value, [0.3, 1], [0, 1], 'clamp'),
     transform: [{ translateY: interpolate(lp.value, [0, 1], [90, 0]) }],
@@ -292,7 +293,7 @@ export function VinylPlayer(p: VinylProps) {
       {lyricsLive && (
         <Animated.View
           pointerEvents={p.lyricsOpen ? 'auto' : 'none'}
-          style={[{ position: 'absolute', top: lyricsTop, left: 20, right: 20, bottom: H - iconsTop + 12 }, lyricsStyle]}
+          style={[{ position: 'absolute', top: lyricsTop, left: 20, right: 20, bottom: H - iconsTop + 2 }, lyricsStyle]}
         >
           {p.lyrics}
         </Animated.View>

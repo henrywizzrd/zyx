@@ -205,7 +205,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const fxMode = useFxMode();
   const fxSpeed = useFxSpeed();
   const fxOn = fxMode !== 'off' || fxSpeed !== 'normal';
-  useRenderProbe('Player', { theme, sheet, sheetOpen, t, fxMode, fxSpeed });
+
   const pickFx = () => {
     const opts: { id: FxMode; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
       { id: 'off', label: t('fx.off'), icon: 'musical-note-outline' },
@@ -263,6 +263,12 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const landscape = win.width > win.height;
   const insets = useSafeAreaInsets();
   const [landLyrics, setLandLyrics] = useState(true); // ở chế độ ngang, lời hiện mặc định
+  // Đo thời gian vẽ lại + ghi lại giá trị nào đổi (log 13/11: player vẽ lại ~2 lần / giây "trang cha vẽ lại / state riêng",
+  // cần biết cụ thể là giá trị nào)
+  useRenderProbe('Player', {
+    theme, sheet, sheetOpen, t, fxMode, fxSpeed, track, isPlaying, duration, loading, failed, togglePlay, next, prev, seekTo,
+    shuffle, repeat, liked, pad, songMenu, moving: swipe.moving, active: swipe.active, win, insets, showLyrics, queueOpen,
+  });
 
   // Kiểu Đĩa than: tải lời sẵn ngay khi player hiện ra → vuốt đĩa lên là có chữ liền
   const lyr = useLyrics(track, landscape ? landLyrics : showLyrics || (theme.player.look === 'vinyl' && swipe.active), duration);
@@ -677,7 +683,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         artist={artist}
         lyricsOpen={showLyrics}
         setLyricsOpen={setShowLyrics}
-        lyrics={<LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} />}
+        lyrics={<LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} fadeStops={[0.3, 0.6]} />}
         volume={<VolumeBar vertical />}
         like={
           <Pressable onPress={() => track.id !== 'none' && toggleLike(track.id)} hitSlop={6} style={vIcon}>

@@ -14,9 +14,12 @@ export type VectorOp =
 
 const cache = new Map<string, string>();
 
-function render(ops: VectorOp[], box: number, px: number, color: string): string | null {
+// Vẽ biểu tượng bằng màu TRẮNG ĐẶC một lần cho mỗi (hình, cỡ); màu thật được nhuộm lúc hiện (Image tintColor) và độ trong
+// đặt bằng opacity. Trước đây mỗi màu vẽ + nén PNG riêng trên luồng JS: đổi theme (màu nhấn đổi) là mọi biểu tượng vẽ lại cùng
+// lúc → luồng JS đứng lâu. Vẽ màu đặc cũng giữ được nét liền mạch ở chỗ các nét chồng nhau
+function render(ops: VectorOp[], box: number, px: number): string | null {
   if (!skia) return null;
-  const key = `${px}|${box}|${color}|${JSON.stringify(ops)}`;
+  const key = `${px}|${box}|${JSON.stringify(ops)}`;
   const hit = cache.get(key);
   if (hit) return hit;
   try {
@@ -25,15 +28,7 @@ function render(ops: VectorOp[], box: number, px: number, color: string): string
     if (!surface) return null;
     const c = surface.getCanvas();
     c.scale(px / box, px / box);
-    // Vẽ bằng màu ĐẶC trong một lớp riêng rồi mới làm trong suốt cả lớp một lần: nếu tô từng nét bằng màu trong suốt thì chỗ
-    // các nét chồng lên nhau (đầu nốt nhạc đè thân nốt...) bị đậm hơn → nhìn như ghép từ nhiều mảnh, không liền mạch
-    const src = Skia.Color(color);
-    const alpha = src[3];
-    const col = Float32Array.from(src);
-    col[3] = 1;
-    const layer = Skia.Paint();
-    layer.setAlphaf(alpha);
-    c.saveLayer(layer);
+    const col = Skia.Color('#FFFFFF');
     for (const op of ops) {
       const paint = Skia.Paint();
       paint.setAntiAlias(true);
@@ -64,7 +59,6 @@ function render(ops: VectorOp[], box: number, px: number, color: string): string
         c.drawPath(path, s);
       }
     }
-    c.restore();
     surface.flush();
     const uri = `data:image/png;base64,${surface.makeImageSnapshot().encodeToBase64()}`;
     cache.set(key, uri);
@@ -78,7 +72,14 @@ function render(ops: VectorOp[], box: number, px: number, color: string): string
 // ops tính theo hệ toạ độ box × box (mặc định = size), hiện ra đúng size × size điểm
 export function VectorIcon({ ops, size, color, box = size, fallback }: { ops: VectorOp[]; size: number; color: string; box?: number; fallback?: React.ReactNode }) {
   const scale = Platform.OS === 'web' ? 1 : Math.min(3, Math.max(2, Math.ceil((require('react-native').PixelRatio as typeof import('react-native').PixelRatio).get())));
-  const uri = useMemo(() => render(ops, box, Math.round(size * scale), color), [ops, box, size, scale, color]);
+  const uri = useMemo(() => render(ops, box, Math.round(size * scale)), [ops, box, size, scale]);
+  // màu → (màu đặc, độ trong)
+  const tint = useMemo(() => {
+    if (!skia) return { c: color, a: 1 };
+    const f = skia.Skia.Color(color);
+    const to = (v: number) => Math.round(v * 255);
+    return { c: `rgb(${to(f[0])},${to(f[1])},${to(f[2])})`, a: f[3] };
+  }, [color]);
   if (!uri) return <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>{fallback}</View>;
-  return <Image source={{ uri }} style={{ width: size, height: size }} fadeDuration={0} />;
+  return <Image source={{ uri }} style={{ width: size, height: size, tintColor: tint.c, opacity: tint.a }} fadeDuration={0} />;
 }
