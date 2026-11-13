@@ -12,7 +12,7 @@
 // Mọi thứ đi theo một giá trị lp (0 = đĩa, 1 = lời) chạy trên luồng giao diện.
 // Chỉ dùng cho màn hình dọc; xoay ngang thì dùng bố cục player thường
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, PanResponder, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image as RNImage, PanResponder, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation, Easing, interpolate, interpolateColor, useFrameCallback, useAnimatedStyle, useDerivedValue, useReducedMotion, useSharedValue, withRepeat, withTiming, type SharedValue,
 } from 'react-native-reanimated';
@@ -20,6 +20,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import { Canvas, Circle, Fill, Group, Path, RadialGradient, Shader, Skia, SweepGradient, TextPath, matchFont, vec, type SkFont } from '@shopify/react-native-skia';
 import { smokeShader } from '../theme/effects/smoke';
+import { discImage, discImageCached, discPad } from '../theme/effects/discImage';
 import { markRender } from '../components/JankMonitor';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCoverGradient, type CoverGradient } from '../theme/coverGradient';
@@ -525,31 +526,28 @@ function useDiscStyle(g: Geo, lp: SharedValue<number>, sw: SharedValue<number>) 
 // vòng tròn tâm (0,0) bán kính r
 const ring = (r: number, extra: object) => ({ position: 'absolute' as const, left: -r, top: -r, width: r * 2, height: r * 2, borderRadius: r, ...extra });
 
-// Mặt đĩa + rãnh — nằm dưới nhãn ảnh
+// Mặt đĩa + rãnh — nằm dưới nhãn ảnh: MỘT ảnh vẽ sẵn (theme/effects/discImage). Chưa có ảnh (lần đầu, đang vẽ) thì tạm
+// một hình tròn đen
 const DiscUnder = React.memo(function DiscUnder({ g, lp, sw }: { g: Geo; lp: SharedValue<number>; sw: SharedValue<number> }) {
   const { R } = g;
   const style = useDiscStyle(g, lp, sw);
-  const grooves = useMemo(() => {
-    const out: number[] = [];
-    for (let rr = R * LABEL + 5; rr < R - 2; rr += 4) out.push(rr);
-    return out;
-  }, [R]);
+  const [uri, setUri] = useState(() => discImageCached(R));
+  useEffect(() => {
+    let alive = true;
+    const id = setTimeout(() => discImage(R).then((u) => alive && u && setUri(u)), uri ? 0 : 1200);
+    return () => {
+      alive = false;
+      clearTimeout(id);
+    };
+  }, [R]); // eslint-disable-line react-hooks/exhaustive-deps
+  const S = R + discPad;
   return (
     <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: 0, height: 0 }, style]}>
-      {/* bóng đổ mềm + mặt đĩa đen */}
-      {/* (bóng bằng vài vòng tối mờ đồng tâm — boxShadow trên một hình ~1300 điểm phải vẽ ra một ảnh bóng rất to) */}
-      <View style={ring(R + 26, { borderWidth: 12, borderColor: 'rgba(0,0,0,0.08)' })} />
-      <View style={ring(R + 14, { borderWidth: 10, borderColor: 'rgba(0,0,0,0.16)' })} />
-      <View style={ring(R + 5, { borderWidth: 6, borderColor: 'rgba(0,0,0,0.26)' })} />
-      <View style={ring(R, { backgroundColor: '#0b0b0c' })} />
-      {/* rãnh: các vòng tròn mảnh, sáng tối xen kẽ cho có vân */}
-      {grooves.map((rr, i) => (
-        <View key={i} style={ring(rr, { borderWidth: StyleSheet.hairlineWidth, borderColor: i % 3 === 0 ? 'rgba(255,255,255,0.055)' : 'rgba(255,255,255,0.03)' })} />
-      ))}
-      {/* rãnh trống giữa các bài + mép đĩa */}
-      <View style={ring(R * 0.875, { borderWidth: Math.max(1.5, R * 0.004), borderColor: 'rgba(255,255,255,0.05)' })} />
-      <View style={ring(R * 0.934, { borderWidth: Math.max(1, R * 0.003), borderColor: 'rgba(255,255,255,0.04)' })} />
-      <View style={ring(R, { borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' })} />
+      {uri ? (
+        <RNImage source={{ uri }} fadeDuration={0} style={{ position: 'absolute', left: -S, top: -S, width: S * 2, height: S * 2 }} />
+      ) : (
+        <View style={ring(R, { backgroundColor: '#0b0b0c' })} />
+      )}
     </Animated.View>
   );
 });

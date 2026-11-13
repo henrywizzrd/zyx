@@ -30,6 +30,17 @@ export function initSentry() {
       enableCaptureFailedRequests: false,
       enableAutoSessionTracking: true,
       maxBreadcrumbs: 50,
+      // Treo giao diện từ 0,5 giây là báo kèm "dấu vết" của luồng chính (đang chạy hàm native nào) — log trong app không nhìn
+      // thấy được phần này, Sentry thì có (vd 13/11: treo 4 giây trong SDAnimatedImageView setImage). Mặc định 2 giây
+      appHangTimeoutInterval: 0.5,
+      // gửi kèm 40 dòng nhật ký gần nhất của app (đang ở màn nào, vừa làm gì) để đọc báo lỗi dễ hơn
+      beforeSend: (event) => {
+        try {
+          const L = require('./data/applog') as typeof import('./data/applog');
+          event.extra = { ...(event.extra ?? {}), applog: L.logToText(L.getLog().slice(-40)).slice(-8000) };
+        } catch {}
+        return event;
+      },
       // Nhật ký của app chép mọi dòng ra console.log → không để Sentry bọc console (mỗi dòng log thành 1 vệt)
       integrations: (list) => list.filter((i) => i.name !== 'Breadcrumbs').concat(Sentry.breadcrumbsIntegration({ console: false, fetch: false, xhr: false })),
     });
