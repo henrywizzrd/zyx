@@ -204,19 +204,6 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
   useEffect(() => {
     if (sw.value > 0.01) sw.value = withTiming(0, { duration: 520, easing: Easing.bezier(0.2, 0.8, 0.25, 1) });
   }, [disc.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Hai khung Skia vẽ đĩa (rãnh, viền) chỉ vẽ MỘT lần. Player được dựng sẵn lúc đang ẩn (vài giây sau khi mở app) → khung Skia
-  // lúc đó chưa có kích thước, vẽ ra trống, và không bao giờ vẽ lại → mất đĩa (ảnh 13/11 03:44). Mỗi lần player hiện ra /
-  // app quay lại từ nền thì dựng lại hai khung đó (rất nhẹ)
-  const [epoch, setEpoch] = useState(0);
-  // (dựng lại lúc player đã mở xong, không phải lúc bắt đầu mở — tránh dồn việc vào đúng lúc hiệu ứng mở đang chạy)
-  useEffect(() => {
-    if (swipe.active && !swipe.moving) setEpoch((e) => e + 1);
-  }, [swipe.active && !swipe.moving]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (st) => st === 'active' && setEpoch((e) => e + 1));
-    return () => sub.remove();
-  }, []);
-
   // ---- màu theo ảnh bìa: thanh thời gian + nút phát. Đổi bài thì màu chuyển dần sang màu mới (~0,7s)
   const grad = useCoverGradient(p.track.thumb?.replace(/=(w\d+-h\d+|s\d+)/, '=w120-h120'));
   const accentTo = grad?.accent ?? ACCENT;
@@ -282,9 +269,9 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
 
       {/* Đĩa (chỉ để nhìn, không nhận chạm) */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <DiscBase key={`b${epoch}`} W={W} H={H} g={g} lp={lp} sw={sw} />
+        <DiscUnder g={g} lp={lp} sw={sw} />
         <VinylLabel id={disc.id} thumb={disc.thumb} color={disc.color} LR={LR} g={g} lp={lp} sw={sw} rot={rot} />
-        <DiscTop key={`t${epoch}`} W={W} H={H} g={g} lp={lp} sw={sw} />
+        <DiscOver g={g} lp={lp} sw={sw} ghost={!settled} />
       </View>
 
       {/* Lớp nhận cử chỉ ở chỗ trống */}
@@ -520,62 +507,69 @@ function Btn({ onPress, bg, children }: { onPress: () => void; bg?: ReturnType<t
   );
 }
 
-// Dời cả đĩa theo lp (đĩa ⇄ lời) và sw (đổi bài) — chỉ vẽ lại trong lúc đang chuyển; bình thường đứng yên
-function useDiscTransform(g: Geo, lp: SharedValue<number>, sw: SharedValue<number>) {
+// Đĩa vẽ bằng các View thường (vòng tròn có viền), KHÔNG dùng khung Skia nữa:
+//  - lúc mở / thu nhỏ player, màn player được "chụp thành ảnh" cho mượt — khung Skia không được chụp vào → đĩa biến mất suốt
+//    lúc chuyển rồi bật hiện lại (giật, thấy rõ khi quay màn hình); View thường thì được chụp bình thường
+//  - không còn lỗi khung Skia dựng lúc ẩn bị trống (trước phải dựng lại mỗi lần mở player)
+//  - viền tròn do hệ thống vẽ, không tốn ảnh to, GPU nhẹ hơn hai khung Skia toàn màn hình
+// Cả khối dời theo lp (đĩa ⇄ lời) và sw (đổi bài) giống nhãn ảnh
+function useDiscStyle(g: Geo, lp: SharedValue<number>, sw: SharedValue<number>) {
   const { cx1, cy1, R, rimY } = g;
-  return useDerivedValue(() => [
-    { translateX: lp.value * cx1 + swapDX(R, lp.value) * sw.value },
-    { translateY: lp.value * cy1 + swapDY(R, rimY, lp.value) * sw.value },
-  ]);
+  return useAnimatedStyle(() => ({
+    transform: [
+      { translateX: lp.value * cx1 + swapDX(R, lp.value) * sw.value },
+      { translateY: lp.value * cy1 + swapDY(R, rimY, lp.value) * sw.value },
+    ],
+  }));
 }
+// vòng tròn tâm (0,0) bán kính r
+const ring = (r: number, extra: object) => ({ position: 'absolute' as const, left: -r, top: -r, width: r * 2, height: r * 2, borderRadius: r, ...extra });
 
-// Mặt đĩa (rãnh) — nằm dưới nhãn ảnh
-const DiscBase = React.memo(function DiscBase({ g, lp, sw }: { W: number; H: number; g: Geo; lp: SharedValue<number>; sw: SharedValue<number> }) {
+// Mặt đĩa + rãnh — nằm dưới nhãn ảnh
+const DiscUnder = React.memo(function DiscUnder({ g, lp, sw }: { g: Geo; lp: SharedValue<number>; sw: SharedValue<number> }) {
   const { R } = g;
-  const rings = useMemo(() => {
-    const b = Skia.PathBuilder.Make();
-    for (let rr = R * LABEL + 4; rr < R - 1; rr += 3) b.addCircle(0, 0, rr);
-    return b.detach();
+  const style = useDiscStyle(g, lp, sw);
+  const grooves = useMemo(() => {
+    const out: number[] = [];
+    for (let rr = R * LABEL + 5; rr < R - 2; rr += 4) out.push(rr);
+    return out;
   }, [R]);
-  const tf = useDiscTransform(g, lp, sw);
   return (
-    <Canvas style={StyleSheet.absoluteFill}>
-      <Group transform={tf}>
-        {/* bóng đổ mềm quanh đĩa */}
-        <Circle cx={0} cy={0} r={R + 30}>
-          <RadialGradient c={vec(0, 0)} r={R + 30} colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0)']} positions={[0, R / (R + 30), 1]} />
-        </Circle>
-        <Circle cx={0} cy={0} r={R}>
-          <RadialGradient c={vec(0, 0)} r={R} colors={['#1b1b1d', '#0d0d0e', '#050505']} positions={[0, 0.7, 1]} />
-        </Circle>
-        <Path path={rings} style="stroke" strokeWidth={1} color="rgba(255,255,255,0.035)" />
-        {/* rãnh trống giữa các bài */}
-        <Circle cx={0} cy={0} r={R * 0.875} style="stroke" strokeWidth={R * 0.004} color="rgba(255,255,255,0.05)" />
-        <Circle cx={0} cy={0} r={R * 0.934} style="stroke" strokeWidth={R * 0.003} color="rgba(255,255,255,0.04)" />
-        <Circle cx={0} cy={0} r={R - 0.5} style="stroke" strokeWidth={1} color="rgba(255,255,255,0.06)" />
-      </Group>
-    </Canvas>
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: 0, height: 0 }, style]}>
+      {/* bóng đổ mềm + mặt đĩa đen */}
+      {/* (bóng bằng vài vòng tối mờ đồng tâm — boxShadow trên một hình ~1300 điểm phải vẽ ra một ảnh bóng rất to) */}
+      <View style={ring(R + 26, { borderWidth: 12, borderColor: 'rgba(0,0,0,0.08)' })} />
+      <View style={ring(R + 14, { borderWidth: 10, borderColor: 'rgba(0,0,0,0.16)' })} />
+      <View style={ring(R + 5, { borderWidth: 6, borderColor: 'rgba(0,0,0,0.26)' })} />
+      <View style={ring(R, { backgroundColor: '#0b0b0c' })} />
+      {/* rãnh: các vòng tròn mảnh, sáng tối xen kẽ cho có vân */}
+      {grooves.map((rr, i) => (
+        <View key={i} style={ring(rr, { borderWidth: StyleSheet.hairlineWidth, borderColor: i % 3 === 0 ? 'rgba(255,255,255,0.055)' : 'rgba(255,255,255,0.03)' })} />
+      ))}
+      {/* rãnh trống giữa các bài + mép đĩa */}
+      <View style={ring(R * 0.875, { borderWidth: Math.max(1.5, R * 0.004), borderColor: 'rgba(255,255,255,0.05)' })} />
+      <View style={ring(R * 0.934, { borderWidth: Math.max(1, R * 0.003), borderColor: 'rgba(255,255,255,0.04)' })} />
+      <View style={ring(R, { borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' })} />
+    </Animated.View>
   );
 });
 
-// Viền tối quanh nhãn + vệt phản chiếu đứng yên (đèn không xoay theo đĩa) — nằm trên nhãn ảnh
-const DiscTop = React.memo(function DiscTop({ g, lp, sw }: { W: number; H: number; g: Geo; lp: SharedValue<number>; sw: SharedValue<number> }) {
+// Viền tối quanh nhãn + lỗ tâm — nằm trên nhãn ảnh (đứng yên, không xoay)
+// ghost: lúc player chưa mở xong (đang mở / thu nhỏ / đang ẩn) vẽ thêm vòng thanh thời gian bằng View — thanh thời gian thật là
+// khung Skia, không được chụp vào ảnh lúc chuyển nên sẽ biến mất rồi hiện lại
+const DiscOver = React.memo(function DiscOver({ g, lp, sw, ghost }: { g: Geo; lp: SharedValue<number>; sw: SharedValue<number>; ghost: boolean }) {
   const { R } = g;
-  const t = 'rgba(255,255,255,0)';
-  const tf = useDiscTransform(g, lp, sw);
+  const LR = R * LABEL;
+  const style = useDiscStyle(g, lp, sw);
   return (
-    <Canvas style={StyleSheet.absoluteFill}>
-      <Group transform={tf}>
-        <Circle cx={0} cy={0} r={R * LABEL + 1.5} style="stroke" strokeWidth={3} color="#0b0b0b" />
-        <Circle cx={0} cy={0} r={R * LABEL + 3.5} style="stroke" strokeWidth={1} color="rgba(255,255,255,0.08)" />
-        <Circle cx={0} cy={0} r={(R * (1 + LABEL)) / 2} style="stroke" strokeWidth={R * (1 - LABEL)}>
-          <SweepGradient c={vec(0, 0)} colors={[t, t, 'rgba(255,255,255,0.09)', t, t]} positions={[0, 5 / 360, 28 / 360, 52 / 360, 1]} />
-        </Circle>
-        <Circle cx={0} cy={0} r={11}>
-          <RadialGradient c={vec(0, 0)} r={11} colors={['#050505', '#050505', '#c9c3bb', '#c9c3bb', '#6d6862']} positions={[0, 0.45, 0.5, 0.62, 0.7]} />
-        </Circle>
-      </Group>
-    </Canvas>
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: 0, height: 0 }, style]}>
+      <View style={ring(LR + 3, { borderWidth: 3.5, borderColor: '#0b0b0b' })} />
+      <View style={ring(LR + 4, { borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' })} />
+      <View style={ring(11, { backgroundColor: '#6d6862' })} />
+      <View style={ring(7.5, { backgroundColor: '#c9c3bb' })} />
+      <View style={ring(5, { backgroundColor: '#050505' })} />
+      {ghost && <View style={ring(g.r + 1.5, { borderWidth: 3, borderColor: 'rgba(255,255,255,0.18)' })} />}
+    </Animated.View>
   );
 });
 
