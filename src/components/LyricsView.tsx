@@ -6,6 +6,7 @@ import { getLiveRate } from '../player/fxEngine';
 import { usePlayerPick, playClock } from '../player/PlayerProvider';
 import { useT } from '../i18n';
 import { usePlayerTransition } from './PlayerTransition';
+import { markRender } from './JankMonitor';
 import RNMaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -33,7 +34,33 @@ const styles = StyleSheet.create({
   near: { color: 'rgba(255,255,255,0.32)', textShadowColor: 'rgba(255,255,255,0.45)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 0 } },
   far: { color: 'rgba(255,255,255,0.2)', textShadowColor: 'rgba(255,255,255,0.4)', textShadowRadius: 9, textShadowOffset: { width: 0, height: 0 } },
 });
-const blurFor = (d: number) => (d <= 1 ? styles.near : styles.far);
+type LineState = 'active' | 'near' | 'far' | 'browse' | 'plain';
+const stateFor = (d: number): LineState => (d <= 1 ? 'near' : 'far');
+
+// Một dòng lời = HAI lớp chữ chồng nhau, kiểu chữ không bao giờ đổi: lớp sáng (câu đang hát, có quầng) và lớp mờ (có bóng mềm).
+// Sang câu mới chỉ đổi ĐỘ TRONG của hai lớp (chạy trên GPU, mờ dần ~0,3s). Trước đây đổi kiểu chữ (màu + bóng) của vài dòng
+// mỗi lần sang câu → iPhone phải vẽ lại chữ có bóng to trên luồng giao diện → giao diện khựng ~140ms mỗi lần đổi câu (log 13/11)
+const DIM: Record<LineState, number> = { active: 0, near: 1, far: 0.62, browse: 1, plain: 0 };
+const LyricLine = React.memo(function LyricLine({ text, state }: { text: string; state: LineState }) {
+  const lit = state === 'active' || state === 'plain';
+  const a = useRef(new Animated.Value(lit ? 1 : 0)).current;
+  const d = useRef(new Animated.Value(DIM[state])).current;
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    const cfg = { duration: 300, easing: Easing.out(Easing.quad), useNativeDriver: USE_NATIVE };
+    Animated.parallel([Animated.timing(a, { toValue: lit ? 1 : 0, ...cfg }), Animated.timing(d, { toValue: DIM[state], ...cfg })]).start();
+  }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <View>
+      <Animated.Text style={[styles.line, state === 'browse' ? styles.browse : styles.near, { opacity: d }]}>{text}</Animated.Text>
+      <Animated.Text style={[styles.line, styles.active, { position: 'absolute', left: 0, right: 0, top: 0, opacity: a }]}>{text}</Animated.Text>
+    </View>
+  );
+});
 
 // Một dòng hiển thị: câu hát, hoặc đoạn chỉ có nhạc (hiện nốt nhạc)
 type Row = { t: number | null; text: string; music?: boolean };
@@ -143,12 +170,15 @@ export function LyricsView({
 
   const rows = useMemo(() => (lyrics ? buildRows(lyrics, duration) : []), [lyrics, duration]);
   const last = useRef(rows);
+  const gen = useRef(0);
+  const wrapY = useRef(0); // vị trí khối các dòng trong nội dung cuộn (vị trí từng dòng đo theo khối này) // đổi lời (đổi bài) → dựng lại toàn bộ dòng để đo lại vị trí từng dòng
   // Lần đầu hiện (mở player, đổi bài): nhảy thẳng tới câu đang hát, không cuộn từ trên xuống.
   // Ẩn khung lời cho tới khi đã nhảy xong để không thấy nháy.
   const placed = useRef(false);
   const [ready, setReady] = useState(false);
   if (last.current !== rows) {
     last.current = rows;
+    gen.current++;
     ys.current = [];
     hs.current = [];
     placed.current = false;
@@ -191,7 +221,7 @@ export function LyricsView({
     const y = ys.current[i];
     if (y == null || !h) return false;
     // Đặt tâm của dòng vào đúng chỗ (giữa khung, hoặc độ cao focus)
-    scroll.current?.scrollTo({ y: Math.max(0, y + (hs.current[i] ?? 0) / 2 - focusAt), animated });
+    scroll.current?.scrollTo({ y: Math.max(0, wrapY.current + y + (hs.current[i] ?? 0) / 2 - focusAt), animated });
     return true;
   };
 
@@ -228,6 +258,11 @@ export function LyricsView({
     browsingRef.current = false;
     setBrowsing(false);
   };
+
+  // ghi mốc "đổi câu" để log khựng biết có trùng lúc sang câu mới không
+  useEffect(() => {
+    if (cur >= 0) markRender('lời đổi câu');
+  }, [cur]);
 
   // Lần đầu (hoặc khung lời vừa đổi chiều cao): nhảy tức thì. Sau đó: cuộn mượt theo câu đang hát.
   const lastH = useRef(0);
@@ -309,6 +344,19 @@ export function LyricsView({
             {t('lyrics.plainOnly')}
           </Text>
         )}
+        {/* key theo lần đổi lời: khung lời giờ dựng sẵn và giữ lại qua các bài. Dòng mới mà nằm đúng chỗ dòng cũ thì không được đo
+            lại (onLayout không chạy) → không biết vị trí → không cuộn theo, câu đang hát sáng nhưng lệch khỏi giữa (lời Zing 13/11) */}
+        <View
+          key={gen.current}
+          onLayout={(e) => {
+            // khối các dòng vừa có / đổi vị trí (đo xong sau các dòng, hoặc khung lời đổi cao): đặt lại câu đang hát vào giữa
+            wrapY.current = e.nativeEvent.layout.y;
+            if (curRef.current >= 0 && !browsingRef.current && scrollToLine(curRef.current, false)) {
+              placed.current = true;
+              setReady(true);
+            }
+          }}
+        >
         {rows.map((l, i) => {
           const onLayout = (e: any) => {
             ys.current[i] = e.nativeEvent.layout.y;
@@ -349,10 +397,11 @@ export function LyricsView({
               }}
               style={{ paddingVertical: 6 }}
             >
-              <Text style={[styles.line, !synced ? styles.plain : active ? styles.active : browsing ? styles.browse : blurFor(Math.abs(i - cur))]}>{l.text}</Text>
+              <LyricLine text={l.text} state={!synced ? 'plain' : active ? 'active' : browsing ? 'browse' : stateFor(Math.abs(i - cur))} />
             </Pressable>
           );
         })}
+        </View>
         {/* Lời lấy từ đâu (YouTube Music / LyricFind, SimpMusic, LRCLIB) */}
         {!!lyrics.source && (
           <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, marginTop: 24 }}>
