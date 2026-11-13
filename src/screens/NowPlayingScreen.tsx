@@ -264,7 +264,8 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const insets = useSafeAreaInsets();
   const [landLyrics, setLandLyrics] = useState(true); // ở chế độ ngang, lời hiện mặc định
 
-  const lyr = useLyrics(track, landscape ? landLyrics : showLyrics, duration);
+  // Kiểu Đĩa than: tải lời sẵn ngay khi player hiện ra → vuốt đĩa lên là có chữ liền
+  const lyr = useLyrics(track, landscape ? landLyrics : showLyrics || (theme.player.look === 'vinyl' && swipe.active), duration);
 
   // ---- Chuyển ảnh bìa ⇄ lời (giống Apple Music): một giá trị lp chạy 0 → 1 trên UI thread, mọi thứ đi theo nó:
   //  ảnh bìa lớn nhoè dần + tối đi, ảnh nhỏ hiện ra ở góc trên, tên bài bay từ dưới lên cạnh ảnh nhỏ (và nhỏ lại),

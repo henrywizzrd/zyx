@@ -60,6 +60,17 @@ const arcPath = (cx: number, cy: number, rr: number, b0: number, b1: number) => 
   return b.detach();
 };
 
+// Đổi bài: độ dời để đĩa khuất hẳn. Đang xem đĩa (lp 0): chéo về góc trên trái, đủ xa để cả vành (bán kính R) ra khỏi màn hình.
+// Đang xem lời (lp 1): thẳng lên trên, qua khỏi mép trên
+const swapDX = (R: number, k: number) => {
+  'worklet';
+  return mix(-(R + 40) / Math.SQRT2, 0, k);
+};
+const swapDY = (R: number, rimY: number, k: number) => {
+  'worklet';
+  return mix(-(R + 40) / Math.SQRT2, -(rimY + 40), k);
+};
+
 // Hình học ở hai trạng thái (toạ độ màn hình):
 //  0 (đĩa): tâm đĩa ở góc trên trái (0,0); cung thời gian từ mép trái (dưới) lên mép phải (trên)
 //  1 (lời): tâm đĩa ở (W/2, rimY − R) → mép dưới của đĩa nằm ở rimY; cung thời gian cân đối hai bên, ngay dưới vành đĩa
@@ -132,13 +143,12 @@ export function VinylPlayer(p: VinylProps) {
 
   // ---- đĩa ⇄ lời
   const lp = useSharedValue(p.lyricsOpen ? 1 : 0);
-  const [lyricsMounted, setLyricsMounted] = useState(p.lyricsOpen);
   useEffect(() => {
-    if (p.lyricsOpen) setLyricsMounted(true);
-    lp.value = withTiming(p.lyricsOpen ? 1 : 0, reduced ? { duration: 200 } : MOVE, (done) => {
-      if (done && !p.lyricsOpen) scheduleOnRN(setLyricsMounted, false);
-    });
+    lp.value = withTiming(p.lyricsOpen ? 1 : 0, reduced ? { duration: 200 } : MOVE);
   }, [p.lyricsOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Khung lời dựng SẴN (ẩn) ngay khi player hiện ra, lời cũng được tải sẵn (NowPlayingScreen) → vuốt lên là chữ có liền,
+  // không còn khoảng "đang tải" / nháy lúc khung lời mới dựng và đo các dòng
+  const lyricsLive = swipe.active || p.lyricsOpen;
 
   // ---- xoay nhãn: chạy trên luồng giao diện; tạm dừng lúc player đang phóng to / thu nhỏ hoặc đang ẩn
   const rot = useSharedValue(0);
@@ -156,6 +166,31 @@ export function VinylPlayer(p: VinylProps) {
     }
   }, [spinning]); // eslint-disable-line react-hooks/exhaustive-deps
   const run = !swipe.moving && swipe.active && !reduced;
+
+  // ---- đổi bài: đĩa cũ trượt đi rồi đĩa bài mới trượt vào (thanh thời gian đứng yên, nền + màu đổi dần cùng lúc)
+  //  · đang xem đĩa: trượt chéo ra góc trên trái (khuất hẳn), đĩa mới trượt từ góc đó vào
+  //  · đang xem lời: đĩa trượt lên khuất khỏi mép trên rồi trượt xuống lại
+  // Đĩa đang trượt ra vẫn mang ảnh bài CŨ; khuất hẳn rồi mới đổi sang ảnh bài mới
+  const sw = useSharedValue(0); // 0 = đĩa ở chỗ, 1 = đĩa đã khuất
+  const [disc, setDisc] = useState({ id: p.track.id, thumb: p.track.thumb, color: p.track.color });
+  const latest = useRef(disc);
+  latest.current = { id: p.track.id, thumb: p.track.thumb, color: p.track.color };
+  const commitDisc = () => setDisc(latest.current);
+  useEffect(() => {
+    if (p.track.id === disc.id) return;
+    if (!visible || reduced) {
+      cancelAnimation(sw);
+      sw.value = 0;
+      setDisc(latest.current);
+      return;
+    }
+    sw.value = withTiming(1, { duration: 340, easing: Easing.bezier(0.4, 0, 0.9, 0.6) }, (done) => {
+      if (done) scheduleOnRN(commitDisc);
+    });
+  }, [p.track.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (sw.value > 0.01) sw.value = withTiming(0, { duration: 520, easing: Easing.bezier(0.2, 0.8, 0.25, 1) });
+  }, [disc.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // Hai khung Skia vẽ đĩa (rãnh, viền) chỉ vẽ MỘT lần. Player được dựng sẵn lúc đang ẩn (vài giây sau khi mở app) → khung Skia
   // lúc đó chưa có kích thước, vẽ ra trống, và không bao giờ vẽ lại → mất đĩa (ảnh 13/11 03:44). Mỗi lần player hiện ra /
   // app quay lại từ nền thì dựng lại hai khung đó (rất nhẹ)
@@ -232,9 +267,9 @@ export function VinylPlayer(p: VinylProps) {
 
       {/* Đĩa (chỉ để nhìn, không nhận chạm) */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <DiscBase key={`b${epoch}`} W={W} H={H} g={g} lp={lp} />
-        <VinylLabel id={p.track.id} thumb={p.track.thumb} color={p.track.color} LR={LR} g={g} lp={lp} rot={rot} />
-        <DiscTop key={`t${epoch}`} W={W} H={H} g={g} lp={lp} />
+        <DiscBase key={`b${epoch}`} W={W} H={H} g={g} lp={lp} sw={sw} />
+        <VinylLabel id={disc.id} thumb={disc.thumb} color={disc.color} LR={LR} g={g} lp={lp} sw={sw} rot={rot} />
+        <DiscTop key={`t${epoch}`} W={W} H={H} g={g} lp={lp} sw={sw} />
       </View>
 
       {/* Lớp nhận cử chỉ ở chỗ trống */}
@@ -254,7 +289,7 @@ export function VinylPlayer(p: VinylProps) {
 
       <VinylArc g={g} W={W} lp={lp} accent={accent} lyrics={p.lyricsOpen} duration={p.duration} loading={p.loading} failed={p.failed} seekTo={p.seekTo} />
 
-      {lyricsMounted && (
+      {lyricsLive && (
         <Animated.View
           pointerEvents={p.lyricsOpen ? 'auto' : 'none'}
           style={[{ position: 'absolute', top: lyricsTop, left: 20, right: 20, bottom: H - iconsTop + 12 }, lyricsStyle]}
@@ -416,11 +451,15 @@ const VinylBackdrop = React.memo(function VinylBackdrop({ color, grad, run }: { 
 // Nhãn giữa đĩa = ảnh bìa, xoay. Tách riêng + memo: màn player vẽ lại (vài lần mỗi giây khi đang phát) không đụng tới ảnh to này.
 // KHÔNG bọc khung cắt (overflow: hidden): lớp ~1000 điểm vừa bị cắt tròn vừa xoay thì iPhone phải vẽ lại cả lớp mỗi khung hình
 const VinylLabel = React.memo(function VinylLabel({
-  id, thumb, color, LR, g, lp, rot,
-}: { id: string; thumb?: string; color?: string; LR: number; g: Geo; lp: SharedValue<number>; rot: SharedValue<number> }) {
-  const { cx1, cy1 } = g;
+  id, thumb, color, LR, g, lp, sw, rot,
+}: { id: string; thumb?: string; color?: string; LR: number; g: Geo; lp: SharedValue<number>; sw: SharedValue<number>; rot: SharedValue<number> }) {
+  const { cx1, cy1, R, rimY } = g;
   const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: lp.value * cx1 }, { translateY: lp.value * cy1 }, { rotate: `${rot.value}deg` }],
+    transform: [
+      { translateX: lp.value * cx1 + swapDX(R, lp.value) * sw.value },
+      { translateY: lp.value * cy1 + swapDY(R, rimY, lp.value) * sw.value },
+      { rotate: `${rot.value}deg` },
+    ],
   }));
   // đổi bài: nhãn mờ đi rồi hiện ảnh mới
   const fade = useSharedValue(1);
@@ -447,30 +486,45 @@ const VinylLabel = React.memo(function VinylLabel({
   );
 });
 
+// bg (nút phát): kính mờ phủ màu nhấn hơi trong → thấy nhoè nhẹ nền khói phía sau thay vì một khối màu đặc
 function Btn({ onPress, bg, children }: { onPress: () => void; bg?: ReturnType<typeof useAnimatedStyle>; children: React.ReactNode }) {
   const b = useBounce();
   return (
     <Pressable onPress={onPress} onPressIn={b.onPressIn} onPressOut={b.onPressOut} hitSlop={6}>
-      <Animated.View style={[styles.btn, bg, b.style]}>{children}</Animated.View>
+      <Animated.View style={[styles.btn, b.style]}>
+        {bg && (
+          <>
+            <View style={[StyleSheet.absoluteFill, { borderRadius: 16, overflow: 'hidden' }]}>
+              {Platform.OS === 'ios' && <BlurView intensity={30} tint="light" style={StyleSheet.absoluteFill} />}
+            </View>
+            <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: 16, borderCurve: 'continuous', opacity: Platform.OS === 'ios' ? 0.78 : 0.92 }, bg]} />
+            <View style={[StyleSheet.absoluteFill, { borderRadius: 16, borderCurve: 'continuous', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.35)' }]} />
+          </>
+        )}
+        {children}
+      </Animated.View>
     </Pressable>
   );
 }
 
-// Dời cả đĩa theo lp (chỉ vẽ lại trong lúc đang chuyển ~0,5s; bình thường đứng yên)
-function useDiscTransform(g: Geo, lp: SharedValue<number>) {
-  const { cx1, cy1 } = g;
-  return useDerivedValue(() => [{ translateX: lp.value * cx1 }, { translateY: lp.value * cy1 }]);
+// Dời cả đĩa theo lp (đĩa ⇄ lời) và sw (đổi bài) — chỉ vẽ lại trong lúc đang chuyển; bình thường đứng yên
+function useDiscTransform(g: Geo, lp: SharedValue<number>, sw: SharedValue<number>) {
+  const { cx1, cy1, R, rimY } = g;
+  return useDerivedValue(() => [
+    { translateX: lp.value * cx1 + swapDX(R, lp.value) * sw.value },
+    { translateY: lp.value * cy1 + swapDY(R, rimY, lp.value) * sw.value },
+  ]);
 }
 
 // Mặt đĩa (rãnh) — nằm dưới nhãn ảnh
-const DiscBase = React.memo(function DiscBase({ g, lp }: { W: number; H: number; g: Geo; lp: SharedValue<number> }) {
+const DiscBase = React.memo(function DiscBase({ g, lp, sw }: { W: number; H: number; g: Geo; lp: SharedValue<number>; sw: SharedValue<number> }) {
   const { R } = g;
   const rings = useMemo(() => {
     const b = Skia.PathBuilder.Make();
     for (let rr = R * LABEL + 4; rr < R - 1; rr += 3) b.addCircle(0, 0, rr);
     return b.detach();
   }, [R]);
-  const tf = useDiscTransform(g, lp);
+  const tf = useDiscTransform(g, lp, sw);
   return (
     <Canvas style={StyleSheet.absoluteFill}>
       <Group transform={tf}>
@@ -492,10 +546,10 @@ const DiscBase = React.memo(function DiscBase({ g, lp }: { W: number; H: number;
 });
 
 // Viền tối quanh nhãn + vệt phản chiếu đứng yên (đèn không xoay theo đĩa) — nằm trên nhãn ảnh
-const DiscTop = React.memo(function DiscTop({ g, lp }: { W: number; H: number; g: Geo; lp: SharedValue<number> }) {
+const DiscTop = React.memo(function DiscTop({ g, lp, sw }: { W: number; H: number; g: Geo; lp: SharedValue<number>; sw: SharedValue<number> }) {
   const { R } = g;
   const t = 'rgba(255,255,255,0)';
-  const tf = useDiscTransform(g, lp);
+  const tf = useDiscTransform(g, lp, sw);
   return (
     <Canvas style={StyleSheet.absoluteFill}>
       <Group transform={tf}>
