@@ -14,10 +14,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image as RNImage, PanResponder, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import Animated, {
-  cancelAnimation, Easing, interpolate, interpolateColor, useFrameCallback, useAnimatedStyle, useDerivedValue, useReducedMotion, useSharedValue, withRepeat, withTiming, type SharedValue,
+  cancelAnimation, Easing, interpolate, interpolateColor, useAnimatedReaction, useFrameCallback, useAnimatedStyle, useDerivedValue, useReducedMotion, useSharedValue, withRepeat, withTiming, type SharedValue,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
-import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
+import { GestureDetector, GestureStateManager, usePanGesture } from 'react-native-gesture-handler';
 import { Canvas, Circle, Fill, Group, Path, RadialGradient, Shader, Skia, SweepGradient, TextPath, matchFont, vec, type SkFont } from '@shopify/react-native-skia';
 import { smokeShader } from '../theme/effects/smoke';
 import { discImage, discImageCached, discPad } from '../theme/effects/discImage';
@@ -28,7 +28,7 @@ import { useT } from '../i18n';
 import { useProgress } from '../player/PlayerProvider';
 import type { Track } from '../data/mock';
 import { SmartImage } from '../components/Cover';
-import { CloseZone, usePlayerTransition } from '../components/PlayerTransition';
+import { CloseZone, playerProgress, usePlayerTransition } from '../components/PlayerTransition';
 import { PlayPauseGlyph, SkipGlyph, useBounce } from '../components/PlayerIcons';
 import { useScreenSize } from '../components/ScreenSize';
 
@@ -263,6 +263,60 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
   const up = usePanGesture(gest.up);
   const down = usePanGesture(gest.down);
 
+  // ---- tua trên thanh thời gian cong: nằm CHUNG lớp chỗ trống với vuốt lên / xuống. Chạm xuống sát cung (±30) thì nhận ngay
+  // (các cử chỉ vuốt bị huỷ); chạm chỗ khác thì bỏ qua ngay → vuốt xuống thu player / vuốt lên mở lời vẫn chạy ở MỌI chỗ trống,
+  // kể cả khoảng trên tên nghệ sĩ và cạnh thanh âm lượng (trước đây một khung chữ nhật quanh cung chặn hết chỗ đó)
+  const scrubSV = useSharedValue(-1);
+  const seekRef = useRef({ seekTo: p.seekTo, duration: p.duration });
+  seekRef.current = { seekTo: p.seekTo, duration: p.duration };
+  const seekGest = useMemo(() => {
+    const { r, cx1, cy1, a0, a1, b0, b1 } = g;
+    const commit = (v: number) => {
+      const q = seekRef.current;
+      if (q.duration > 0) q.seekTo(v * q.duration);
+    };
+    const local = (x: number, y: number, k: number) => {
+      'worklet';
+      const lx = x - k * cx1;
+      const ly = y - k * cy1;
+      return { lx, ly, s: k > 0.5 ? b0 : a0, e: k > 0.5 ? b1 : a1 };
+    };
+    const at = (x: number, y: number, k: number) => {
+      'worklet';
+      const l = local(x, y, k);
+      return Math.max(0, Math.min(1, (Math.atan2(l.ly, l.lx) - l.s) / (l.e - l.s)));
+    };
+    return {
+      manualActivation: true,
+      onTouchesDown: (e: { handlerTag: number; allTouches: { x: number; y: number }[] }) => {
+        'worklet';
+        const t0 = e.allTouches[0];
+        const k = lp.value;
+        const l = local(t0.x, t0.y, k);
+        if (Math.abs(Math.hypot(l.lx, l.ly) - r) < 30) {
+          scrubSV.value = at(t0.x, t0.y, k);
+          GestureStateManager.activate(e.handlerTag);
+        } else GestureStateManager.fail(e.handlerTag);
+      },
+      onUpdate: (e: { x: number; y: number }) => {
+        'worklet';
+        scrubSV.value = at(e.x, e.y, lp.value);
+      },
+      onDeactivate: (e: { canceled: boolean }) => {
+        'worklet';
+        const v = scrubSV.value;
+        scrubSV.value = -1;
+        if (!e.canceled && v >= 0) scheduleOnRN(commit, v);
+      },
+      onFinalize: () => {
+        'worklet';
+        scrubSV.value = -1;
+      },
+    };
+  }, [g]); // eslint-disable-line react-hooks/exhaustive-deps
+  const seekA = usePanGesture(seekGest);
+  const seekB = usePanGesture(seekGest);
+
   return (
     <View style={{ flex: 1 }}>
       <VinylBackdrop color={p.track.color} grad={grad} run={run} />
@@ -272,25 +326,33 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         <DiscUnder g={g} lp={lp} sw={sw} />
         <VinylLabel id={disc.id} thumb={disc.thumb} color={disc.color} LR={LR} g={g} lp={lp} sw={sw} rot={rot} />
-        <DiscOver g={g} lp={lp} sw={sw} ghost={!settled} />
+        <DiscOver g={g} lp={lp} sw={sw} />
       </View>
 
       {/* Lớp nhận cử chỉ ở chỗ trống */}
       {p.lyricsOpen ? (
         <GestureDetector key="down" gesture={down}>
-          <View style={StyleSheet.absoluteFill} />
+          <View style={StyleSheet.absoluteFill}>
+            <GestureDetector gesture={seekA}>
+              <View style={StyleSheet.absoluteFill} />
+            </GestureDetector>
+          </View>
         </GestureDetector>
       ) : (
         <CloseZone key="up">
           <View style={StyleSheet.absoluteFill}>
             <GestureDetector gesture={up}>
-              <View style={StyleSheet.absoluteFill} />
+              <View style={StyleSheet.absoluteFill}>
+                <GestureDetector gesture={seekB}>
+                  <View style={StyleSheet.absoluteFill} />
+                </GestureDetector>
+              </View>
             </GestureDetector>
           </View>
         </CloseZone>
       )}
 
-      <VinylArc g={g} W={W} lp={lp} accent={accent} lyrics={p.lyricsOpen} duration={p.duration} loading={p.loading} failed={p.failed} seekTo={p.seekTo} />
+      <VinylArc g={g} lp={lp} accent={accent} scrubSV={scrubSV} duration={p.duration} loading={p.loading} failed={p.failed} />
 
       {lyricsLive && (
         <Animated.View
@@ -555,7 +617,10 @@ const DiscUnder = React.memo(function DiscUnder({ g, lp, sw }: { g: Geo; lp: Sha
 // Viền tối quanh nhãn + lỗ tâm — nằm trên nhãn ảnh (đứng yên, không xoay)
 // ghost: lúc player chưa mở xong (đang mở / thu nhỏ / đang ẩn) vẽ thêm vòng thanh thời gian bằng View — thanh thời gian thật là
 // khung Skia, không được chụp vào ảnh lúc chuyển nên sẽ biến mất rồi hiện lại
-const DiscOver = React.memo(function DiscOver({ g, lp, sw, ghost }: { g: Geo; lp: SharedValue<number>; sw: SharedValue<number>; ghost: boolean }) {
+const DiscOver = React.memo(function DiscOver({ g, lp, sw }: { g: Geo; lp: SharedValue<number>; sw: SharedValue<number> }) {
+  // vòng giả luôn nằm sẵn, chỉ hiện khi player chưa mở hẳn (đọc thẳng độ mở player trên luồng giao diện): trước đây nó được
+  // dựng mới đúng lúc bắt đầu thu player → thêm việc vào khung hình đầu tiên (khựng 60–75ms đầu mỗi lần vuốt xuống)
+  const ghostStyle = useAnimatedStyle(() => ({ opacity: playerProgress.value > 0.995 ? 0 : 1 }));
   const { R } = g;
   const LR = R * LABEL;
   const style = useDiscStyle(g, lp, sw);
@@ -566,19 +631,26 @@ const DiscOver = React.memo(function DiscOver({ g, lp, sw, ghost }: { g: Geo; lp
       <View style={ring(11, { backgroundColor: '#6d6862' })} />
       <View style={ring(7.5, { backgroundColor: '#c9c3bb' })} />
       <View style={ring(5, { backgroundColor: '#050505' })} />
-      {ghost && <View style={ring(g.r + 1.5, { borderWidth: 3, borderColor: 'rgba(255,255,255,0.18)' })} />}
+      <Animated.View style={[ring(g.r + 1.5, { borderWidth: 3, borderColor: 'rgba(255,255,255,0.18)' }), ghostStyle]} />
     </Animated.View>
   );
 });
 
 // Thanh thời gian cong: chỉ phần này đọc thời gian đã phát (đổi vài lần mỗi giây). Đi theo đĩa khi chuyển sang lời
 const VinylArc = React.memo(function VinylArc({
-  g, W, lp, accent, lyrics, duration, loading, failed, seekTo,
-}: { g: Geo; W: number; lp: SharedValue<number>; accent: SharedValue<string>; lyrics: boolean; duration: number; loading: boolean; failed: boolean; seekTo: (s: number) => void }) {
+  g, lp, accent, scrubSV, duration, loading, failed,
+}: { g: Geo; lp: SharedValue<number>; accent: SharedValue<string>; scrubSV: SharedValue<number>; duration: number; loading: boolean; failed: boolean }) {
   const t = useT();
   const progress = useProgress();
   markRender('thanh thời gian');
+  // đang kéo tua (cử chỉ tua nằm ở VinylPlayer, chạy trên luồng giao diện): scrubSV = vị trí 0..1, -1 = không kéo
   const [scrub, setScrub] = useState<number | null>(null);
+  useAnimatedReaction(
+    () => scrubSV.value,
+    (v, prev) => {
+      if (v !== prev) scheduleOnRN(setScrub, v < 0 ? null : v);
+    }
+  );
   const pct = scrub ?? (duration > 0 ? Math.min(1, progress / duration) : 0);
   const font = getTimeFont();
 
@@ -615,49 +687,6 @@ const VinylArc = React.memo(function VinylArc({
     return k * cy1 + r * Math.sin(a);
   });
 
-  // ---- tua: dải chữ nhật bao quanh cung (ở trạng thái hiện tại); chỉ nhận chạm nằm sát cung (±30), chỗ khác bỏ qua
-  const top = lyrics ? Math.max(0, g.yEnds1 - 34) : Math.max(0, g.yRight - 34);
-  const bottom = lyrics ? g.yLow1 + 34 : g.yLeft + 34;
-  const ref = useRef({ g, duration, seekTo, top, lyrics });
-  ref.current = { g, duration, seekTo, top, lyrics };
-  const local = (x: number, y: number) => {
-    const q = ref.current;
-    const cx = q.lyrics ? q.g.cx1 : 0;
-    const cy = q.lyrics ? q.g.cy1 : 0;
-    return { x: x - cx, y: y + q.top - cy, s: q.lyrics ? q.g.b0 : q.g.a0, e: q.lyrics ? q.g.b1 : q.g.a1 };
-  };
-  const pAt = (x: number, y: number) => {
-    const l = local(x, y);
-    return Math.max(0, Math.min(1, (Math.atan2(l.y, l.x) - l.s) / (l.e - l.s)));
-  };
-  const near = (x: number, y: number) => {
-    const l = local(x, y);
-    return Math.abs(Math.hypot(l.x, l.y) - ref.current.g.r) < 30;
-  };
-  const last = useRef(0);
-  const pan = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: (e) => near(e.nativeEvent.locationX, e.nativeEvent.locationY),
-        onMoveShouldSetPanResponder: () => false,
-        onPanResponderTerminationRequest: () => false,
-        onPanResponderGrant: (e) => {
-          last.current = pAt(e.nativeEvent.locationX, e.nativeEvent.locationY);
-          setScrub(last.current);
-        },
-        onPanResponderMove: (e) => {
-          last.current = pAt(e.nativeEvent.locationX, e.nativeEvent.locationY);
-          setScrub(last.current);
-        },
-        onPanResponderRelease: () => {
-          if (ref.current.duration > 0) ref.current.seekTo(last.current * ref.current.duration);
-          setScrub(null);
-        },
-        onPanResponderTerminate: () => setScrub(null),
-      }),
-    [] // eslint-disable-line react-hooks/exhaustive-deps
-  );
-
   return (
     <>
       <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -667,7 +696,6 @@ const VinylArc = React.memo(function VinylArc({
         <TextPath path={textPath} font={font} text={cur} initialOffset={0} color={TEXT2} />
         <TextPath path={textPath} font={font} text={right} initialOffset={rightOff} color={failed ? '#FF8A80' : TEXT2} />
       </Canvas>
-      <View {...pan.panHandlers} style={{ position: 'absolute', left: 0, width: W, top, height: bottom - top }} />
     </>
   );
 });
