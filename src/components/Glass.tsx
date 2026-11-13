@@ -85,15 +85,25 @@ export function GlassFill({ radius = 0, solid = 0, slab = false, dark: forceDark
     const ios = Platform.OS === 'ios';
     return (
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, overflow: 'hidden' }]}>
+        {/* Thanh "Độ mờ kính" chỉnh cả độ nhoè lẫn độ đặc: kéo về trái = vật liệu mỏng, nhoè nhẹ, trong (thấy nền phía sau);
+            kéo về phải = vật liệu dày, đặc như màn đa nhiệm. (Bản đầu luôn dùng vật liệu dày nhất ở cường độ tối đa → đặc, không chỉnh được) */}
         {real && (
           <BlurView
-            intensity={ios ? 100 : 70}
-            tint={ios ? (dark ? 'systemThickMaterialDark' : 'systemThickMaterialLight') : dark ? 'dark' : 'light'}
+            intensity={Math.round(ios ? 35 + 65 * g.level : 25 + 50 * g.level)}
+            tint={
+              ios
+                ? g.level < 0.34
+                  ? dark ? 'systemUltraThinMaterialDark' : 'systemUltraThinMaterialLight'
+                  : g.level < 0.67
+                  ? dark ? 'systemThinMaterialDark' : 'systemThinMaterialLight'
+                  : dark ? 'systemMaterialDark' : 'systemMaterialLight'
+                : dark ? 'dark' : 'light'
+            }
             style={StyleSheet.absoluteFill}
           />
         )}
-        {/* nhuộm nhẹ màu theme (đậm dần theo thanh "Độ mờ kính") */}
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: real ? `rgba(${glassRgb},${(0.18 + 0.4 * g.level + solid * 0.1 + (ios ? 0 : 0.3)).toFixed(2)})` : theme.colors.surface }]} />
+        {/* nhuộm nhẹ màu theme, đậm dần theo thanh "Độ mờ kính" */}
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: real ? `rgba(${glassRgb},${(0.04 + 0.32 * g.level + solid * 0.08 + (ios ? 0 : 0.25)).toFixed(2)})` : theme.colors.surface }]} />
         {/* viền sáng mảnh, sáng hơn ở nửa trên */}
         <View style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, borderWidth: StyleSheet.hairlineWidth, borderColor: dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)' }]} />
         {!noRim && (
