@@ -36,6 +36,9 @@ export const playerOrigin: {
 
 // Độ mở của player (0 = mini player, 1 = đầy đủ), dùng chung cho lớp làm mờ nền phía sau (BackdropBlur trong App)
 export const playerProgress = makeMutable(0);
+// 1 = tạm gỡ hẳn màn player (đang đóng) khỏi khung hình — lúc đổi theme chụp ảnh màn hình (ThemeTransition):
+// player đóng chỉ trong suốt (opacity 0) chứ vẫn nằm đó, ảnh chụp phải vẽ cả nó (ảnh bìa to, khói Skia, kính mờ...) → rất chậm
+export const playerShotHide = makeMutable(0);
 // Rect.fade: lớp hiệu ứng mờ dần trong đoạn p 0,08 → 0 (lúc này player đã gần bằng đúng khung nút, lệch vài điểm)
 export const FADE_LAND = 0.08;
 
@@ -334,8 +337,9 @@ export function PlayerTransition({ open, onClose, onClosed, onOpened, onReopen, 
   // Chỉ áp cho kiểu viên mini player (dock Apple Music): viên thật hiện dần theo độ mở trên luồng giao diện nên không hở.
   // Bong bóng thì chỉ hiện lại khi JS báo (onClosed) → giấu sớm ở đây là hở một nhịp không có gì (bong bóng nháy)
   const rootVis = useAnimatedStyle(() => {
-    if (fadeSV.value && sized.value) return { opacity: interpolate(p.value, [0.003, FADE_LAND], [0, 1], 'clamp') };
-    return { opacity: (sized.value || !liveSV.value) && p.value < 0.003 ? 0 : 1 };
+    if (playerShotHide.value && p.value < 0.003) return { opacity: 0, display: 'none' as const };
+    if (fadeSV.value && sized.value) return { opacity: interpolate(p.value, [0.003, FADE_LAND], [0, 1], 'clamp'), display: 'flex' as const };
+    return { opacity: (sized.value || !liveSV.value) && p.value < 0.003 ? 0 : 1, display: 'flex' as const };
   });
   const screen = useAnimatedStyle(() => ({ opacity: interpolate(p.value, [0.22, 0.55], [0, 1], 'clamp') }));
 

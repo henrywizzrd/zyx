@@ -108,7 +108,23 @@ export function ThemeTransition({ children }: { children: React.ReactNode }) {
       switched.current = false;
       try {
         const { captureRef } = require('react-native-view-shot') as typeof import('react-native-view-shot');
-        const uri = await captureRef(root as any, { format: 'jpg', quality: 0.92, result: 'tmpfile' });
+        // Player đang đóng: gỡ tạm khỏi khung hình rồi mới chụp (log 13/11: đổi sang Trời sao trong Theme Studio làm app đơ 7–9 giây
+        // ngay lúc chụp; player đĩa than ẩn bên dưới có ảnh to, khói Skia và kính mờ)
+        const { playerShotHide, playerProgress } = require('../components/PlayerTransition') as typeof import('../components/PlayerTransition');
+        const hide = playerProgress.value < 0.003;
+        if (hide) {
+          playerShotHide.value = 1;
+          await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        }
+        const t0 = Date.now();
+        let uri: string;
+        try {
+          uri = await captureRef(root as any, { format: 'jpg', quality: 0.92, result: 'tmpfile' });
+        } finally {
+          if (hide) playerShotHide.value = 0;
+        }
+        const { log } = require('../data/applog') as typeof import('../data/applog');
+        log('jank', `đổi theme: chụp màn hình ${Date.now() - t0}ms`);
 
         // Bộ có hiệu ứng riêng: nạp ảnh chụp vào Skia để shader "xoá" dần
         let effect: ThemeEffect | null = EFFECT_OF[id];

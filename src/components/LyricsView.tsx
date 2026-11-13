@@ -32,6 +32,8 @@ const styles = StyleSheet.create({
   // Đang tự lướt xem lời: các câu khác hết nhoè để đọc được
   browse: { color: 'rgba(255,255,255,0.5)' },
   near: { color: 'rgba(255,255,255,0.32)', textShadowColor: 'rgba(255,255,255,0.45)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 0 } },
+  // lớp mờ của LyricLine: KHÔNG có bóng chữ (bóng chữ to làm iPhone vẽ chữ rất lâu; cả trăm dòng cùng lúc khi đổi bài)
+  dim: { color: 'rgba(255,255,255,0.3)' },
   far: { color: 'rgba(255,255,255,0.2)', textShadowColor: 'rgba(255,255,255,0.4)', textShadowRadius: 9, textShadowOffset: { width: 0, height: 0 } },
 });
 type LineState = 'active' | 'near' | 'far' | 'browse' | 'plain';
@@ -40,8 +42,10 @@ const stateFor = (d: number): LineState => (d <= 1 ? 'near' : 'far');
 // Một dòng lời = HAI lớp chữ chồng nhau, kiểu chữ không bao giờ đổi: lớp sáng (câu đang hát, có quầng) và lớp mờ (có bóng mềm).
 // Sang câu mới chỉ đổi ĐỘ TRONG của hai lớp (chạy trên GPU, mờ dần ~0,3s). Trước đây đổi kiểu chữ (màu + bóng) của vài dòng
 // mỗi lần sang câu → iPhone phải vẽ lại chữ có bóng to trên luồng giao diện → giao diện khựng ~140ms mỗi lần đổi câu (log 13/11)
-const DIM: Record<LineState, number> = { active: 0, near: 1, far: 0.62, browse: 1, plain: 0 };
-const LyricLine = React.memo(function LyricLine({ text, state }: { text: string; state: LineState }) {
+const DIM: Record<LineState, number> = { active: 0, near: 1, far: 0.6, browse: 1, plain: 0 };
+// Lớp sáng (có quầng) chỉ được dựng cho các dòng quanh câu đang hát (near), dòng xa chỉ có lớp mờ → đổi bài không phải
+// dựng / vẽ cả trăm dòng chữ có quầng
+const LyricLine = React.memo(function LyricLine({ text, state, near }: { text: string; state: LineState; near: boolean }) {
   const lit = state === 'active' || state === 'plain';
   const a = useRef(new Animated.Value(lit ? 1 : 0)).current;
   const d = useRef(new Animated.Value(DIM[state])).current;
@@ -56,8 +60,8 @@ const LyricLine = React.memo(function LyricLine({ text, state }: { text: string;
   }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <View>
-      <Animated.Text style={[styles.line, state === 'browse' ? styles.browse : styles.near, { opacity: d }]}>{text}</Animated.Text>
-      <Animated.Text style={[styles.line, styles.active, { position: 'absolute', left: 0, right: 0, top: 0, opacity: a }]}>{text}</Animated.Text>
+      <Animated.Text style={[styles.line, state === 'browse' ? styles.browse : styles.dim, { opacity: d }]}>{text}</Animated.Text>
+      {(near || lit) && <Animated.Text style={[styles.line, styles.active, { position: 'absolute', left: 0, right: 0, top: 0, opacity: a }]}>{text}</Animated.Text>}
     </View>
   );
 });
@@ -397,7 +401,7 @@ export function LyricsView({
               }}
               style={{ paddingVertical: 6 }}
             >
-              <LyricLine text={l.text} state={!synced ? 'plain' : active ? 'active' : browsing ? 'browse' : stateFor(Math.abs(i - cur))} />
+              <LyricLine text={l.text} near={!synced || Math.abs(i - cur) <= 2} state={!synced ? 'plain' : active ? 'active' : browsing ? 'browse' : stateFor(Math.abs(i - cur))} />
             </Pressable>
           );
         })}
