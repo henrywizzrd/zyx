@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, ScrollView, Share, StyleSheet, Switch, Text, View } from 'react-native';
+import { resetVinylFlags, setVinylFlag, useVinylFlags, VINYL_FLAGS } from '../debug/vinylFlags';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useContentInsets } from '../components/FloatingDock';
@@ -33,6 +34,9 @@ export function LogScreen() {
   // Trượt vào xong mới dựng danh sách (log mở ra khựng ~350ms vì dựng cả trăm dòng cùng lúc với hiệu ứng trượt)
   const entered = useEntered();
   const [filter, setFilter] = useState<Filter>('all');
+  const vflags = useVinylFlags();
+  const offCount = VINYL_FLAGS.filter(([k]) => !vflags[k]).length;
+  const [debugOpen, setDebugOpen] = useState(offCount > 0);
   const n = all.length;
   const rows = useMemo(() => {
     const src = filter === 'all' ? all : all.filter((l) => l.tag === filter);
@@ -74,6 +78,31 @@ export function LogScreen() {
         </View>
       </View>
       <Text style={{ color: textSecondary, fontSize: 13, marginTop: 10 }}>{t('log.hint')}</Text>
+      {/* Dò lỗi player đĩa than: tắt từng phần rồi mở / đóng player, xem nhật ký còn "khựng" không (tạm thời, sẽ gỡ) */}
+      <View style={[styles.debugBox, { borderColor: border, backgroundColor: surface }]}>
+        <Pressable onPress={() => setDebugOpen((v) => !v)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Ionicons name="bug-outline" size={18} color={text} />
+          <Text style={{ flex: 1, color: text, fontWeight: '800', fontSize: 15 }}>Dò lỗi player đĩa than</Text>
+          <Text style={{ color: textSecondary, fontSize: 12 }}>{offCount ? `tắt ${offCount}` : 'đủ'}</Text>
+          <Ionicons name={debugOpen ? 'chevron-up' : 'chevron-down'} size={18} color={textSecondary} />
+        </Pressable>
+        {debugOpen && (
+          <View style={{ marginTop: 8 }}>
+            <Text style={{ color: textSecondary, fontSize: 12, marginBottom: 6 }}>
+              Tắt một phần → mở / đóng player 3–4 lần → xem "luồng JS khựng" / "giao diện khựng" còn không. Mỗi lần bật / tắt đều ghi vào nhật ký.
+            </Text>
+            {VINYL_FLAGS.map(([k, name]) => (
+              <View key={k} style={styles.debugRow}>
+                <Text style={{ flex: 1, color: text, fontSize: 14 }}>{name}</Text>
+                <Switch value={vflags[k]} onValueChange={(v) => setVinylFlag(k, v)} />
+              </View>
+            ))}
+            <Pressable onPress={resetVinylFlags} style={{ alignSelf: 'flex-start', marginTop: 6 }}>
+              <Text style={{ color: accent, fontWeight: '700' }}>Bật lại tất cả</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 14 }}>
         {FILTERS.map((f) => {
           const on = f === filter;
@@ -137,6 +166,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: '800' },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth },
   dot: { width: 8, height: 8, borderRadius: 4 },
+  debugBox: { marginTop: 12, padding: 12, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
+  debugRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
   row: { paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   mono: { fontSize: 11, fontVariant: ['tabular-nums'] },

@@ -12,7 +12,7 @@
 // Mọi thứ đi theo một giá trị lp (0 = đĩa, 1 = lời) chạy trên luồng giao diện.
 // Chỉ dùng cho màn hình dọc; xoay ngang thì dùng bố cục player thường
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image as RNImage, PanResponder, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Image as RNImage, PanResponder, Platform, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation, Easing, interpolate, interpolateColor, useAnimatedReaction, useFrameCallback, useAnimatedStyle, useDerivedValue, useReducedMotion, useSharedValue, withRepeat, withTiming, type SharedValue,
 } from 'react-native-reanimated';
@@ -31,6 +31,8 @@ import { SmartImage } from '../components/Cover';
 import { CloseZone, playerProgress, usePlayerTransition } from '../components/PlayerTransition';
 import { PlayPauseGlyph, SkipGlyph, useBounce } from '../components/PlayerIcons';
 import { useScreenSize } from '../components/ScreenSize';
+import { useVinylFlags } from '../debug/vinylFlags';
+import { log } from '../data/applog';
 
 const ACCENT = '#E8C9A0';
 const TEXT = '#F3EEE8';
@@ -152,6 +154,21 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
   // ...nhưng dựng SAU khi player mở xong (~0,15s sau), không dựng ngay lúc bắt đầu mở: dựng cả trăm dòng chữ đúng lúc hiệu ứng
   // mở player đang chạy làm rớt khung (log 13/11 11:58: khựng 130–250ms ngay đầu mỗi lần mở player)
   const settled = swipe.active && !swipe.moving;
+  const dbg = useVinylFlags(); // bảng dò lỗi (Cài đặt → Nhật ký)
+  // App xuống NỀN (tắt màn hình / sang app khác): đóng băng hẳn phần hình của player — dừng xoay, dừng khói, gỡ hai khung Skia
+  // (khói + thanh thời gian). Nghe nhạc nền không cần chúng, và không để thứ gì trong số đó chạy ngầm ngốn CPU (văng app 16:58:
+  // iOS tắt app vì một luồng JavaScript dùng 84% CPU suốt 1 phút khi đang nghe nền)
+  const [fg, setFg] = useState(AppState.currentState !== 'background');
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => {
+      const on = st !== 'background';
+      setFg((was) => {
+        if (was !== on) log('ui', on ? 'đĩa than: mở băng (app lên lại)' : 'đĩa than: đóng băng khi xuống nền');
+        return on;
+      });
+    });
+    return () => sub.remove();
+  }, []);
   const [lyricsReady, setLyricsReady] = useState(false);
   // Dựng xong thì GIỮ LẠI khi đóng player (trước đây đóng là gỡ, mở lại là dựng lại cả khung lời → luồng JS đứng 1,3–1,7 giây
   // sau MỖI lần mở player, log 13/11 16:52)
@@ -160,7 +177,7 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
     const id = setTimeout(() => setLyricsReady(true), 150);
     return () => clearTimeout(id);
   }, [settled, swipe.active]); // eslint-disable-line react-hooks/exhaustive-deps
-  const lyricsLive = lyricsReady || p.lyricsOpen;
+  const lyricsLive = fg && ((dbg.lyricsPre && lyricsReady) || p.lyricsOpen);
 
   // ---- xoay nhãn: chạy trên luồng giao diện; tạm dừng lúc player đang phóng to / thu nhỏ hoặc đang ẩn
   const rot = useSharedValue(0);
@@ -175,7 +192,7 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
     const id = setTimeout(() => setLate(true), 120);
     return () => clearTimeout(id);
   }, [settled]);
-  const spinning = p.isPlaying && late && !reduced;
+  const spinning = p.isPlaying && late && fg && dbg.spin && !reduced;
   const visible = !swipe.moving && swipe.active;
   useEffect(() => {
     cancelAnimation(rot);
@@ -188,7 +205,7 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
       rot.value = withTiming(from + 10, { duration: 1400, easing: Easing.out(Easing.cubic) });
     }
   }, [spinning]); // eslint-disable-line react-hooks/exhaustive-deps
-  const run = late && !reduced;
+  const run = late && fg && !reduced;
 
   // ---- đổi bài: đĩa cũ trượt đi rồi đĩa bài mới trượt vào (thanh thời gian đứng yên, nền + màu đổi dần cùng lúc)
   //  · đang xem đĩa: trượt chéo ra góc trên trái (khuất hẳn), đĩa mới trượt từ góc đó vào
@@ -215,7 +232,7 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
     if (sw.value > 0.01) sw.value = withTiming(0, { duration: 520, easing: Easing.bezier(0.2, 0.8, 0.25, 1) });
   }, [disc.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // ---- màu theo ảnh bìa: thanh thời gian + nút phát. Đổi bài thì màu chuyển dần sang màu mới (~0,7s)
-  const grad = useCoverGradient(p.track.thumb?.replace(/=(w\d+-h\d+|s\d+)/, '=w120-h120'));
+  const grad = useCoverGradient(!dbg.coverColor ? null : p.track.thumb?.replace(/=(w\d+-h\d+|s\d+)/, '=w120-h120'));
   const accentTo = grad?.accent ?? ACCENT;
   const cFrom = useSharedValue(accentTo);
   const cTo = useSharedValue(accentTo);
@@ -328,14 +345,14 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
 
   return (
     <View style={{ flex: 1 }}>
-      <VinylBackdrop color={p.track.color} grad={grad} run={run} />
+      <VinylBackdrop color={p.track.color} grad={grad} run={run} smoke={fg && dbg.smoke} />
       <StatusBar barStyle="light-content" />
 
       {/* Đĩa (chỉ để nhìn, không nhận chạm) */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <DiscUnder g={g} lp={lp} sw={sw} />
-        <VinylLabel id={disc.id} thumb={disc.thumb} color={disc.color} LR={LR} g={g} lp={lp} sw={sw} rot={rot} />
-        <DiscOver g={g} lp={lp} sw={sw} />
+        {dbg.disc && <DiscUnder g={g} lp={lp} sw={sw} />}
+        {dbg.label && <VinylLabel id={disc.id} thumb={disc.thumb} color={disc.color} LR={LR} g={g} lp={lp} sw={sw} rot={rot} />}
+        {dbg.disc && <DiscOver g={g} lp={lp} sw={sw} ghost={dbg.ghost} />}
       </View>
 
       {/* Lớp nhận cử chỉ ở chỗ trống */}
@@ -361,7 +378,7 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
         </CloseZone>
       )}
 
-      <VinylArc g={g} lp={lp} accent={accent} scrubSV={scrubSV} duration={p.duration} loading={p.loading} failed={p.failed} />
+      {fg && dbg.arc && <VinylArc g={g} lp={lp} accent={accent} scrubSV={scrubSV} duration={p.duration} loading={p.loading} failed={p.failed} />}
 
       {lyricsLive && (
         <Animated.View
@@ -446,7 +463,7 @@ const FALLBACK: number[][] = [
   [0.2, 0.42, 0.62],
   [0.1, 0.12, 0.24],
 ];
-const VinylBackdrop = React.memo(function VinylBackdrop({ color, grad, run }: { color?: string; grad: CoverGradient | null; run: boolean }) {
+const VinylBackdrop = React.memo(function VinylBackdrop({ color, grad, run, smoke }: { color?: string; grad: CoverGradient | null; run: boolean; smoke: boolean }) {
   const win = useScreenSize();
   const effect = useMemo(() => smokeShader(), []);
   const cw = Math.ceil(win.width / SMOKE_DIV);
@@ -464,8 +481,8 @@ const VinylBackdrop = React.memo(function VinylBackdrop({ color, grad, run }: { 
     }
   }, false);
   useEffect(() => {
-    clock.setActive(run);
-  }, [run]); // eslint-disable-line react-hooks/exhaustive-deps
+    clock.setActive(run && smoke);
+  }, [run, smoke]); // eslint-disable-line react-hooks/exhaustive-deps
   // 4 màu: nền tối của màu chính, rồi 3 màu nổi bật
   const target = useMemo(() => {
     const c = grad?.rgb?.length ? grad.rgb : FALLBACK;
@@ -501,7 +518,7 @@ const VinylBackdrop = React.memo(function VinylBackdrop({ color, grad, run }: { 
   });
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { overflow: 'hidden', backgroundColor: color || '#1a1820' }]}>
-      {effect && (
+      {effect && smoke && (
         <Canvas
           style={{
             position: 'absolute',
@@ -626,7 +643,7 @@ const DiscUnder = React.memo(function DiscUnder({ g, lp, sw }: { g: Geo; lp: Sha
 // Viền tối quanh nhãn + lỗ tâm — nằm trên nhãn ảnh (đứng yên, không xoay)
 // ghost: lúc player chưa mở xong (đang mở / thu nhỏ / đang ẩn) vẽ thêm vòng thanh thời gian bằng View — thanh thời gian thật là
 // khung Skia, không được chụp vào ảnh lúc chuyển nên sẽ biến mất rồi hiện lại
-const DiscOver = React.memo(function DiscOver({ g, lp, sw }: { g: Geo; lp: SharedValue<number>; sw: SharedValue<number> }) {
+const DiscOver = React.memo(function DiscOver({ g, lp, sw, ghost }: { g: Geo; lp: SharedValue<number>; sw: SharedValue<number>; ghost: boolean }) {
   // vòng giả luôn nằm sẵn, chỉ hiện khi player chưa mở hẳn (đọc thẳng độ mở player trên luồng giao diện): trước đây nó được
   // dựng mới đúng lúc bắt đầu thu player → thêm việc vào khung hình đầu tiên (khựng 60–75ms đầu mỗi lần vuốt xuống)
   const ghostStyle = useAnimatedStyle(() => ({ opacity: playerProgress.value > 0.995 ? 0 : 1 }));
@@ -640,7 +657,7 @@ const DiscOver = React.memo(function DiscOver({ g, lp, sw }: { g: Geo; lp: Share
       <View style={ring(11, { backgroundColor: '#6d6862' })} />
       <View style={ring(7.5, { backgroundColor: '#c9c3bb' })} />
       <View style={ring(5, { backgroundColor: '#050505' })} />
-      <Animated.View style={[ring(g.r + 1.5, { borderWidth: 3, borderColor: 'rgba(255,255,255,0.18)' }), ghostStyle]} />
+      {ghost && <Animated.View style={[ring(g.r + 1.5, { borderWidth: 3, borderColor: 'rgba(255,255,255,0.18)' }), ghostStyle]} />}
     </Animated.View>
   );
 });

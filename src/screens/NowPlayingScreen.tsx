@@ -26,6 +26,7 @@ import { VectorIcon, type VectorOp } from '../components/VectorIcon';
 import { scheduleOnRN } from 'react-native-worklets';
 import { useScreenSize } from '../components/ScreenSize';
 import { VinylPlayer } from './VinylPlayer';
+import { useVinylFlags } from '../debug/vinylFlags';
 
 // Kiểu khai báo của thư viện chưa khớp React 19, ép kiểu để dùng như component bình thường
 const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
@@ -258,7 +259,8 @@ function VinylNowPlaying({ onClose }: { onClose: () => void }) {
   );
   const [queueOpen, setQueueOpen] = useState(false);
   // tải lời sẵn ngay khi player hiện ra → vuốt đĩa lên là có chữ liền
-  const lyr = useLyrics(track, showLyrics || swipe.active, duration);
+  const vf = useVinylFlags(); // bảng dò lỗi: tắt 'Tải lời sẵn khi mở player' → chỉ tải khi bấm nút lời
+  const lyr = useLyrics(track, showLyrics || (vf.lyricsFetch && swipe.active), duration);
   useRenderProbe('Player đĩa than', { theme, track, isPlaying, duration, loading, failed, shuffle, repeat, liked, active: swipe.active, moving: swipe.moving, showLyrics, queueOpen, lyr: lyr.lyrics, lyrSt: lyr.status, fxOn });
   const isLiked = liked.has(track.id);
   const goPrev = useCallback(() => {
