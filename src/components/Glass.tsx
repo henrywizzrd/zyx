@@ -49,7 +49,10 @@ export const hasLiquidGlass = !!LG;
 // Ba loại kính (Theme Studio): Trong / Mờ / Khói. Thanh "Độ mờ kính" chỉnh độ đậm bên trong loại đó
 // Mờ (frost) làm theo kính của màn đa nhiệm iOS: nhoè đậm, phủ màu theme dày hơn (ngả tối với theme tối),
 // chữ / ảnh phía sau chỉ còn là mảng màu, không đọc được
-export type GlassMaterial = 'clear' | 'frost' | 'smoke';
+// Mờ tối (matte): kiểu kính iOS cổ điển — đúng cái Tyson thấy khi xem app ở màn đa nhiệm (iOS thay Liquid Glass bằng lớp vật liệu
+// nhoè dày "material" của hệ thống): nhoè rất đậm, ngả tối + nhuộm nhẹ màu theme, mép chỉ một viền sáng mảnh, không phản chiếu,
+// không khúc xạ. Không dùng Liquid Glass
+export type GlassMaterial = 'clear' | 'frost' | 'smoke' | 'matte';
 
 // Bóng hai lớp của tấm kính đặt nổi trên mặt bàn (công thức chốt từ trang thử kính):
 // một bóng đậm, gọn sát chân + một bóng mềm, rộng. lift: độ nổi (1 = bình thường, cầm lên thì lớn hơn)
@@ -76,6 +79,33 @@ export function GlassFill({ radius = 0, solid = 0, slab = false, dark: forceDark
   const material: GlassMaterial = theme.glass.material ?? 'clear';
   const dark = glassTint === 'dark';
   const real = Platform.OS !== 'web';
+
+  // ---- Mờ tối: vật liệu nhoè dày của hệ thống
+  if (material === 'matte') {
+    const ios = Platform.OS === 'ios';
+    return (
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, overflow: 'hidden' }]}>
+        {real && (
+          <BlurView
+            intensity={ios ? 100 : 70}
+            tint={ios ? (dark ? 'systemThickMaterialDark' : 'systemThickMaterialLight') : dark ? 'dark' : 'light'}
+            style={StyleSheet.absoluteFill}
+          />
+        )}
+        {/* nhuộm nhẹ màu theme (đậm dần theo thanh "Độ mờ kính") */}
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: real ? `rgba(${glassRgb},${(0.18 + 0.4 * g.level + solid * 0.1 + (ios ? 0 : 0.3)).toFixed(2)})` : theme.colors.surface }]} />
+        {/* viền sáng mảnh, sáng hơn ở nửa trên */}
+        <View style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, borderWidth: StyleSheet.hairlineWidth, borderColor: dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)' }]} />
+        {!noRim && (
+          <LinearGradient
+            colors={[dark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.35)', 'rgba(255,255,255,0)']}
+            locations={[0, 0.35]}
+            style={StyleSheet.absoluteFill}
+          />
+        )}
+      </View>
+    );
+  }
 
   // ---- iOS 26+: Liquid Glass thật (khúc xạ, mép kính, phản chiếu do hệ thống vẽ)
   if (LG && !noRim) {

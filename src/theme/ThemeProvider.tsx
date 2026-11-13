@@ -104,7 +104,7 @@ function sanitize(t: Theme): Theme {
       uri: typeof t.background.uri === 'string' ? t.background.uri : '',
       dim: clampN(t.background.dim, 0, 0.8, d.background.dim),
     },
-    glass: { blur: clampN(t.glass.blur, 0, 100, d.glass.blur), material: ['clear', 'frost', 'smoke'].includes(t.glass.material as string) ? t.glass.material : 'clear' },
+    glass: { blur: clampN(t.glass.blur, 0, 100, d.glass.blur), material: ['clear', 'frost', 'smoke', 'matte'].includes(t.glass.material as string) ? t.glass.material : 'clear' },
     language: (LANGS as readonly string[]).includes(t.language) ? t.language : d.language,
     dock: {
       ...t.dock,
@@ -160,7 +160,7 @@ interface ThemeContextValue {
   setPreset: (id: ThemePresetId, followSystem?: boolean) => void;
   setBackground: (patch: Partial<Theme['background']>) => void;
   setGlassBlur: (blur: number) => void;
-  setGlassMaterial: (m: 'clear' | 'frost' | 'smoke') => void;
+  setGlassMaterial: (m: 'clear' | 'frost' | 'smoke' | 'matte') => void;
   setAmbient: (preset: AmbientPresetId, on: boolean) => void;
   setMeteorLevel: (level: number) => void;
 }

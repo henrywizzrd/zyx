@@ -460,6 +460,7 @@ export const vi = {
   'settings.playerLook': "Kiểu player",
   'settings.playerClassic': "Mặc định",
   'settings.playerVinyl': "Đĩa than",
+  'studio.material.matte': "Mờ tối",
 };
 
 export type StringKey = keyof typeof vi;
@@ -903,4 +904,5 @@ export const en: Record<StringKey, string> = {
   'settings.playerLook': "Player style",
   'settings.playerClassic': "Classic",
   'settings.playerVinyl': "Vinyl",
+  'studio.material.matte': "Matte",
 };
