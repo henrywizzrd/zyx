@@ -22,7 +22,6 @@ import { Canvas, Circle, Fill, Group, Path, RadialGradient, Shader, Skia, SweepG
 import { smokeShader } from '../theme/effects/smoke';
 import { markRender } from '../components/JankMonitor';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BlurView } from 'expo-blur';
 import { useCoverGradient, type CoverGradient } from '../theme/coverGradient';
 import { useT } from '../i18n';
 import { useProgress } from '../player/PlayerProvider';
@@ -369,12 +368,13 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
 
 const PILL = 46;
 
-// Kính mờ đậm hơn nền một chút (iOS: làm nhoè thật; Android: lớp tối trong suốt)
+// Kính tối hơn nền một chút. KHÔNG dùng lớp làm nhoè thật (BlurView): nền khói phía sau vốn đã mềm nên nhoè thêm nhìn gần như
+// không khác, mà mỗi lớp nhoè phải tính lại MỖI khung hình vì nền khói luôn chuyển động — 3 lớp như vậy làm GPU quá tải, nhất là
+// khi đang quay màn hình (iPhone vừa vẽ app vừa nén video). Thay bằng lớp tối trong + viền sáng mảnh ở mép trên
 function Frost({ radius }: { radius: number }) {
   return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius, overflow: 'hidden' }]}>
-      {Platform.OS === 'ios' && <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: Platform.OS === 'ios' ? 'rgba(0,0,0,0.16)' : 'rgba(0,0,0,0.34)' }]} />
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius, borderCurve: 'continuous', overflow: 'hidden', backgroundColor: 'rgba(8,8,14,0.32)' }]}>
+      <View style={{ position: 'absolute', left: radius * 0.6, right: radius * 0.6, top: 0, height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(255,255,255,0.28)' }} />
     </View>
   );
 }
@@ -502,7 +502,7 @@ const VinylLabel = React.memo(function VinylLabel({
   );
 });
 
-// bg (nút phát): kính mờ phủ màu nhấn hơi trong → thấy nhoè nhẹ nền khói phía sau thay vì một khối màu đặc
+// bg (nút phát): màu nhấn hơi trong (thấy nhẹ nền khói phía sau) + viền sáng mảnh
 function Btn({ onPress, bg, children }: { onPress: () => void; bg?: ReturnType<typeof useAnimatedStyle>; children: React.ReactNode }) {
   const b = useBounce();
   return (
@@ -510,10 +510,7 @@ function Btn({ onPress, bg, children }: { onPress: () => void; bg?: ReturnType<t
       <Animated.View style={[styles.btn, b.style]}>
         {bg && (
           <>
-            <View style={[StyleSheet.absoluteFill, { borderRadius: 16, overflow: 'hidden' }]}>
-              {Platform.OS === 'ios' && <BlurView intensity={30} tint="light" style={StyleSheet.absoluteFill} />}
-            </View>
-            <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: 16, borderCurve: 'continuous', opacity: Platform.OS === 'ios' ? 0.78 : 0.92 }, bg]} />
+            <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: 16, borderCurve: 'continuous', opacity: 0.86 }, bg]} />
             <View style={[StyleSheet.absoluteFill, { borderRadius: 16, borderCurve: 'continuous', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.35)' }]} />
           </>
         )}

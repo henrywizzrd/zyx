@@ -86,7 +86,13 @@ export function ThemeTransition({ children }: { children: React.ReactNode }) {
   const applyPreset = useCallback(
     (id: ThemePresetId) => {
       switched.current = true;
+      // đo cả app vẽ lại theo theme mới mất bao lâu (log 13/11: đổi theme → luồng JS đứng 5–9 giây, chưa rõ phần nào)
+      const t0 = Date.now();
       setPreset(id, pendingFollow.current);
+      requestAnimationFrame(() => {
+        const { log } = require('../data/applog') as typeof import('../data/applog');
+        log('jank', `đổi theme: cả app vẽ lại theo theme mới ${Date.now() - t0}ms`);
+      });
     },
     [setPreset]
   );

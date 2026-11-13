@@ -41,10 +41,12 @@ export function useRenderProbe(name: string, deps: Record<string, unknown>) {
   useLayoutEffect(() => {
     markRender(name);
     const dt = performance.now() - t0;
-    // > 1,5s: màn đang ẩn (đóng băng) được vẽ sẵn, tới lúc mở lại mới hiện ra — không phải khựng thật, bỏ qua
-    if (dt < 50 || dt > 1500 || justResumed()) return;
+    if (dt < 50 || justResumed()) return;
     const why = changed == null ? 'lần đầu' : changed.length ? `đổi: ${changed.join(', ')}` : 'trang cha vẽ lại / state riêng';
-    log('jank', `vẽ lại ${name}: ${Math.round(dt)}ms (lần ${n.current}) · ${why}`);
+    // > 1,5s: thường là màn đang ẩn (đóng băng) được vẽ sẵn, tới lúc mở lại mới hiện ra — vẫn ghi (để dò vụ đổi theme đứng
+    // 5–9 giây) nhưng đánh dấu để không nhầm là khựng thật
+    const note = dt > 1500 ? ' · (có thể là màn đang ẩn vừa mở lại)' : '';
+    log('jank', `vẽ lại ${name}: ${Math.round(dt)}ms (lần ${n.current}) · ${why}${note}`);
   });
 }
 
