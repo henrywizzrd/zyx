@@ -149,7 +149,20 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
   }, [p.lyricsOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   // Khung lời dựng SẴN (ẩn) ngay khi player hiện ra, lời cũng được tải sẵn (NowPlayingScreen) → vuốt lên là chữ có liền,
   // không còn khoảng "đang tải" / nháy lúc khung lời mới dựng và đo các dòng
-  const lyricsLive = swipe.active || p.lyricsOpen;
+  // ...nhưng dựng SAU khi player mở xong (~0,15s sau), không dựng ngay lúc bắt đầu mở: dựng cả trăm dòng chữ đúng lúc hiệu ứng
+  // mở player đang chạy làm rớt khung (log 13/11 11:58: khựng 130–250ms ngay đầu mỗi lần mở player)
+  const settled = swipe.active && !swipe.moving;
+  const [lyricsReady, setLyricsReady] = useState(false);
+  useEffect(() => {
+    if (!swipe.active) {
+      setLyricsReady(false);
+      return;
+    }
+    if (!settled || lyricsReady) return;
+    const id = setTimeout(() => setLyricsReady(true), 150);
+    return () => clearTimeout(id);
+  }, [settled, swipe.active]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lyricsLive = lyricsReady || p.lyricsOpen;
 
   // ---- xoay nhãn: chạy trên luồng giao diện; tạm dừng lúc player đang phóng to / thu nhỏ hoặc đang ẩn
   const rot = useSharedValue(0);
@@ -196,9 +209,10 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
   // lúc đó chưa có kích thước, vẽ ra trống, và không bao giờ vẽ lại → mất đĩa (ảnh 13/11 03:44). Mỗi lần player hiện ra /
   // app quay lại từ nền thì dựng lại hai khung đó (rất nhẹ)
   const [epoch, setEpoch] = useState(0);
+  // (dựng lại lúc player đã mở xong, không phải lúc bắt đầu mở — tránh dồn việc vào đúng lúc hiệu ứng mở đang chạy)
   useEffect(() => {
-    if (swipe.active) setEpoch((e) => e + 1);
-  }, [swipe.active]);
+    if (swipe.active && !swipe.moving) setEpoch((e) => e + 1);
+  }, [swipe.active && !swipe.moving]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const sub = AppState.addEventListener('change', (st) => st === 'active' && setEpoch((e) => e + 1));
     return () => sub.remove();
