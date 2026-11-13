@@ -153,11 +153,9 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
   // mở player đang chạy làm rớt khung (log 13/11 11:58: khựng 130–250ms ngay đầu mỗi lần mở player)
   const settled = swipe.active && !swipe.moving;
   const [lyricsReady, setLyricsReady] = useState(false);
+  // Dựng xong thì GIỮ LẠI khi đóng player (trước đây đóng là gỡ, mở lại là dựng lại cả khung lời → luồng JS đứng 1,3–1,7 giây
+  // sau MỖI lần mở player, log 13/11 16:52)
   useEffect(() => {
-    if (!swipe.active) {
-      setLyricsReady(false);
-      return;
-    }
     if (!settled || lyricsReady) return;
     const id = setTimeout(() => setLyricsReady(true), 150);
     return () => clearTimeout(id);
@@ -166,7 +164,18 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
 
   // ---- xoay nhãn: chạy trên luồng giao diện; tạm dừng lúc player đang phóng to / thu nhỏ hoặc đang ẩn
   const rot = useSharedValue(0);
-  const spinning = p.isPlaying && !swipe.moving && swipe.active && !reduced;
+  // Bắt đầu xoay đĩa / chạy khói trễ ~0,12s sau khi mở xong: đúng khung hình cuối của hiệu ứng mở, màn player vừa thôi là
+  // "ảnh chụp" và phải vẽ thật lần đầu — dồn thêm khởi động xoay + khói vào đúng lúc đó làm khung cuối dài 60–90ms (log 16:52)
+  const [late, setLate] = useState(settled);
+  useEffect(() => {
+    if (!settled) {
+      setLate(false);
+      return;
+    }
+    const id = setTimeout(() => setLate(true), 120);
+    return () => clearTimeout(id);
+  }, [settled]);
+  const spinning = p.isPlaying && late && !reduced;
   const visible = !swipe.moving && swipe.active;
   useEffect(() => {
     cancelAnimation(rot);
@@ -179,7 +188,7 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
       rot.value = withTiming(from + 10, { duration: 1400, easing: Easing.out(Easing.cubic) });
     }
   }, [spinning]); // eslint-disable-line react-hooks/exhaustive-deps
-  const run = !swipe.moving && swipe.active && !reduced;
+  const run = late && !reduced;
 
   // ---- đổi bài: đĩa cũ trượt đi rồi đĩa bài mới trượt vào (thanh thời gian đứng yên, nền + màu đổi dần cùng lúc)
   //  · đang xem đĩa: trượt chéo ra góc trên trái (khuất hẳn), đĩa mới trượt từ góc đó vào

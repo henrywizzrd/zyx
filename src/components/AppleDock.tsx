@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { useT } from '../i18n';
 import { TabId } from '../theme/types';
+import { requestSearchFocus } from '../screens/searchFocus';
 import { DockGlyph } from './DockIcons';
 import { LABELS } from './FloatingDock';
 import { GlassFill, glassShadow } from './Glass';
@@ -374,7 +375,13 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
           <Animated.View pointerEvents="box-none" style={[styles.abs, { right: M, bottom: 0, width: H, height: H }, barsOut]}>
           <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: H / 2 }, glassShadow(1, light), searchStyle]}>
             <GlassFill radius={H / 2} solid={0.5} slab noRim={noRim} />
-            <Pressable testID="dock-search" onPress={() => onChange('search')} {...squish(searchPress, 1.12)} style={[StyleSheet.absoluteFill, styles.center]}>
+            <Pressable
+              testID="dock-search"
+              onPress={() => {
+                // giống dock ZYX: sang trang Tìm kiếm và bật luôn ô tìm kiếm (lịch sử trượt xuống, bàn phím hiện)
+                onChange('search');
+                requestSearchFocus();
+              }} {...squish(searchPress, 1.12)} style={[StyleSheet.absoluteFill, styles.center]}>
               <DockGlyph id="search" size={27} color={active === 'search' ? theme.colors.accent : theme.colors.text} />
             </Pressable>
           </Animated.View>

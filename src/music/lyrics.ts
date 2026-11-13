@@ -9,6 +9,7 @@ const BASE = 'https://lrclib.net/api';
 // Kho lời của SimpMusic: lưu theo đúng mã video YouTube (videoId), nên mốc thời gian khớp đúng bản đang phát
 const SIMP = 'https://api-lyrics.simpmusic.org/v1';
 const cache = new Map<string, Lyrics | null>();
+const inflight = new Map<string, Promise<Lyrics | null>>();
 const MAX_DURATION_DIFF = 3; // giây
 
 // Bỏ các đoạn như (feat. ...), (Remix), (Remastered) để dễ khớp tên bài
@@ -155,12 +156,22 @@ export function useLyrics(track: Track, enabled: boolean, duration = 0) {
     let dead = false;
     setState({ status: 'loading', lyrics: null });
     if (!known && !waited) return; // còn đang chờ trình phát báo độ dài bài
-    fetchLyrics(track, duration)
-      .catch(() => null)
-      .then((l) => {
-        cache.set(track.id, l);
-        if (!dead) setState({ status: 'done', lyrics: l });
-      });
+    // cùng một bài chỉ tải MỘT lần dù được gọi lại khi đang tải (đóng / mở player liên tục) — trước đây mỗi lần là một lượt
+    // tải mới (log 13/11: tra lời Zing 2 lần liền cho cùng một bài)
+    let job = inflight.get(track.id);
+    if (!job) {
+      job = fetchLyrics(track, duration)
+        .catch(() => null)
+        .then((l) => {
+          cache.set(track.id, l);
+          inflight.delete(track.id);
+          return l;
+        });
+      inflight.set(track.id, job);
+    }
+    job.then((l) => {
+      if (!dead) setState({ status: 'done', lyrics: l });
+    });
     return () => {
       dead = true;
     };

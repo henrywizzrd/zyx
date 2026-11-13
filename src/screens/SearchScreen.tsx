@@ -5,7 +5,7 @@ import { ScalePressable } from '../components/PressScale';
 import { Stagger } from '../components/Stagger';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import RAnimated, { useAnimatedScrollHandler, useSharedValue as useRShared } from 'react-native-reanimated';
+import RAnimated, { Easing as REasing, FadeInDown, FadeInUp, FadeOutDown, FadeOutUp, useAnimatedScrollHandler, useSharedValue as useRShared } from 'react-native-reanimated';
 import { useDockCollapse } from '../components/dockCollapse';
 import { BlurView } from 'expo-blur';
 import { useGlass, GlassFill, glassShadow } from '../components/Glass';
@@ -23,6 +23,8 @@ import { searchUsers, UserRow } from '../data/community';
 
 // Lịch sử tìm kiếm: các từ khoá gần đây (mới nhất trước), hiện khi bấm vào ô tìm kiếm còn trống
 const HISTORY = 'search:history';
+const EASE_OUT = REasing.bezier(0.23, 1, 0.32, 1);
+const EASE_IN_OUT = REasing.bezier(0.77, 0, 0.175, 1);
 const HISTORY_MAX = 12;
 const addHistory = (q: string) => {
   const v = q.trim();
@@ -160,6 +162,7 @@ export function SearchScreen() {
   const [usersFor, setUsersFor] = useState<string | null>(null);
   const [usersFailed, setUsersFailed] = useState(false);
   const [focused, setFocused] = useState(false);
+  const searchAnim = useRef(false);
   const dbv = useDbVersion();
   const history = useMemo(() => kvGet<string[]>(HISTORY) ?? [], [dbv]); // eslint-disable-line react-hooks/exhaustive-deps
   // đo thời gian vẽ lại (vào trang + bật bàn phím từng làm luồng JS đứng 2,5 giây)
@@ -550,18 +553,28 @@ export function SearchScreen() {
           <Text style={{ color: accent, fontWeight: '700', fontSize: 14 }}>{tr('search.clearHistory')}</Text>
         </Pressable>
       </View>
-      {history.map((h) => (
-        <Pressable key={h} onPress={() => runSearch(h)} style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 }, pressed && { opacity: 0.6 }]}>
+      {history.map((h, i) => (
+        // từng dòng lịch sử trượt xuống từ ô tìm kiếm, nối đuôi nhau (dòng sau trễ hơn dòng trước một chút)
+        <RAnimated.View key={h} entering={searchAnim.current ? FadeInDown.duration(240).delay(70 + Math.min(i, 8) * 28).easing(EASE_OUT) : undefined}>
+        <Pressable onPress={() => runSearch(h)} style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 }, pressed && { opacity: 0.6 }]}>
           <Ionicons name="time-outline" size={20} color={textSecondary} />
           <Text numberOfLines={1} style={{ flex: 1, color: text, fontSize: 16 }}>{h}</Text>
           <Pressable onPress={() => removeHistory(h)} hitSlop={10}>
             <Ionicons name="close" size={18} color={textSecondary} />
           </Pressable>
         </Pressable>
+        </RAnimated.View>
       ))}
     </View>
   );
   const showHistory = focused && !searching && history.length > 0;
+  // Chạm ô tìm kiếm (hoặc nút Tìm kiếm trên dock): mục "Duyệt tất cả" trượt xuống biến mất, lịch sử trượt xuống từ ô tìm kiếm.
+  // Chạm chỗ trống: lịch sử trượt ngược lên chui vào ô tìm kiếm, "Duyệt tất cả" trượt lên lại.
+  // Chỉ bật hiệu ứng sau lần chạm ô tìm kiếm đầu tiên (không chạy lúc trang vừa dựng)
+  if (focused) searchAnim.current = true;
+  const blurSearch = () => {
+    if (focused) inputRef.current?.blur();
+  };
 
   const musicBody = (
     <>
@@ -738,12 +751,31 @@ export function SearchScreen() {
 
         {searchBox}
 
-        {showHistory ? historyList : !searching ? browse : !showResults ? suggestions : (
+        {/* chạm vào chỗ trống bên dưới ô tìm kiếm → thôi tìm (cất bàn phím, lịch sử thu lại) */}
+        <Pressable onPress={blurSearch} accessible={false} style={{ minHeight: 400 }}>
+        {showHistory ? (
+          <RAnimated.View
+            key="history"
+            entering={searchAnim.current ? FadeInDown.duration(240).delay(60).easing(EASE_OUT) : undefined}
+            exiting={FadeOutUp.duration(190).easing(EASE_IN_OUT)}
+          >
+            {historyList}
+          </RAnimated.View>
+        ) : !searching ? (
+          <RAnimated.View
+            key="browse"
+            entering={searchAnim.current ? FadeInUp.duration(300).delay(110).easing(EASE_OUT) : undefined}
+            exiting={FadeOutDown.duration(200).easing(EASE_IN_OUT)}
+          >
+            {browse}
+          </RAnimated.View>
+        ) : !showResults ? suggestions : (
           <View style={{ marginTop: 14, gap: 4 }}>
             {chipRow}
             {resultsBody}
           </View>
         )}
+        </Pressable>
       </View>
     </RAnimated.ScrollView>
   );
