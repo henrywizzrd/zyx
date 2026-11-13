@@ -159,8 +159,11 @@ function PresetCard({ id, selected, width, onPress }: {
 }
 
 // Trang Giao diện: bộ màu, nền (màu / ảnh / GIF / video), độ tối nền, độ mờ kính
+// Màu đèn neon cho loại kính Neon ('' = theo màu nhấn của theme)
+const NEON_COLORS = ['', '#7EF0FF', '#FF5FD2', '#B78CFF', '#6CFF9E', '#FFD15C', '#FF8A3D', '#FF4D6D'];
+
 export function ThemeStudioScreen() {
-  const { theme, setBackground, setGlassBlur, setGlassMaterial, setAmbient, setMeteorLevel } = useTheme();
+  const { theme, setBackground, setGlassBlur, setGlassMaterial, setGlassNeon, setAmbient, setMeteorLevel } = useTheme();
   const { changePreset } = useThemeTransition();
   const scheme = useColorScheme();
   const t = useT();
@@ -322,12 +325,16 @@ export function ThemeStudioScreen() {
         {/* Loại kính: Trong / Mờ / Khói / Mờ tối (dock, mini player, bảng bật lên, thẻ...) */}
         <Text style={[styles.label, { color: text, marginTop: 18 }]}>{t('studio.material')}</Text>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-          {(['clear', 'frost', 'smoke', 'matte'] as const).map((m) => {
+          {(['clear', 'frost', 'smoke', 'matte', 'neon'] as const).map((m) => {
             const on = (theme.glass.material ?? 'clear') === m;
             return (
               <Pressable
                 key={m}
-                onPress={() => setGlassMaterial(m)}
+                onPress={() => {
+                  setGlassMaterial(m);
+                  // Mờ tối: mặc định bản MỎNG (nhoè nhẹ, trong) — kéo thanh Độ mờ kính sang phải để dày / đặc hơn
+                  if (m === 'matte' && (theme.glass.material ?? 'clear') !== 'matte') setGlassBlur(15);
+                }}
                 style={{ flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 14, borderCurve: 'continuous', backgroundColor: on ? accent : theme.colors.surface }}
               >
                 <Text style={{ color: on ? theme.colors.onAccent : text, fontWeight: '700' }}>{t(`studio.material.${m}` as const)}</Text>
@@ -335,6 +342,31 @@ export function ThemeStudioScreen() {
             );
           })}
         </View>
+
+        {/* Neon: chọn màu đèn (ô đầu = màu nhấn của theme). Mỗi ô tự phát sáng đúng màu của nó */}
+        {theme.glass.material === 'neon' && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 14 }}>
+            {NEON_COLORS.map((c) => {
+              const col = c || accent;
+              const on = (theme.glass.neon ?? '') === c;
+              return (
+                <Pressable
+                  key={c || 'auto'}
+                  onPress={() => setGlassNeon(c)}
+                  hitSlop={6}
+                  accessibilityLabel={c || t('studio.neon.auto')}
+                  style={{
+                    width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: 'rgba(8,8,20,0.6)', borderWidth: on ? 2 : 1, borderColor: col,
+                    boxShadow: `0px 0px ${on ? 14 : 7}px ${col}`,
+                  }}
+                >
+                  {c === '' ? <Text style={{ color: col, fontSize: 11, fontWeight: '800' }}>A</Text> : <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: col, boxShadow: `0px 0px 6px ${col}` }} />}
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
 
         {/* Kính mờ */}
         <View style={styles.sliderHead}>

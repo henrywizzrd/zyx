@@ -37,7 +37,7 @@ export interface Theme {
   // color: màu nền của bộ màu (tính tự động). uri: file ảnh/video ('' = chưa có). dim: độ tối phủ lên ảnh/video cho dễ đọc chữ (0..0.8)
   background: { type: BackgroundType; color: string; uri: string; dim: number };
   colors: Palette; // tính tự động từ preset, không tự sửa
-  glass: { blur: number; material?: 'clear' | 'frost' | 'smoke' | 'matte' }; // độ mờ kính (0..100) + loại kính: Trong / Mờ / Khói / Mờ tối
+  glass: { blur: number; material?: 'clear' | 'frost' | 'smoke' | 'matte' | 'neon'; neon?: string }; // độ mờ kính (0..100) + loại kính: Trong / Mờ / Khói / Mờ tối / Neon; neon: màu đèn ('' = màu nhấn theme)
   // Hiệu ứng nền của từng bộ: tuyết rơi (Snow), lá rơi (Green), bong bóng + cá (Ocean), hạt cà phê (Latte)
   // meteorLevel: mật độ sao băng của bộ Mưa sao băng (0 = ít, 1 = vừa, 2 = nhiều, 3 = bão sao băng)
   effects: { ambient: Record<AmbientPresetId, boolean>; meteorLevel?: number };

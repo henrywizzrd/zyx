@@ -104,7 +104,11 @@ function sanitize(t: Theme): Theme {
       uri: typeof t.background.uri === 'string' ? t.background.uri : '',
       dim: clampN(t.background.dim, 0, 0.8, d.background.dim),
     },
-    glass: { blur: clampN(t.glass.blur, 0, 100, d.glass.blur), material: ['clear', 'frost', 'smoke', 'matte'].includes(t.glass.material as string) ? t.glass.material : 'clear' },
+    glass: {
+      blur: clampN(t.glass.blur, 0, 100, d.glass.blur),
+      material: ['clear', 'frost', 'smoke', 'matte', 'neon'].includes(t.glass.material as string) ? t.glass.material : 'clear',
+      neon: typeof t.glass.neon === 'string' && /^(#[0-9a-fA-F]{6})?$/.test(t.glass.neon) ? t.glass.neon : '',
+    },
     language: (LANGS as readonly string[]).includes(t.language) ? t.language : d.language,
     dock: {
       ...t.dock,
@@ -160,7 +164,8 @@ interface ThemeContextValue {
   setPreset: (id: ThemePresetId, followSystem?: boolean) => void;
   setBackground: (patch: Partial<Theme['background']>) => void;
   setGlassBlur: (blur: number) => void;
-  setGlassMaterial: (m: 'clear' | 'frost' | 'smoke' | 'matte') => void;
+  setGlassMaterial: (m: 'clear' | 'frost' | 'smoke' | 'matte' | 'neon') => void;
+  setGlassNeon: (c: string) => void; // màu đèn neon ('' = màu nhấn theme)
   setAmbient: (preset: AmbientPresetId, on: boolean) => void;
   setMeteorLevel: (level: number) => void;
 }
@@ -274,6 +279,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setBackground: (patch) => setThemeState((t) => derive({ ...t, background: { ...t.background, ...patch } })),
       setGlassBlur: (blur) => setThemeState((t) => ({ ...t, glass: { ...t.glass, blur: Math.max(0, Math.min(100, blur)) } })),
       setGlassMaterial: (material) => setThemeState((t) => ({ ...t, glass: { ...t.glass, material } })),
+      setGlassNeon: (neon) => setThemeState((t) => ({ ...t, glass: { ...t.glass, neon } })),
       setAmbient: (preset, on) =>
         setThemeState((t) => ({ ...t, effects: { ...t.effects, ambient: { ...t.effects.ambient, [preset]: on } } })),
       setMeteorLevel: (level) => setThemeState((t) => ({ ...t, effects: { ...t.effects, meteorLevel: Math.max(0, Math.min(3, Math.round(level))) } })),

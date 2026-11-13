@@ -52,7 +52,7 @@ export const hasLiquidGlass = !!LG;
 // Mờ tối (matte): kiểu kính iOS cổ điển — đúng cái Tyson thấy khi xem app ở màn đa nhiệm (iOS thay Liquid Glass bằng lớp vật liệu
 // nhoè dày "material" của hệ thống): nhoè rất đậm, ngả tối + nhuộm nhẹ màu theme, mép chỉ một viền sáng mảnh, không phản chiếu,
 // không khúc xạ. Không dùng Liquid Glass
-export type GlassMaterial = 'clear' | 'frost' | 'smoke' | 'matte';
+export type GlassMaterial = 'clear' | 'frost' | 'smoke' | 'matte' | 'neon';
 
 // Bóng hai lớp của tấm kính đặt nổi trên mặt bàn (công thức chốt từ trang thử kính):
 // một bóng đậm, gọn sát chân + một bóng mềm, rộng. lift: độ nổi (1 = bình thường, cầm lên thì lớn hơn)
@@ -80,6 +80,28 @@ export function GlassFill({ radius = 0, solid = 0, slab = false, dark: forceDark
   const dark = glassTint === 'dark';
   const real = Platform.OS !== 'web';
 
+  // ---- Neon: gần như trong suốt (nhoè rất nhẹ + lớp tối mỏng), chỉ có viền phát sáng màu đèn (chọn trong Theme Studio).
+  // Quầng sáng toả RA NGOÀI nên lớp viền nằm ngoài khung cắt (không overflow: hidden), còn lớp nhoè nằm trong khung cắt
+  if (material === 'neon') {
+    const col = theme.glass.neon || theme.colors.accent;
+    return (
+      <>
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, overflow: 'hidden' }]}>
+          {real && <BlurView intensity={Math.round(10 + 30 * g.level)} tint="dark" style={StyleSheet.absoluteFill} />}
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: `rgba(8,8,20,${(0.22 + 0.4 * g.level + solid * 0.1 + (Platform.OS === 'android' ? 0.15 : 0)).toFixed(2)})` }]} />
+        </View>
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            SQUIRCLE,
+            { borderRadius: radius, borderWidth: 1.2, borderColor: col, boxShadow: `0px 0px 12px ${col}99, inset 0px 0px 9px ${col}40` },
+          ]}
+        />
+      </>
+    );
+  }
+
   // ---- Mờ tối: vật liệu nhoè dày của hệ thống
   if (material === 'matte') {
     const ios = Platform.OS === 'ios';
@@ -103,7 +125,7 @@ export function GlassFill({ radius = 0, solid = 0, slab = false, dark: forceDark
           />
         )}
         {/* nhuộm nhẹ màu theme, đậm dần theo thanh "Độ mờ kính" */}
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: real ? `rgba(${glassRgb},${(0.04 + 0.32 * g.level + solid * 0.08 + (ios ? 0 : 0.25)).toFixed(2)})` : theme.colors.surface }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: real ? `rgba(${glassRgb},${(0.12 + 0.28 * g.level + solid * 0.08 + (ios ? 0 : 0.2)).toFixed(2)})` : theme.colors.surface }]} />
         {/* viền sáng mảnh, sáng hơn ở nửa trên */}
         <View style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, borderWidth: StyleSheet.hairlineWidth, borderColor: dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)' }]} />
         {!noRim && (
