@@ -130,7 +130,8 @@ export type VinylProps = {
   children?: React.ReactNode; // hàng chờ...
 };
 
-export function VinylPlayer(p: VinylProps) {
+// memo: chỉ vẽ lại khi có prop thật sự đổi (các phần truyền vào đều được dựng sẵn bằng useMemo ở NowPlayingScreen)
+export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
   const win = useScreenSize();
   const W = win.width;
   const H = win.height;
@@ -350,7 +351,7 @@ export function VinylPlayer(p: VinylProps) {
       {p.children}
     </View>
   );
-}
+});
 
 const PILL = 46;
 

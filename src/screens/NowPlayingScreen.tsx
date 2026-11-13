@@ -1,5 +1,5 @@
 import { useRenderProbe } from '../components/JankMonitor';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Platform, Pressable, Share, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -193,7 +193,150 @@ const layoutMemo = { blockH: 52, slotW: 0, infoH: 0, headerH: 0 };
 const posMemo = { ax: 0, ay: 0, lx: 0, ly: 0, ok: false };
 
 
+// Màn player: chọn bố cục. Kiểu Đĩa than (màn dọc) là một component RIÊNG chỉ có đúng những gì nó cần — trước đây nó nằm chung
+// trong player thường nên mỗi lần vẽ lại phải chạy cả ~30 hook / hiệu ứng của bố cục thường (~50ms trên luồng JS mỗi lần)
 export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
+  const { theme } = useTheme();
+  const win = useScreenSize();
+  if (theme.player.look === 'vinyl' && win.width <= win.height) return <VinylNowPlaying onClose={onClose} />;
+  return <ClassicNowPlaying onClose={onClose} />;
+}
+
+// Nút chọn chế độ âm thanh (dùng ở player Đĩa than)
+function useFxPicker() {
+  const sheet = useActionSheet();
+  const t = useT();
+  const fxMode = useFxMode();
+  const fxSpeed = useFxSpeed();
+  const fxOn = fxMode !== 'off' || fxSpeed !== 'normal';
+  const pickFx = () => {
+    const opts: { id: FxMode; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
+      { id: 'off', label: t('fx.off'), icon: 'musical-note-outline' },
+      { id: '8d', label: t('fx.8d'), icon: 'sync-outline' },
+      { id: 'hall', label: t('fx.hall'), icon: 'business-outline' },
+    ];
+    sheet.openActions({ title: t('fx.title'), subtitle: t('fx.hint'), icon: 'headset-outline' }, [
+      ...opts.map((o) => ({ label: o.label, icon: fxMode === o.id ? 'checkmark-circle' : o.icon, on: fxMode === o.id, run: () => setFxMode(o.id) })),
+      {
+        label: t('fx.speed'),
+        icon: 'speedometer-outline' as const,
+        on: fxSpeed !== 'normal',
+        run: () => {},
+        chips: FX_SPEEDS.map((sp) => ({ label: t(`fx.speed.${sp}` as const), on: fxSpeed === sp, run: () => setFxSpeed(sp) })),
+      },
+      { label: t('fx.sendLog'), icon: 'bug-outline' as const, run: () => {
+          setTimeout(() => Share.share({ message: fxLogText() || '(trống)' }).catch(() => {}), 300);
+        },
+      },
+    ]);
+  };
+  const ref = useRef(pickFx);
+  ref.current = pickFx;
+  const stable = useCallback(() => ref.current(), []);
+  return { fxOn, pickFx: stable };
+}
+
+const V_ICON = { width: 40, height: 40, alignItems: 'center' as const, justifyContent: 'center' as const };
+
+function VinylNowPlaying({ onClose }: { onClose: () => void }) {
+  const { theme } = useTheme();
+  ON = onColor(theme.colors.accent);
+  const t = useT();
+  const { fxOn, pickFx } = useFxPicker();
+  const {
+    track, isPlaying, duration, loading, failed,
+    togglePlay, next, prev, seekTo, shuffle, repeat, toggleShuffle, cycleRepeat, liked, toggleLike,
+  } = usePlayerPick('track', 'isPlaying', 'duration', 'loading', 'failed', 'togglePlay', 'next', 'prev', 'seekTo', 'shuffle', 'repeat', 'toggleShuffle', 'cycleRepeat', 'liked', 'toggleLike');
+  const idle = track.id === 'none';
+  const title = idle ? t('np.idleTitle') : track.title;
+  const artist = idle ? t('np.idleArtist') : track.artist;
+  const swipe = usePlayerTransition();
+  const [showLyrics, setShowLyricsState] = useState(() => lyricsOpen);
+  const setShowLyrics = useCallback(
+    (v: boolean | ((p: boolean) => boolean)) => setShowLyricsState((p) => (lyricsOpen = typeof v === 'function' ? v(p) : v)),
+    []
+  );
+  const [queueOpen, setQueueOpen] = useState(false);
+  // tải lời sẵn ngay khi player hiện ra → vuốt đĩa lên là có chữ liền
+  const lyr = useLyrics(track, showLyrics || swipe.active, duration);
+  useRenderProbe('Player đĩa than', { theme, track, isPlaying, duration, loading, failed, shuffle, repeat, liked, active: swipe.active, moving: swipe.moving, showLyrics, queueOpen, lyr: lyr.lyrics, lyrSt: lyr.status, fxOn });
+  const isLiked = liked.has(track.id);
+  const goPrev = useCallback(() => {
+    swapDir = -1;
+    prev();
+  }, [prev]);
+
+  // Các phần dựng sẵn bằng useMemo: chỉ dựng lại khi chính nó đổi
+  const lyricsNode = useMemo(() => <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} fadeStops={[0.3, 0.6]} />, [lyr.status, lyr.lyrics, seekTo]);
+  const volume = useMemo(() => <VolumeBar vertical />, []);
+  const likeNode = useMemo(
+    () => (
+      <Pressable onPress={() => track.id !== 'none' && toggleLike(track.id)} hitSlop={6} style={V_ICON}>
+        <LikePop on={isLiked} color={ON}>
+          <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={22} color={isLiked ? ON : '#FFFFFF'} />
+        </LikePop>
+      </Pressable>
+    ),
+    [isLiked, track.id, toggleLike, theme.colors.accent] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const fxNode = useMemo(
+    () => (
+      <Pressable onPress={pickFx} hitSlop={10} style={styles.sideBtn}>
+        <Ionicons name={fxOn ? 'headset' : 'headset-outline'} size={22} color={fxOn ? ON : SOFT} />
+      </Pressable>
+    ),
+    [fxOn, pickFx, theme.colors.accent] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const icons = useMemo(
+    () => (
+      <>
+        <Pressable onPress={() => setShowLyrics((v) => !v)} hitSlop={6} style={V_ICON}>
+          <LyricsIcon on={showLyrics} />
+        </Pressable>
+        <Pressable onPress={() => setQueueOpen(true)} hitSlop={6} style={V_ICON}>
+          <QueueIcon />
+        </Pressable>
+        <CtlBtn onPress={toggleShuffle} style={V_ICON}>
+          <Ionicons name="shuffle" size={ICON} color={shuffle ? ON : SOFT} />
+        </CtlBtn>
+        <CtlBtn onPress={cycleRepeat} style={V_ICON}>
+          <RepeatIcon mode={repeat} color={repeat !== 'off' ? ON : SOFT} />
+        </CtlBtn>
+      </>
+    ),
+    [showLyrics, shuffle, repeat, toggleShuffle, cycleRepeat, setShowLyrics, theme.colors.accent] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const closeQueue = useCallback(() => setQueueOpen(false), []);
+  const queue = useMemo(() => <QueueSheet visible={queueOpen} onClose={closeQueue} />, [queueOpen, closeQueue]);
+
+  return (
+    <VinylPlayer
+      track={track}
+      isPlaying={isPlaying}
+      loading={loading}
+      failed={failed}
+      duration={duration}
+      togglePlay={togglePlay}
+      next={next}
+      prev={goPrev}
+      seekTo={seekTo}
+      onClose={onClose}
+      title={title}
+      artist={artist}
+      lyricsOpen={showLyrics}
+      setLyricsOpen={setShowLyrics}
+      lyrics={lyricsNode}
+      volume={volume}
+      like={likeNode}
+      fx={fxNode}
+      icons={icons}
+    >
+      {queue}
+    </VinylPlayer>
+  );
+}
+
+function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
   const { theme } = useTheme();
   ON = onColor(theme.colors.accent);
   const sheet = useActionSheet();
@@ -270,8 +413,7 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
     shuffle, repeat, liked, pad, songMenu, moving: swipe.moving, active: swipe.active, win, insets, showLyrics, queueOpen,
   });
 
-  // Kiểu Đĩa than: tải lời sẵn ngay khi player hiện ra → vuốt đĩa lên là có chữ liền
-  const lyr = useLyrics(track, landscape ? landLyrics : showLyrics || (theme.player.look === 'vinyl' && swipe.active), duration);
+  const lyr = useLyrics(track, landscape ? landLyrics : showLyrics, duration);
 
   // ---- Chuyển ảnh bìa ⇄ lời (giống Apple Music): một giá trị lp chạy 0 → 1 trên UI thread, mọi thứ đi theo nó:
   //  ảnh bìa lớn nhoè dần + tối đi, ảnh nhỏ hiện ra ở góc trên, tên bài bay từ dưới lên cạnh ảnh nhỏ (và nhỏ lại),
@@ -658,60 +800,6 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
         {GrabBar}
         <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} inModal />
       </View>
-    );
-  }
-
-  // ================= Màn hình dọc: kiểu Đĩa than (Cài đặt → Kiểu player) =================
-  if (theme.player.look === 'vinyl') {
-    const vIcon = { width: 40, height: 40, alignItems: 'center' as const, justifyContent: 'center' as const };
-    return (
-      <VinylPlayer
-        track={track}
-        isPlaying={isPlaying}
-        loading={loading}
-        failed={failed}
-        duration={duration}
-        togglePlay={togglePlay}
-        next={next}
-        prev={() => {
-          swapDir = -1;
-          prev();
-        }}
-        seekTo={seekTo}
-        onClose={onClose}
-        title={title}
-        artist={artist}
-        lyricsOpen={showLyrics}
-        setLyricsOpen={setShowLyrics}
-        lyrics={<LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} fadeStops={[0.3, 0.6]} />}
-        volume={<VolumeBar vertical />}
-        like={
-          <Pressable onPress={() => track.id !== 'none' && toggleLike(track.id)} hitSlop={6} style={vIcon}>
-            <LikePop on={isLiked} color={ON}>
-              <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={22} color={isLiked ? ON : '#FFFFFF'} />
-            </LikePop>
-          </Pressable>
-        }
-        fx={FxButton}
-        icons={
-          <>
-            <Pressable onPress={() => setShowLyrics((v) => !v)} hitSlop={6} style={vIcon}>
-              <LyricsIcon on={showLyrics} />
-            </Pressable>
-            <Pressable onPress={() => setQueueOpen(true)} hitSlop={6} style={vIcon}>
-              <QueueIcon />
-            </Pressable>
-            <CtlBtn onPress={toggleShuffle} style={vIcon}>
-              <Ionicons name="shuffle" size={ICON} color={shuffle ? ON : SOFT} />
-            </CtlBtn>
-            <CtlBtn onPress={cycleRepeat} style={vIcon}>
-              <RepeatIcon mode={repeat} color={repeat !== 'off' ? ON : SOFT} />
-            </CtlBtn>
-          </>
-        }
-      >
-        <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} />
-      </VinylPlayer>
     );
   }
 
