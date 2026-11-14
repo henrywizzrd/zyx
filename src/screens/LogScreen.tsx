@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, ScrollView, Share, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { resetVinylFlags, setVinylFlag, useVinylFlags, VINYL_FLAGS } from '../debug/vinylFlags';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
@@ -92,10 +92,14 @@ export function LogScreen() {
               Tắt một phần → mở / đóng player 3–4 lần → xem "luồng JS khựng" / "giao diện khựng" còn không. Mỗi lần bật / tắt đều ghi vào nhật ký.
             </Text>
             {VINYL_FLAGS.map(([k, name]) => (
-              <View key={k} style={styles.debugRow}>
-                <Text style={{ flex: 1, color: text, fontSize: 14 }}>{name}</Text>
-                <Switch value={vflags[k]} onValueChange={(v) => setVinylFlag(k, v)} />
-              </View>
+              // Chạm cả dòng để bật / tắt. (Trước dùng Switch của iOS nhưng gạt không ăn trên màn này — log không có dòng
+              // "dò lỗi: TẮT" nào; nút Pressable "Bật lại tất cả" thì ăn → dùng Pressable cho chắc)
+              <Pressable key={k} onPress={() => setVinylFlag(k, !vflags[k])} style={styles.debugRow} hitSlop={4}>
+                <Text style={{ flex: 1, color: vflags[k] ? text : textSecondary, fontSize: 14 }}>{name}</Text>
+                <View style={[styles.pill, { backgroundColor: vflags[k] ? accent : border }]}>
+                  <Text style={{ color: vflags[k] ? onAccent : text, fontWeight: '800', fontSize: 12 }}>{vflags[k] ? 'BẬT' : 'TẮT'}</Text>
+                </View>
+              </Pressable>
             ))}
             <Pressable onPress={resetVinylFlags} style={{ alignSelf: 'flex-start', marginTop: 6 }}>
               <Text style={{ color: accent, fontWeight: '700' }}>Bật lại tất cả</Text>
@@ -167,7 +171,8 @@ const styles = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18, borderWidth: StyleSheet.hairlineWidth },
   dot: { width: 8, height: 8, borderRadius: 4 },
   debugBox: { marginTop: 12, padding: 12, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
-  debugRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
+  debugRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+  pill: { minWidth: 48, alignItems: 'center', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999 },
   row: { paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   mono: { fontSize: 11, fontVariant: ['tabular-nums'] },

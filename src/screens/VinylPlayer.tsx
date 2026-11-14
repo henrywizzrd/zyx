@@ -352,7 +352,8 @@ export const VinylPlayer = React.memo(function VinylPlayer(p: VinylProps) {
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         {dbg.disc && <DiscUnder g={g} lp={lp} sw={sw} />}
         {dbg.label && <VinylLabel id={disc.id} thumb={disc.thumb} color={disc.color} LR={LR} g={g} lp={lp} sw={sw} rot={rot} />}
-        {dbg.disc && <DiscOver g={g} lp={lp} sw={sw} ghost={dbg.ghost} />}
+        {dbg.disc && <DiscOver g={g} lp={lp} sw={sw} />}
+        {dbg.ghost && <GhostArc g={g} lp={lp} sw={sw} W={W} H={H} />}
       </View>
 
       {/* Lớp nhận cử chỉ ở chỗ trống */}
@@ -643,10 +644,7 @@ const DiscUnder = React.memo(function DiscUnder({ g, lp, sw }: { g: Geo; lp: Sha
 // Viền tối quanh nhãn + lỗ tâm — nằm trên nhãn ảnh (đứng yên, không xoay)
 // ghost: lúc player chưa mở xong (đang mở / thu nhỏ / đang ẩn) vẽ thêm vòng thanh thời gian bằng View — thanh thời gian thật là
 // khung Skia, không được chụp vào ảnh lúc chuyển nên sẽ biến mất rồi hiện lại
-const DiscOver = React.memo(function DiscOver({ g, lp, sw, ghost }: { g: Geo; lp: SharedValue<number>; sw: SharedValue<number>; ghost: boolean }) {
-  // vòng giả luôn nằm sẵn, chỉ hiện khi player chưa mở hẳn (đọc thẳng độ mở player trên luồng giao diện): trước đây nó được
-  // dựng mới đúng lúc bắt đầu thu player → thêm việc vào khung hình đầu tiên (khựng 60–75ms đầu mỗi lần vuốt xuống)
-  const ghostStyle = useAnimatedStyle(() => ({ opacity: playerProgress.value > 0.995 ? 0 : 1 }));
+const DiscOver = React.memo(function DiscOver({ g, lp, sw }: { g: Geo; lp: SharedValue<number>; sw: SharedValue<number> }) {
   const { R } = g;
   const LR = R * LABEL;
   const style = useDiscStyle(g, lp, sw);
@@ -657,7 +655,23 @@ const DiscOver = React.memo(function DiscOver({ g, lp, sw, ghost }: { g: Geo; lp
       <View style={ring(11, { backgroundColor: '#6d6862' })} />
       <View style={ring(7.5, { backgroundColor: '#c9c3bb' })} />
       <View style={ring(5, { backgroundColor: '#050505' })} />
-      {ghost && <Animated.View style={[ring(g.r + 1.5, { borderWidth: 3, borderColor: 'rgba(255,255,255,0.18)' }), ghostStyle]} />}
+    </Animated.View>
+  );
+});
+
+// Vòng thanh thời gian GIẢ (View thường): lúc chuyển cảnh, cả player được chụp thành ảnh mà ảnh chụp không có phần vẽ bằng
+// Skia → vòng giả thay chỗ cho đường ray của thanh thời gian. Luôn nằm sẵn, chỉ hiện khi player chưa mở hẳn (đọc thẳng độ mở
+// player trên luồng giao diện: dựng mới đúng lúc bắt đầu thu player thì khựng 60–75ms khung đầu).
+// Vòng tròn đủ thì dài hơn thanh thật → lúc kéo player xuống thấy thanh "dãn ra hai bên". Thanh thật luôn chạy từ x = M tới
+// x = W − M (cả khi xem đĩa lẫn khi xem lời) → cắt vòng giả đúng trong dải đó là trùng khít với thanh thật
+const GhostArc = React.memo(function GhostArc({ g, lp, sw, W, H }: { g: Geo; lp: SharedValue<number>; sw: SharedValue<number>; W: number; H: number }) {
+  const style = useDiscStyle(g, lp, sw);
+  const shown = useAnimatedStyle(() => ({ opacity: playerProgress.value > 0.995 ? 0 : 1 }));
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: M, top: 0, width: W - 2 * M, height: H, overflow: 'hidden' }, shown]}>
+      <Animated.View style={[{ position: 'absolute', left: -M, top: 0, width: 0, height: 0 }, style]}>
+        <View style={ring(g.r + 1.5, { borderWidth: 3, borderColor: 'rgba(255,255,255,0.18)' })} />
+      </Animated.View>
     </Animated.View>
   );
 });
