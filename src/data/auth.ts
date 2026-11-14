@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { kvGet, kvSet, useDbVersion } from './db';
+import { log } from './applog';
 
 // ---------------------------------------------------------------------------
 // Đăng nhập, dùng server Supabase thật:
@@ -38,9 +39,17 @@ export function useSession(): Session | null {
 // Mở app: kiểm tra phiên của Supabase còn hiệu lực không (bị đăng xuất từ chỗ khác, hết hạn...) để khớp lại
 export async function syncSession() {
   try {
-    const { data } = await sb().auth.getSession();
+    const { data, error } = await sb().auth.getSession();
     const cur = kvGet<Current>(CURRENT);
-    if (!data.session && cur) kvSet(CURRENT, null);
+    if (!data.session && cur) {
+      // Chỉ đăng xuất khi chắc chắn phiên không còn: không có lỗi (máy không còn lưu phiên), hoặc server trả lời rõ là
+      // phiên / mã làm mới không hợp lệ (400/401/403). Lỗi mạng / server chập chờn lúc mở app (vd. app vừa văng rồi mở lại
+      // ngay) thì GIỮ đăng nhập — trước đây mọi lỗi đều đẩy người dùng về màn đăng nhập
+      const status = (error as any)?.status as number | undefined;
+      const definite = !error || status === 400 || status === 401 || status === 403;
+      log('ui', `phiên đăng nhập: không còn phiên (${error ? `lỗi ${status ?? '?'}: ${error.message}` : 'máy không lưu phiên'}) → ${definite ? 'đăng xuất' : 'giữ đăng nhập'}`);
+      if (definite) kvSet(CURRENT, null);
+    }
     // Bản cũ chưa lưu id tài khoản: bổ sung (hồ sơ / bài đăng giờ lưu riêng theo từng tài khoản)
     else if (data.session && cur && cur.id !== data.session.user.id) kvSet(CURRENT, { ...cur, id: data.session.user.id });
   } catch {}
