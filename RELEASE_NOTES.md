@@ -1,12 +1,18 @@
-## ZYX v1.1.1 — crash fix for Android
+## ZYX v1.1.2
 
-### Fixed
-- **Android:** the app could close by itself when moving to the next song while the player was showing on the lock screen / notification. This affected many Android phones and is now fixed.
+### New
+- **Log by day:** Settings › Log now keeps the last 14 days. Switch between a day list and a calendar (top right), tap a day to open its log.
+- **Send your log in one tap:** open a day and tap **Send** to copy it, share it as a file, or email it straight to the developer.
+- **Crash reports:** if ZYX closes unexpectedly, the log from just before it is saved and sent to the developer automatically. You can turn this off in **Settings › Send crash reports**.
+- **Reorder songs:** hold a song in your own playlists or in Liked Songs and drag it up or down.
+- **Hearts and downloads in song lists:** tap the heart next to a song to like or unlike it. Downloaded songs show a green arrow, and a small ring fills up while a song downloads.
+
+### Improved
+- **Glass styles:** Clear, Frosted and Smoked now look clearly different across the whole app, not just the dock.
 
 ### Install
-- **Android:** download `Zyx.apk` below and install it over your current version — no need to uninstall.
-- **iPhone:** nothing to do. This fix is Android-only, and your app keeps receiving updates automatically.
+- **Already using ZYX 1.1.0 or 1.1.1?** Close and reopen the app — it updates by itself.
+- **New install:** download `Zyx.apk` (Android) or `Zyx-unsigned.ipa` (iPhone, sign it with ESign / Sideloadly) below.
+- **Android, still on 1.1.0?** Please install `Zyx.apk` from this page over your current version: it fixes a crash when skipping songs, which an in-app update cannot fix.
 
-> Still on a test build from before v1.1.0? Uninstall it first, then install this version.
-
-Found a bug? Open **Settings › Log**, tap **Share › Copy**, and post it in our [Discord](https://discord.gg/stmhyUDurQ) with a screenshot or screen recording.
+Found a bug? Open **Settings › Log**, tap a day, then **Send › Send to the developer**, or post it in our [Discord](https://discord.gg/stmhyUDurQ).

@@ -6,10 +6,10 @@ import { log } from '../data/applog';
 
 // One-off popup for Android users still on the 1.1.0 APK: that build crashes when skipping songs with
 // lock-screen controls (Sentry REACT-NATIVE-2) and only a new APK fixes it — an OTA update cannot.
-// OK opens the v1.1.1 release page, Cancel hides the popup for a day.
-const FIXED_IN = '1.1.1';
+// OK opens the newest release page (v1.1.2, which has the fix too), Cancel hides the popup for a day.
+const FIXED_IN = '1.1.2';
 const AFFECTED = ['1.1.0'];
-const RELEASE_URL = 'https://github.com/henrywizzrd/zyx/releases/tag/v1.1.1';
+const RELEASE_URL = 'https://github.com/henrywizzrd/zyx/releases/tag/v1.1.2';
 const SNOOZE_KEY = 'zyx.updateNotice.snoozedUntil';
 
 async function installedNativeVersion(): Promise<string | null> {
