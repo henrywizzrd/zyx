@@ -204,7 +204,8 @@ export function log(tag: LogTag, msg: string) {
   if (tag === 'error' || tag === 'jank' || AppState.currentState !== 'active') flushLog();
   notify();
   // black box: warning signs send a log snapshot right away (see blackbox.ts)
-  if (tag === 'jank') {
+  // Not while the app is in the background or just switching: the OS pauses the app there, which only looks like a freeze
+  if (tag === 'jank' && !line.bg && line.t - lastStateChange > 3000) {
     const ms = Number(/(\d+)ms/.exec(msg)?.[1] ?? 0);
     if (ms >= 2000) blackBox()?.blackBoxSnapshot('freeze', msg);
   }
@@ -248,6 +249,7 @@ export function logToText(arr: LogLine[]) {
 }
 
 // lazy require: blackbox imports this file
+let lastStateChange = 0; // when the app last went to / came back from the background
 function blackBox(): typeof import('./blackbox') | null {
   try {
     return require('./blackbox') as typeof import('./blackbox');
@@ -296,6 +298,7 @@ export function installAppLog() {
 
   // App vào nền / quay lại
   AppState.addEventListener('change', (st) => {
+    lastStateChange = Date.now();
     log('ui', `app → ${st}`);
     if (st !== 'active') flushLog();
   });

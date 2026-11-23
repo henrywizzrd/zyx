@@ -696,8 +696,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       if (s.isLoaded && s.duration > 0) setDuration((d) => (Math.abs(d - s.duration) > 0.5 ? s.duration : d));
       // Hết bài mà trình phát KHÔNG có bài kế tiếp xếp sẵn (có thì nó tự chuyển, app chỉ cập nhật theo ở onTrackChange):
       // báo của thư viện, hoặc tự nhận biết khi đã chạy tới cuối và dừng
+      // Android: when a new song is loaded, the player sometimes reports "finished" for it after 0.2 s
+      // (log 23/11, Galaxy S21 FE: the app skipped through songs on its own, several times a second).
+      // Trust "finished" only near the real end of the song.
+      const nearEnd = !(s.duration > 0) || s.currentTime >= s.duration - 2; // length unknown: keep trusting it
+      if (s.didJustFinish && !nearEnd) flog(`báo hết sai (ở ${s.currentTime.toFixed(1)}/${(s.duration ?? 0).toFixed(1)}s) → bỏ qua`, 'music');
       const ended =
-        s.didJustFinish ||
+        (s.didJustFinish && nearEnd) ||
         (!audio().hasNext() && s.isLoaded && s.duration > 0 && !s.playing && s.currentTime >= s.duration - 0.3);
       if (ended && !loadingRef.current && endedFor.current !== reqId.current) {
         endedFor.current = reqId.current;
