@@ -1,7 +1,7 @@
 import React, { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { installAppLog, log, previousSession, setLogContext } from './src/data/applog';
 import { reportPreviousRun } from './src/data/blackbox';
-import { beginMotion, endMotion, JankMonitor, setPerfInfo, useRenderProbe } from './src/components/JankMonitor';
+import { beginMotion, endMotion, JankMonitor, setPerfInfo, useRenderProbe, heapMB } from './src/components/JankMonitor';
 import { updateCoverTint } from './src/theme/coverTint';
 import { LogScreen } from './src/screens/LogScreen';
 import { StatsScreen } from './src/screens/StatsScreen';
@@ -467,11 +467,12 @@ function Boot({ children }: { children: React.ReactNode }) {
         const idle: (cb: () => void) => void = (globalThis as any).requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 0));
         idle(() => {
           const s0 = Date.now();
+          const h0 = heapMB();
           try {
             ytmusic()
               .getSession()
               .catch(() => {})
-              .finally(() => log('ui', `khởi động: ${parts.join(', ')}; vào app sau ${shownAt}ms (${why}); phiên phát nhạc ${Date.now() - s0}ms (chạy nền sau khi vào app)`));
+              .finally(() => log('ui', `khởi động: ${parts.join(', ')}; vào app sau ${shownAt}ms (${why}); phiên phát nhạc ${Date.now() - s0}ms (chạy nền sau khi vào app) · bộ nhớ JS ${h0 || '?'} → ${heapMB() || '?'}`));
           } catch {}
         });
       }, 1200);

@@ -9,6 +9,13 @@ interface ICache {
 // Bộ nhớ đệm cho youtubei.js, lưu thành file trong thư mục cache của app.
 // Quan trọng nhất là "player" của YouTube đã phân tích sẵn: lần mở app sau, nếu YouTube chưa đổi player,
 // thư viện lấy luôn từ đây thay vì tải lại và phân tích lại (việc nặng nhất khi chuẩn bị phát nhạc).
+// Startup diagnostics (log 23/11: iPhone 8 Plus froze 11 s and JS memory hit 264 MB while preparing playback)
+function cacheLog(msg: string) {
+  try {
+    (require('../data/applog') as typeof import('../data/applog')).log('music', `bộ nhớ đệm player: ${msg}`);
+  } catch {}
+}
+
 export class FileCache implements ICache {
   cache_dir = 'youtubei';
 
@@ -22,8 +29,12 @@ export class FileCache implements ICache {
   async get(key: string): Promise<ArrayBuffer | undefined> {
     try {
       const f = this.file(key);
-      if (!f.exists) return undefined;
+      if (!f.exists) {
+        cacheLog(`không có sẵn "${key}" → phải tải và phân tích lại`);
+        return undefined;
+      }
       const bytes = await f.bytes();
+      cacheLog(`dùng lại "${key}" (${Math.round(bytes.byteLength / 1024)}KB)`);
       return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
     } catch {
       return undefined;
@@ -35,6 +46,7 @@ export class FileCache implements ICache {
       const f = this.file(key);
       if (!f.exists) f.create();
       await f.write(new Uint8Array(value));
+      cacheLog(`đã lưu "${key}" (${Math.round(value.byteLength / 1024)}KB)`);
     } catch (e) {
       console.warn('[ytcache] set', e);
     }

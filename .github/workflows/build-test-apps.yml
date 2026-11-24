@@ -208,6 +208,10 @@ jobs:
       - name: ZYX Beta variant
         if: github.ref_name == 'beta'
         run: node scripts/ci/beta-variant.js
+      # [hotfix] / [critical] updates ask the user to restart right away; every other update applies quietly on next launch
+      - name: Mark critical update
+        if: contains(github.event.head_commit.message, '[hotfix]') || contains(github.event.head_commit.message, '[critical]')
+        run: node -e "const f='app.json';const j=JSON.parse(require('fs').readFileSync(f));j.expo.extra.updatePriority='critical';require('fs').writeFileSync(f,JSON.stringify(j,null,2))"
       # Đẩy riêng iOS và Android: để "all" thì nó đóng gói cả bản web (app không dùng web, và expo-sqlite trên web lỗi)
       - name: Push OTA update (preview for [update], production for [release] / [hotfix], beta on the beta branch)
         env:

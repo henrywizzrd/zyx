@@ -142,7 +142,7 @@ export function setPerfInfo(s: string) {
 let winStart = Date.now();
 let jsWorst = 0;
 let lastQuiet = 0;
-function heapMB() {
+export function heapMB() {
   try {
     const st = (globalThis as any).HermesInternal?.getInstrumentedStats?.();
     const b = st?.js_heapSize ?? st?.js_allocatedBytes;
