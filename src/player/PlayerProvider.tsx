@@ -560,6 +560,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const togglePlay = useCallback(() => {
     if (!musicSupported || queueRef.current.length === 0) return;
     flog('người dùng bấm phát / dừng trong app', 'music');
+    userToggleAt.current = Date.now();
     // Hàng đợi khôi phục từ lần mở app trước: nạp bài rồi tua tới chỗ đang nghe dở
     if (needsLoad.current) {
       const cur = queueRef.current[indexRef.current];
@@ -641,6 +642,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return () => sub.remove();
   }, []);
   const lastStatus = useRef<{ playing: boolean; isBuffering: boolean; isLoaded: boolean; currentTime: number } | null>(null);
+  const userToggleAt = useRef(0); // when the user last pressed play / pause inside the app
   // Theo dõi trạng thái thật của trình phát
   useEffect(() => {
     if (!musicSupported) return;
@@ -672,6 +674,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       if (AppState.currentState === 'active') {
         setProgress(s.currentTime);
         checkFrameLoop('trình phát (báo giờ)');
+      }
+      // The song stopped and the app didn't ask for it: iOS / Android paused it (call, notification sound, Siri, alarm,
+      // headphones or Bluetooth disconnected, or pause pressed on the lock screen / headphones). Logged so we can tell
+      // these apart from bugs (log 24/11 00:40: music stopped at 193/205 s in the background and never came back).
+      const prev = lastStatus.current;
+      if (prev?.playing && !s.playing && !s.isBuffering && s.isLoaded && !loadingRef.current && Date.now() - userToggleAt.current > 1500 && !(s.duration > 0 && s.currentTime >= s.duration - 1)) {
+        flog(`dừng không phải do app (cuộc gọi / thông báo / Siri, tai nghe hoặc Bluetooth ngắt, hay bấm dừng ở màn hình khoá / tai nghe) · ${AppState.currentState === 'active' ? 'đang mở app' : 'app ở nền'}`, 'music');
       }
       lastStatus.current = { playing: s.playing, isBuffering: s.isBuffering, isLoaded: s.isLoaded, currentTime: s.currentTime };
       if (s.isLoaded) loadAtRef.current = 0; // bài đã nạp xong

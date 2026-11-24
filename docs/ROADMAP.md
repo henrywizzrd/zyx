@@ -1,0 +1,36 @@
+# ZYX roadmap (beta)
+
+Working notes for what's next. Agreed items are done one at a time on the `beta` branch, tested in ZYX Beta, then batched into the weekly stable update.
+
+## Release rules (agreed 24/11)
+- Stable gets about **one update a week**. Updates download quietly and apply the next time the app opens.
+- `[hotfix]` / `[critical]` only for bugs that stop people listening; those still ask to restart right away.
+
+## 1. Use less memory, keep the same animations
+Goal: old / low-RAM phones (iPhone 8 Plus, 3 GB) stop getting closed by iOS in the background, without changing how the app looks or moves. Animations themselves cost almost nothing; memory goes to what is drawn.
+
+Steps, lowest risk first:
+1. **Audit (read only):** list every place that holds images, glass/blur layers, Skia canvases and pre-built tabs, with a size estimate for each.
+2. **Right-sized images:** vinyl label, cover art and theme backgrounds decoded at the size shown on that phone (the vinyl label is drawn at 1280 px today, about 6.5 MB).
+3. **Free memory in the background:** clear the image memory cache and unmount the vinyl player / background effects while only audio plays; rebuild on return.
+4. **Background effects at half resolution:** smoke, aurora and rain are soft shapes, so drawing the Skia canvas at 0.5× and scaling up looks the same for about ¼ of the memory.
+5. **Fewer glass layers:** merge neighbouring blur areas and trim each to the part that is actually visible.
+6. **Don't keep all four tabs forever:** release tabs that haven't been opened for a while.
+7. **Image cache limit** for the image library.
+
+Open question: logs only measure JS memory. iOS closes apps by total memory, so we still need a way to log the app's total footprint (check whether this is possible without a new native build).
+
+## 2. Playback session at startup
+Logs from 23/11 (iPhone 8 Plus: 11 s freeze, 264 MB; Galaxy S21 FE: 6.4 s, 176 MB) line up with preparing the playback session (downloading and running YouTube's player code). Startup now logs JS memory before/after and player-cache hit/miss. When the data confirms it, options are a server-side step on Supabase or running it off the JS thread. Discuss before building.
+
+## 3. Music stopping on its own in the background
+Log 24/11 00:40 (beta, 8D on): the song stopped at 193/205 s while the app was in the background and never resumed. The app did not pause it: expo-audio on iOS pauses on an audio interruption (call, notification sound, Siri, alarm) and resumes only if iOS says so, and pauses when headphones / Bluetooth disconnect. The log now marks these as "dừng không phải do app". Next: find out which case it is, then decide whether to resume after interruptions.
+
+## 4. Later
+- Christmas effects
+- Background downloads, smaller downloads (audio-only blocked → 360p video, up to 185 MB per song)
+- Search / Library jank; 1–2 s JS freeze after closing the player and switching tab
+- Android: slow tab switches and high memory on mid-range phones
+- Import from YouTube Music, Spotify, SoundCloud, Apple Music (announced for early December)
+- Local music files (FLAC/ALAC; EAC3-JOC to be tested)
+- Staged rollouts and an automated test on a low-end Android emulator
