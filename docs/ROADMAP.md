@@ -26,7 +26,22 @@ Logs from 23/11 (iPhone 8 Plus: 11 s freeze, 264 MB; Galaxy S21 FE: 6.4 s, 176 M
 ## 3. Music stopping on its own in the background
 Log 24/11 00:40 (beta, 8D on): the song stopped at 193/205 s while the app was in the background and never resumed. The app did not pause it: expo-audio on iOS pauses on an audio interruption (call, notification sound, Siri, alarm) and resumes only if iOS says so, and pauses when headphones / Bluetooth disconnect. The log now marks these as "dừng không phải do app". Next: find out which case it is, then decide whether to resume after interruptions.
 
-## 4. Later
+## 4. Ideas saved for later (24/11)
+
+### Admin page (Tyson is the only admin)
+- An admin role in the app; only the admin account sees a separate Admin page.
+- **User list:** every user by username only (never email or password), with their device model.
+- **Health light per user:** green = fine, yellow = minor errors now and then, red = crashes. Lets us spot which devices crash often and optimise for them.
+- **Tap a user** to open their logs.
+- Notes for when we build it: logs then go to our server automatically, so this follows the "Send crash reports" switch and needs a clear line in the privacy text; the admin check must live on the server (Supabase row-level security), not only in the app.
+
+### ZYX Wrapped (year in review, like Spotify Wrapped)
+- Asked for by a user on Discord.
+- Story-style screens from the listening history: minutes listened, top songs / artists, most-replayed song, plus a shareable image.
+- Check first what the play history stores (e.g. real time listened). New users this year will have a thin recap.
+- Could ship with the early-December update.
+
+## 5. Later
 - Christmas effects
 - Background downloads, smaller downloads (audio-only blocked → 360p video, up to 185 MB per song)
 - Search / Library jank; 1–2 s JS freeze after closing the player and switching tab
