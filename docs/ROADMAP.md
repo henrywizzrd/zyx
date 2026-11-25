@@ -35,6 +35,27 @@ Log 24/11 00:40 (beta, 8D on): the song stopped at 193/205 s while the app was i
 - **Tap a user** to open their logs.
 - Notes for when we build it: logs then go to our server automatically, so this follows the "Send crash reports" switch and needs a clear line in the privacy text; the admin check must live on the server (Supabase row-level security), not only in the app.
 
+### Home redesign (planned for Friday 27/11)
+Tyson shared 4 reference shots (25/11, from TikTok @webdesign.ui; not stored in the repo). What to borrow from each:
+- **Warm health app (coral/pink):** one huge number in light type ("84/100") under a thin arc gauge, a short friendly sentence above it, translucent cards on a soft gradient, a round pill-shaped bottom nav, white pill buttons.
+- **Hotel app (teal mountains):** a full-bleed photo behind everything with a tint, "Hello Sindy" greeting with avatar and bell, round filter chips in a row, horizontal photo cards with a small overlay label, "See all" on each section.
+- **Tennis app (deep blue):** big two-line headline over a hero image, a row of two stat chips, a stats card with a smooth line chart, list rows with a round play button, a thin weekly progress bar.
+- **Cycle app (soft pink):** one-colour palette from light to dark, Day / Month switch, a bar chart with the selected day highlighted, insight rows with tiny sparklines, an image card with a short call to action.
+
+How that could map onto ZYX Home (to confirm on Friday):
+- **Hero:** the current song's cover as a tinted full-bleed backdrop (we already compute 4 colours from the cover), greeting + avatar, and one big number such as minutes listened this week.
+- **Chips:** moods / genres / "Downloaded" as round chips.
+- **Carousels:** Recently played, Your mixes, New for you as photo cards with a frosted label.
+- **Listening card:** this week's listening as a bar chart (Day / Week switch), today highlighted; doubles as a teaser for ZYX Wrapped.
+- **Rows:** quick picks as list rows with a round play button.
+- Colours follow the user's theme, so every theme gets its own version of this look.
+
+Friday plan:
+1. Look at the current Home code and data (what each section shows, what stats we have).
+2. Make 2–3 mockups in Claude Design for Tyson to pick from (no code yet).
+3. Build the chosen one on beta, a section at a time, and test it in ZYX Beta.
+4. Keep the memory plan in mind: images at display size, few blur layers, no extra always-running animations.
+
 ### ZYX Wrapped (year in review, like Spotify Wrapped)
 - Asked for by a user on Discord.
 - Story-style screens from the listening history: minutes listened, top songs / artists, most-replayed song, plus a shareable image.
