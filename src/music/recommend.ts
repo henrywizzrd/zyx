@@ -16,12 +16,18 @@
 //     in a row.
 // Batches are 10 songs; the player asks for the next batch when 4 songs are left (so at song 6 of 10),
 // and the Queue sheet asks for more when scrolled to the bottom.
+//
+// New listeners (27/11): the genres picked on the welcome screen (kv zyx.favGenres) are a fourth source while
+// there is little listening history. Two of them are searched on YouTube Music each batch and their songs get a
+// bonus; the bonus shrinks with every song listened to (30 s or more) and is gone after GENRE_FADE songs, from
+// then on the queue follows the user's own taste only. Shown in the Queue as "Your genres".
 import type { Track } from '../data/mock';
 import type { Song } from './ytmusic';
-import { getTaste } from '../data/db';
+import { getTaste, kvGet } from '../data/db';
+import { ytmusic } from './lazy';
 import { log as appLog } from '../data/applog';
 
-export type SuggestReason = 'artist' | 'similar';
+export type SuggestReason = 'artist' | 'similar' | 'genre';
 export interface Suggestion {
   song: Song;
   reason: SuggestReason; // shown in the Queue: "You like" (known artist) or "Similar"
@@ -34,6 +40,28 @@ const artistKey = (a: string) => (a || '').split(',')[0].trim().toLowerCase();
 // Radios already fetched (seed id → songs), kept 30 minutes
 const RADIO_TTL = 30 * 60 * 1000;
 const radioCache = new Map<string, { at: number; songs: Song[] }>();
+
+// Genres from the welcome screen → what to search. Vietnamese genres get Vietnamese queries
+const GENRE_FADE = 8;
+const GENRE_QUERY: Record<string, string> = {
+  'V-Pop': 'nhạc V-Pop hot',
+  'Rap Việt': 'Rap Việt hay nhất',
+  Bolero: 'nhạc Bolero hay nhất',
+  Ballad: 'nhạc Ballad Việt',
+  Lofi: 'lofi chill songs',
+};
+const genreQuery = (g: string) => GENRE_QUERY[g] ?? `${g} hits`;
+// genres whose songs often carry "lofi" / "acoustic" in the title: don't drop those as versions
+const VERSION_GENRES = new Set(['Lofi', 'Acoustic', 'Chill']);
+const genreCache = new Map<string, { at: number; songs: Song[] }>();
+async function genreSongs(g: string): Promise<Song[]> {
+  const q = genreQuery(g);
+  const hit = genreCache.get(q);
+  if (hit && Date.now() - hit.at < RADIO_TTL) return hit.songs;
+  const songs = await ytmusic().searchSongs(q);
+  genreCache.set(q, { at: Date.now(), songs });
+  return songs;
+}
 
 // Session memory (cleared when the app restarts)
 const sessionPlayed = new Set<string>();
@@ -85,10 +113,24 @@ export async function suggestNext({
     await new Promise((r) => setTimeout(r, 0)); // let the UI breathe between two parses
   }
 
+  // New listeners: songs from 2 of the genres they picked, weighted by how little they have listened so far
+  const favGenres = kvGet<string[]>('zyx.favGenres') ?? [];
+  const genreWeight = favGenres.length ? Math.max(0, 1 - taste.listens / GENRE_FADE) : 0;
+  const genreLists: { genre: string; songs: Song[] }[] = [];
+  if (genreWeight > 0) {
+    const two = [...favGenres].sort(() => Math.random() - 0.5).slice(0, 2);
+    for (const g of two) {
+      try {
+        genreLists.push({ genre: g, songs: (await genreSongs(g)).slice(0, 20) });
+      } catch {}
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
+
   // The most-listened artist sets the scale for the artist bonus
   const maxArtist = Math.max(1, ...taste.artists.values());
   const now = Date.now();
-  type Cand = { song: Song; hits: number; best: number; seed: Track };
+  type Cand = { song: Song; hits: number; best: number; seed: Track; genre?: boolean };
   const cands = new Map<string, Cand>();
   radios.forEach((r, i) => {
     if (r.status !== 'fulfilled') return;
@@ -106,6 +148,21 @@ export async function suggestNext({
     });
   });
 
+  genreLists.forEach(({ genre, songs }) => {
+    const allowVersions = VERSION_GENRES.has(genre);
+    songs.forEach((song, pos) => {
+      if (exclude.has(song.id) || sessionPlayed.has(song.id) || uniq.some((s) => s.id === song.id)) return;
+      if (!allowVersions && VERSION.test(song.title)) return;
+      const rank = 1 - pos / Math.max(1, songs.length);
+      const c = cands.get(song.id);
+      if (c) {
+        c.hits += 1;
+        c.best = Math.max(c.best, rank);
+        c.genre = true;
+      } else cands.set(song.id, { song, hits: 1, best: rank, seed: uniq[0], genre: true });
+    });
+  });
+
   const scored = [...cands.values()].map((c) => {
     const key = artistKey(c.song.artist);
     const artistLove = (taste.artists.get(key) ?? 0) / maxArtist; // 0..1
@@ -116,7 +173,9 @@ export async function suggestNext({
     else if (days < 14) score -= 1;
     if (taste.skipped.has(c.song.id)) score -= 4;
     score -= (sessionArtistSkips.get(key) ?? 0) * 1.5;
-    return { ...c, key, score, reason: (artistLove > 0.15 ? 'artist' : 'similar') as SuggestReason };
+    if (c.genre) score += 3 * genreWeight; // fades to 0 as the user listens
+    const reason: SuggestReason = artistLove > 0.15 ? 'artist' : c.genre && genreWeight > 0 ? 'genre' : 'similar';
+    return { ...c, key, score, reason };
   });
   scored.sort((a, b) => b.score - a.score);
 
@@ -134,7 +193,8 @@ export async function suggestNext({
   }
   appLog(
     'music',
-    `suggestions: ${out.length}/${cands.size} from ${uniq.length} seeds (${uniq.map((s) => s.title.slice(0, 18)).join(' · ')})`
+    `suggestions: ${out.length}/${cands.size} from ${uniq.length} seeds (${uniq.map((s) => s.title.slice(0, 18)).join(' · ')})` +
+      (genreLists.length ? ` + genres ${genreLists.map((g) => g.genre).join(', ')} at ${Math.round(genreWeight * 100)}% (${taste.listens} listens)` : '')
   );
   return out.map((c) => ({ song: c.song, reason: c.reason, seed: c.seed }));
 }

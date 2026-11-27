@@ -193,7 +193,7 @@ export function QueueSheet({ visible, onClose, inModal }: { visible: boolean; on
       {/* Suggested songs: why this one (an artist you listen to a lot, or similar to what's playing) */}
       {q.auto && q.why && !current && (
         <View style={[styles.why, POP && { backgroundColor: '#D4F25A', borderWidth: 1.5, borderColor: '#111111' }]}>
-          <Text style={{ color: POP ? '#111111' : '#FFFFFF', fontSize: 11, fontWeight: '800' }}>{t(q.why === 'artist' ? 'queue.why.artist' : 'queue.why.similar')}</Text>
+          <Text style={{ color: POP ? '#111111' : '#FFFFFF', fontSize: 11, fontWeight: '800' }}>{t(q.why === 'artist' ? 'queue.why.artist' : q.why === 'genre' ? 'queue.why.genre' : 'queue.why.similar')}</Text>
         </View>
       )}
     </View>

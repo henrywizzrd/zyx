@@ -217,9 +217,10 @@ export interface Taste {
   lastPlayed: Map<string, number>;
   skipped: Set<string>;
   liked: Track[];
+  listens: number; // songs actually listened to (30 s or more) in the period
 }
 export function getTaste(days = 30): Taste {
-  const empty: Taste = { artists: new Map(), lastPlayed: new Map(), skipped: new Set(), liked: [] };
+  const empty: Taste = { artists: new Map(), lastPlayed: new Map(), skipped: new Set(), liked: [], listens: 0 };
   return safe(empty, (d) => {
     const since = Date.now() - days * 86400000;
     const rows = d.getAllSync<{ track_id: string; artist: string; played_at: number; secs: number | null; duration: number | null }>(
@@ -229,7 +230,9 @@ export function getTaste(days = 30): Taste {
     const artists = new Map<string, number>();
     const lastPlayed = new Map<string, number>();
     const early = new Map<string, number>();
+    let listens = 0;
     for (const r of rows) {
+      if (r.secs == null || r.secs >= 30) listens++;
       const key = (r.artist || '').split(',')[0].trim().toLowerCase();
       const listened = r.secs ?? Math.min(r.duration && r.duration > 0 ? r.duration : 180, 600);
       if (key) artists.set(key, (artists.get(key) ?? 0) + listened);
@@ -240,7 +243,7 @@ export function getTaste(days = 30): Taste {
     const liked = d
       .getAllSync<TrackRow>('SELECT t.* FROM liked l JOIN tracks t ON t.id = l.track_id ORDER BY l.liked_at DESC LIMIT 30')
       .map(rowToTrack);
-    return { artists, lastPlayed, skipped, liked };
+    return { artists, lastPlayed, skipped, liked, listens };
   });
 }
 

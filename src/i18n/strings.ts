@@ -226,6 +226,7 @@ export const vi = {
   'queue.finding': 'Đang tìm bài liên quan...',
   'queue.why.artist': 'Bạn hay nghe',
   'queue.why.similar': 'Tương tự',
+  'queue.why.genre': 'Thể loại bạn chọn',
   'queue.note': '✦ Bài liên quan do app tự thêm. Nhấn giữ một bài để kéo đổi thứ tự.',
 
   // Player
@@ -775,6 +776,7 @@ export const en: Record<StringKey, string> = {
   'queue.finding': 'Finding related songs...',
   'queue.why.artist': 'You like',
   'queue.why.similar': 'Similar',
+  'queue.why.genre': 'Your genres',
   'queue.note': '✦ Added by autoplay. Long-press a song to drag it to a new spot.',
 
   'np.idleTitle': 'Nothing playing',
