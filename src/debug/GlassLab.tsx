@@ -9,7 +9,6 @@ import { GlassFill, hasLiquidGlass, type GlassMaterial } from '../components/Gla
 const MATERIALS: { id: GlassMaterial; label: string }[] = [
   { id: 'clear', label: 'Clear' },
   { id: 'frost', label: 'Frosted' },
-  { id: 'smoke', label: 'Smoked' },
   { id: 'neon', label: 'Neon' },
 ];
 

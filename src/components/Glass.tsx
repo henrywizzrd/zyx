@@ -61,7 +61,8 @@ export function GlassInside({ children }: { children: React.ReactNode }) {
 // darkened + lightly tinted with the theme colour, a thin light rim, no reflection or refraction. Not Liquid Glass
 // 27/11: the old self-drawn 'frost' was removed; 'frost' (Frosted) now uses the system thick-blur material that used to be
 // called 'matte' (Tyson: that one is the real frosted look). Saved 'matte' themes are migrated to 'frost' in ThemeProvider.
-export type GlassMaterial = 'clear' | 'frost' | 'smoke' | 'neon';
+// 27/11: 'smoke' was removed too; saved 'smoke' themes are migrated to 'frost' in ThemeProvider.
+export type GlassMaterial = 'clear' | 'frost' | 'neon';
 
 // Bóng hai lớp của tấm kính đặt nổi trên mặt bàn (công thức chốt từ trang thử kính):
 // một bóng đậm, gọn sát chân + một bóng mềm, rộng. lift: độ nổi (1 = bình thường, cầm lên thì lớn hơn)
@@ -169,9 +170,7 @@ export function GlassFill({
   // ---- iOS 26+: Liquid Glass thật (khúc xạ, mép kính, phản chiếu do hệ thống vẽ)
   if (LG && !noRim && !inside) {
     const tint =
-      material === 'smoke'
-        ? `rgba(0,0,0,${(0.22 + 0.33 * g.level).toFixed(2)})`
-        : g.level > 0.02 || solid > 0
+      g.level > 0.02 || solid > 0
         ? `rgba(${glassRgb},${(0.22 * g.level + solid * 0.08).toFixed(2)})`
         : undefined;
     return (
@@ -188,17 +187,13 @@ export function GlassFill({
   // ---- Self-drawn glass (everything inside pages): each material has its own clear signature so the choice in
   // Theme Studio is visible across the whole app, modelled on the dock's real Liquid Glass:
   //  clear  — almost no blur or tint, strong edge light (lens rim) and a bright diagonal reflection
-  //  smoke  — dark tinted glass, medium blur, crisp light rim
-  const P =
-    material === 'smoke'
-      ? { blur: 18 + g.level * 40, tintA: 0, sheen: 0.1, glow: 'inset 0px 0px 12px rgba(255,255,255,0.07)' }
-      : { blur: 3 + g.level * 14, tintA: 0.02 + 0.18 * g.level, sheen: 0.28, glow: `inset 0px 0px 14px rgba(255,255,255,${dark ? 0.16 : 0.28})` };
+  const P = { blur: 3 + g.level * 14, tintA: 0.02 + 0.18 * g.level, sheen: 0.28, glow: `inset 0px 0px 14px rgba(255,255,255,${dark ? 0.16 : 0.28})` }; // clear
   const androidBoost = Platform.OS === 'android' ? 0.2 : 0;
-  const a = material === 'smoke' ? 0 : Math.max(solid * (0.55 + 0.45 * g.level), P.tintA + androidBoost);
-  const tint = material === 'smoke' ? `rgba(6,8,14,${(0.38 + 0.32 * g.level + androidBoost).toFixed(2)})` : `rgba(${glassRgb},${Math.min(0.92, a).toFixed(2)})`;
+  const a = Math.max(solid * (0.55 + 0.45 * g.level), P.tintA + androidBoost);
+  const tint = `rgba(${glassRgb},${Math.min(0.92, a).toFixed(2)})`;
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, overflow: 'hidden' }]}>
-      {real && <BlurView intensity={Math.round(P.blur)} tint={dark || material === 'smoke' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />}
+      {real && <BlurView intensity={Math.round(P.blur)} tint={dark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: real ? tint : theme.colors.surface }]} />
       {/* diagonal reflection on the glass surface (strongest on clear) */}
       <LinearGradient
