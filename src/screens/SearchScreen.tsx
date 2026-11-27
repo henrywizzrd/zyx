@@ -40,6 +40,7 @@ import { useSongMenu } from '../components/useSongMenu';
 import { useNav } from '../nav/Nav';
 import { useT } from '../i18n';
 import { useDisplayFont } from '../theme/fonts';
+import { popEdge } from '../theme/pop';
 
 const H_PAD = 16;
 const GAP = 12;
@@ -503,7 +504,7 @@ export function SearchScreen() {
                       setUserMode(false);
                       runSearch(query, k, true);
                     }}
-                    style={[styles.chip, { backgroundColor: on ? accent : theme.colors.surface }]}
+                    style={[styles.chip, { backgroundColor: on ? accent : theme.colors.surface }, popEdge(on)]}
                   >
                     <Text style={{ color: on ? theme.colors.onAccent : text, fontWeight: '700', fontSize: 13 }}>{tr(`search.filter.${k}`)}</Text>
                   </Pressable>

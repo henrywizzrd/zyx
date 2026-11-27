@@ -12,7 +12,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { useT } from '../i18n';
 import { useContentInsets } from '../components/FloatingDock';
 import { LibraryLayout } from '../theme/types';
-import { followers } from '../data/mock';
+import { FollowerStack } from '../components/FollowerStack';
 import { LibraryEntry, useLibrary } from '../data/library';
 import { createPlaylist, getPlaylists } from '../data/db';
 import { SmartImage } from '../components/Cover';
@@ -32,6 +32,7 @@ import { useDockCollapse } from '../components/dockCollapse';
 import { useRenderProbe } from '../components/JankMonitor';
 import { GlassFill, glassShadow } from '../components/Glass';
 import { useDisplayFont } from '../theme/fonts';
+import { popEdge, popMode } from '../theme/pop';
 
 const H_PAD = 16;
 const COVER_H = 520; // chiều cao vùng ảnh bìa: phủ phần đầu trang rồi mờ dần xuống tận danh sách
@@ -81,6 +82,7 @@ function CoverBox({ item, size, radius }: { item: LibraryEntry; size: number; ra
 
 export function LibraryScreen() {
   const df = useDisplayFont();
+  const pop = useTheme().theme.style === 'pop';
   const { theme, landscape, setLibraryLayout, setLibraryOrder } = useTheme();
   const t = useT();
   const profile = useProfile();
@@ -225,7 +227,7 @@ export function LibraryScreen() {
   const chip = (label: string, on: boolean, onPress: () => void) => (
     <Pressable
       onPress={onPress}
-      style={[styles.chip, on ? { backgroundColor: accent } : glassShadow(0.5, theme.colors.glassTint !== 'dark')]}
+      style={[styles.chip, on ? [{ backgroundColor: accent }, popEdge(true)] : glassShadow(0.5, theme.colors.glassTint !== 'dark')]}
     >
       {!on && <GlassFill radius={18} solid={0.45} slab />}
       <Text style={{ color: on ? theme.colors.onAccent : text, fontWeight: '600', fontSize: 13 }}>{label}</Text>
@@ -398,6 +400,48 @@ export function LibraryScreen() {
     </>
   );
 
+  // ================= Pop profile header (27/11) =================
+  // Pop is flat, so the cover doesn't fade into the page: it sits in an outlined card with a hard shadow,
+  // the avatar overlaps its bottom-left corner, and the name is set in the title font on the page colour
+  const popBtn = [styles.popBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderWidth: Math.min(popMode.line, 2.5) }, glassShadow(0.6)];
+  const popHero = (
+    <View style={{ paddingTop: pad.top + 10, paddingHorizontal: H_PAD }}>
+      <View style={[styles.popCover, { backgroundColor: profile.wallColor, borderColor: theme.colors.border, borderWidth: popMode.line }, glassShadow(1)]}>
+        <View style={[StyleSheet.absoluteFill, { borderRadius: 18, overflow: 'hidden' }]}>
+          {!!profile.cover && <Image source={{ uri: profile.cover }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
+        </View>
+        <Pressable onPress={() => editImage('cover')} hitSlop={8} style={[popBtn, { position: 'absolute', top: 10, right: 10 }]}>
+          <Ionicons name="camera-outline" size={18} color={theme.colors.text} />
+        </Pressable>
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 14, marginTop: -46, paddingLeft: 14 }}>
+        <Pressable
+          onPress={() => editImage('avatar')}
+          style={[styles.avatar, { width: 96, height: 96, overflow: 'visible', backgroundColor: profile.avatarColor, borderColor: theme.colors.border, borderWidth: popMode.line }, glassShadow(1)]}
+        >
+          <View style={[StyleSheet.absoluteFill, { borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }]}>
+            {profile.avatar ? (
+              <Image source={{ uri: profile.avatar }} resizeMode="cover" style={StyleSheet.absoluteFill} />
+            ) : (
+              <Ionicons name="person" size={46} color="rgba(255,255,255,0.85)" />
+            )}
+          </View>
+        </Pressable>
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingBottom: 4 }}>
+          <View style={{ flex: 1 }} />
+          <FollowerStack size={30} ring={theme.colors.border} textColor="#FFFFFF" />
+          <Pressable onPress={() => setEditOpen(true)} hitSlop={8} style={popBtn}>
+            <Ionicons name="pencil-outline" size={18} color={theme.colors.text} />
+          </Pressable>
+        </View>
+      </View>
+      <Text numberOfLines={1} style={[{ color: theme.colors.text, fontSize: 30, fontWeight: '800', marginTop: 14 }, df]}>
+        {profile.name}
+        <Text style={{ color: theme.colors.textSecondary, fontSize: 20 }}> #{profile.tag}</Text>
+      </Text>
+    </View>
+  );
+
   // ================= Màn hình ngang =================
   // Trái: thẻ hồ sơ (ảnh bìa làm nền, phủ kính mờ) với avatar, tên, #tag, người theo dõi; bên dưới là các mục
   // (Hồ sơ, Playlist, Album, Nghệ sĩ) xếp dọc. Phải: nội dung của mục đang chọn. Mỗi bên cuộn riêng
@@ -415,7 +459,7 @@ export function LibraryScreen() {
         <ScrollView style={{ width: leftW, flexGrow: 0 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: pad.top + 12, paddingBottom: pad.bottom + pad.endPadding, paddingHorizontal: H_PAD }}>
           {/* vừa xoay sang ngang: cột trái trượt vào từ trái, cột phải từ phải (rotateEnter.ts) */}
           <Animated.View entering={enter(0, 'left')}>
-          <View style={[styles.landCard, { backgroundColor: profile.wallColor }]}>
+          <View style={[styles.landCard, { backgroundColor: profile.wallColor }, pop && { borderWidth: popMode.line, borderColor: theme.colors.border }, pop && glassShadow(1)]}>
             {profile.cover ? (
               <>
                 {/* Ảnh bìa: rõ ở nửa trên, mờ dần xuống dưới (bản mờ chồng lên, lộ dần theo dải chuyển từ trong suốt → đặc) */}
@@ -444,13 +488,7 @@ export function LibraryScreen() {
               <Text style={{ color: 'rgba(255,255,255,0.75)', fontWeight: '600' }}> #{profile.tag}</Text>
             </Text>
             <View style={styles.followersRow}>
-              <View style={{ flexDirection: 'row' }}>
-                {followers.map((f, i) => (
-                  <View key={f.id} style={[styles.follower, { backgroundColor: f.color, borderColor: 'rgba(0,0,0,0.3)', marginLeft: i === 0 ? 0 : -8 }]}>
-                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{f.initial}</Text>
-                  </View>
-                ))}
-              </View>
+              <FollowerStack size={28} ring="rgba(0,0,0,0.3)" />
               <View style={{ flex: 1 }} />
               <Pressable onPress={() => setEditOpen(true)} hitSlop={8} style={styles.penBtn}>
                 <Ionicons name="pencil-outline" size={18} color="#FFFFFF" />
@@ -461,7 +499,7 @@ export function LibraryScreen() {
             {menu.map((m) => {
               const on = filter === m.id;
               return (
-                <Pressable key={m.id} onPress={() => toggleFilter(m.id)} style={[styles.menuRow, { backgroundColor: on ? theme.colors.accent : 'transparent' }]}>
+                <Pressable key={m.id} onPress={() => toggleFilter(m.id)} style={[styles.menuRow, { backgroundColor: on ? theme.colors.accent : 'transparent' }, on && popEdge(true)]}>
                   <Ionicons name={m.icon} size={22} color={on ? theme.colors.onAccent : text} />
                   <Text style={{ flex: 1, color: on ? theme.colors.onAccent : text, fontSize: 16, fontWeight: '700' }}>{m.label}</Text>
                   <Ionicons name="chevron-forward" size={18} color={on ? theme.colors.onAccent : textSecondary} />
@@ -494,6 +532,8 @@ export function LibraryScreen() {
     <ReorderableScrollView bounces scrollYOut={scrollY} contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}>
       {/* vừa xoay về dọc: trượt từ dưới lên vào chỗ (rotateEnter.ts) */}
       <Animated.View entering={enter(0, 'up')} style={{ width: '100%' }}>
+        {pop ? popHero : (
+        <>
         {/* Ảnh bìa (wall) của profile: ảnh người dùng chọn, mờ dần xuống màu nền. Chưa có ảnh thì là dải màu như cũ */}
         {profile.cover ? (
           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: COVER_H }}>
@@ -559,18 +599,8 @@ export function LibraryScreen() {
               <Pressable style={[styles.plusBtn, { borderColor: hero.sub }]}>
                 <Ionicons name="add" size={18} color={hero.text} />
               </Pressable>
-              <View style={{ flexDirection: 'row', marginLeft: 10 }}>
-                {followers.map((f, i) => (
-                  <View
-                    key={f.id}
-                    style={[
-                      styles.follower,
-                      { backgroundColor: f.color, borderColor: theme.background.color, marginLeft: i === 0 ? 0 : -8 },
-                    ]}
-                  >
-                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{f.initial}</Text>
-                  </View>
-                ))}
+              <View style={{ marginLeft: 10 }}>
+                <FollowerStack ring={theme.background.color} />
               </View>
               {/* Nút bút (cùng cỡ với nút đổi ảnh bìa): mở popup sửa tên và hashtag */}
               <Pressable onPress={() => setEditOpen(true)} hitSlop={8} style={[styles.penBtn, { marginLeft: 10 }]}>
@@ -579,6 +609,9 @@ export function LibraryScreen() {
             </View>
           </View>
         </View>
+
+        </>
+        )}
 
         {/* Chip lọc */}
         <View style={{ paddingHorizontal: H_PAD, marginTop: 28, flexDirection: 'row', gap: 8 }}>
@@ -609,6 +642,8 @@ export function LibraryScreen() {
 }
 
 const styles = StyleSheet.create({
+  popCover: { height: 180, borderRadius: 18, borderCurve: 'continuous' },
+  popBtn: { width: 36, height: 36, borderRadius: 10, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
   avatar: { width: 112, height: 112, borderRadius: 14, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatarEdit: {
     position: 'absolute', right: 6, bottom: 6, width: 26, height: 26, borderRadius: 13,

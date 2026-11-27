@@ -19,7 +19,7 @@ import { TabId } from '../theme/types';
 import { requestSearchFocus } from '../screens/searchFocus';
 import { DockGlyph } from './DockIcons';
 import { LABELS } from './FloatingDock';
-import { GlassFill, glassShadow } from './Glass';
+import { GlassFill, glassShadow, hasLiquidGlass } from './Glass';
 import { SmartImage } from './Cover';
 import { usePlayerPick, ViewRef } from '../player/PlayerProvider';
 import { PlayPauseGlyph, SkipGlyph } from './PlayerIcons';
@@ -67,7 +67,8 @@ export function Cell({ id, on, labels, width, height = AM.H, icon }: { id: Tab; 
 export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: TabId; onChange: (t: TabId) => void; onOpenPlayer: () => void; hidden: boolean }) {
   const { theme } = useTheme();
   const light = theme.colors.glassTint !== 'dark';
-  const noRim = theme.dock.rimLight === false;
+  // Rim light only with real Liquid Glass (iOS 26+), which draws its own edge light; self-drawn glass has none (27/11: setting removed)
+  const noRim = !hasLiquidGlass;
   const insets = useSafeAreaInsets();
   const { width: W } = useWindowDimensions();
   const reduced = useReducedMotion(); // iPhone bật "Giảm chuyển động": không giãn, không phồng, chỉ đổi vị trí / mờ

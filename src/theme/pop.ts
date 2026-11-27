@@ -99,3 +99,11 @@ export function setPopMode(on: boolean, colors: Palette, pop: PopSettings) {
   popMode.offset = POP_SHADOW_OFFSET[pop.shadow];
   popMode.shadow = pop.shadowColor === 'accent' ? colors.accent : colors.border;
 }
+
+// Outline for small filled things (chips, pills) that don't use GlassFill: in Pop they need the same ink edge
+// (and, when raised, the same hard shadow) as every card. Returns nothing in Glass style
+export function popEdge(raised = false) {
+  if (!popMode.on) return null;
+  const o = raised && popMode.offset ? Math.max(2, Math.round(popMode.offset * 0.6)) : 0;
+  return { borderWidth: Math.min(popMode.line, 2.5), borderColor: popMode.ink, ...(o ? { boxShadow: `${o}px ${o}px 0px ${popMode.shadow}` } : null) };
+}

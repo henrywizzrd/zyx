@@ -16,7 +16,7 @@ import { useT } from '../i18n';
 import { TabId } from '../theme/types';
 import { DockGlyph } from './DockIcons';
 import { LABELS } from './FloatingDock';
-import { ArtSlab, GlassFill, glassShadow } from './Glass';
+import { ArtSlab, GlassFill, glassShadow, hasLiquidGlass } from './Glass';
 import { usePlayerPick, ViewRef } from '../player/PlayerProvider';
 import { FADE_LAND, playerOrigin, playerProgress, prewarmPlayer } from './PlayerTransition';
 import { hapticSnap } from './haptics';
@@ -39,7 +39,8 @@ export function ZyxDock({ active, onChange, onOpenPlayer, hidden }: { active: Ta
   const { theme } = useTheme();
   const t = useT();
   const light = theme.colors.glassTint !== 'dark';
-  const noRim = theme.dock.rimLight === false;
+  // Rim light only with real Liquid Glass (iOS 26+), which draws its own edge light; self-drawn glass has none (27/11: setting removed)
+  const noRim = !hasLiquidGlass;
   const insets = useSafeAreaInsets();
   const { width: W } = useWindowDimensions();
   const reduced = useReducedMotion();

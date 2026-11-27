@@ -19,7 +19,7 @@ function DockIcon({ active, children }: { active: boolean; children: React.React
 }
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
-import { GlassFill, glassShadow } from './Glass';
+import { GlassFill, glassShadow, hasLiquidGlass } from './Glass';
 import { useT } from '../i18n';
 import { usePlayerPick, ViewRef } from '../player/PlayerProvider';
 import { TabId } from '../theme/types';
@@ -216,7 +216,7 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
           }}
         >
           {/* Tấm kính nổi kiểu Apple Music: mờ phần phía sau + vệt sáng + cạnh kính */}
-          <GlassFill radius={radius} solid={0.5} slab noRim={theme.dock.rimLight === false} />
+          <GlassFill radius={radius} solid={0.5} slab noRim={!hasLiquidGlass} />
           {/* Giữ lâu vào khoảng trống giữa các nút cũng kéo được dock */}
           <Pressable
             {...d.pressProps}

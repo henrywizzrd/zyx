@@ -13,7 +13,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { TabId } from '../theme/types';
 import { requestSearchFocus } from '../screens/searchFocus';
 import { DockGlyph } from './DockIcons';
-import { GlassFill, glassShadow } from './Glass';
+import { GlassFill, glassShadow, hasLiquidGlass } from './Glass';
 import { SmartImage } from './Cover';
 import { usePlayerPick, ViewRef } from '../player/PlayerProvider';
 import { PlayPauseGlyph, SkipGlyph } from './PlayerIcons';
@@ -36,7 +36,8 @@ const MINI_W = 340; // bề ngang viên mini player (vừa phải, không kéo d
 export function AppleDockLand({ active, onChange, onOpenPlayer, hidden, square }: { active: TabId; onChange: (t: TabId) => void; onOpenPlayer: () => void; hidden: boolean; square?: boolean }) {
   const { theme } = useTheme();
   const light = theme.colors.glassTint !== 'dark';
-  const noRim = theme.dock.rimLight === false;
+  // Rim light only with real Liquid Glass (iOS 26+), which draws its own edge light; self-drawn glass has none (27/11: setting removed)
+  const noRim = !hasLiquidGlass;
   const insets = useSafeAreaInsets();
   const { width: W } = useWindowDimensions();
   const reduced = useReducedMotion();

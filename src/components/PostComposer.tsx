@@ -12,6 +12,7 @@ import { Attachment, createPost, POST_MAX } from '../data/social';
 import { musicSupported, toTrack, ytmusic } from '../music/lazy';
 import type { Track } from '../data/mock';
 import { AttachmentCard, AttachThumb } from './PostCard';
+import { popEdge } from '../theme/pop';
 
 // Ô soạn bài mới cho tab Trang chủ của Profile:
 //  - chữ thuần, tối đa 500 ký tự (không đăng ảnh để bảng tin gọn, đỡ rối)
@@ -244,7 +245,7 @@ function AttachPicker({ onPick }: { onPick: (a: Attachment) => void }) {
           setTab(id);
           setQ('');
         }}
-        style={[styles.tab, on && { backgroundColor: accent }]}
+        style={[styles.tab, on && { backgroundColor: accent }, on && popEdge()]}
       >
         <Ionicons name={icon} size={16} color={on ? theme.colors.onAccent : text} />
         <Text style={{ color: on ? theme.colors.onAccent : text, fontWeight: '700' }}>{label}</Text>

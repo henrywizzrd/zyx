@@ -12,6 +12,7 @@ import { GlassFill, glassShadow, SQUIRCLE } from '../components/Glass';
 import { SmartImage } from '../components/Cover';
 import { usePlayerPick } from '../player/PlayerProvider';
 import { getListenStats, ListenStats } from '../data/db';
+import { popEdge } from '../theme/pop';
 
 type Range = 'week' | 'month' | 'year';
 const DAY = 86400000;
@@ -92,7 +93,7 @@ export function StatsScreen() {
           {(['week', 'month', 'year'] as const).map((r) => {
             const on = r === range;
             return (
-              <Pressable key={r} onPress={() => setRange(r)} style={[styles.range, on && { backgroundColor: accent }]}>
+              <Pressable key={r} onPress={() => setRange(r)} style={[styles.range, on && { backgroundColor: accent }, on && popEdge()]}>
                 {!on && <GlassFill radius={18} solid={0.35} slab />}
                 <Text style={{ color: on ? onAccent : text, fontWeight: '700', fontSize: 14 }}>{t(`stats.${r}` as any)}</Text>
               </Pressable>

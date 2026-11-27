@@ -25,6 +25,7 @@ import { SmartImage } from '../components/Cover';
 import { checkNetwork, useOffline } from '../data/net';
 import { cacheGet, cacheSet, createPlaylist, getDownloadedTracks, getPlaylists, getRecent, getTopArtists, RecentItem, useDbVersion } from '../data/db';
 import { useDisplayFont } from '../theme/fonts';
+import { popEdge } from '../theme/pop';
 
 const PAD = 16;
 type ScrollViewRef = React.ComponentRef<typeof ScrollView>;
@@ -538,7 +539,7 @@ function Trending() {
   const chips = (
     <View style={{ flexDirection: 'row', gap: 6 }}>
       {(['week', 'month', 'year'] as TrendingRange[]).map((k) => (
-        <Pressable key={k} onPress={() => setHome({ trendingRange: k })} style={[styles.pill, { backgroundColor: k === range ? accent : surface }]}>
+        <Pressable key={k} onPress={() => setHome({ trendingRange: k })} style={[styles.pill, { backgroundColor: k === range ? accent : surface }, popEdge(k === range)]}>
           <Text style={{ color: k === range ? theme.colors.onAccent : text, fontSize: 12, fontWeight: '700' }}>{t(`home.range.${k}`)}</Text>
         </Pressable>
       ))}

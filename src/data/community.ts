@@ -231,3 +231,33 @@ export const onPostPatch = (fn: (p: Patch) => void) => {
 export const emitPostPatch = (p: Patch) => listeners.forEach((fn) => fn(p));
 export const applyPatch = (list: Post[], p: Patch) =>
   p.deleted ? list.filter((x) => x.id !== p.id) : list.map((x) => (x.id === p.id ? { ...x, ...p } : x));
+
+// The newest people who follow me (for the faces next to my name in Library) + how many follow me in total.
+// null = guest (no account) or not loaded. Later: a full followers list opens from the "…" bubble
+export interface FollowerPeek {
+  total: number;
+  recent: { id: string; name: string; avatar?: string; color: string }[];
+}
+export async function getMyFollowers(limit = 3): Promise<FollowerPeek | null> {
+  const acc = currentAccount();
+  if (!acc) return null;
+  const { data, count, error } = await sb()
+    .from('follows')
+    .select('follower, created_at', { count: 'exact' })
+    .eq('followee', acc.id)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  const ids = (data ?? []).map((r: any) => r.follower as string);
+  if (!ids.length) return { total: count ?? 0, recent: [] };
+  const { data: profs, error: e2 } = await sb().from('profiles').select('id, display_name, avatar_url, avatar_color').in('id', ids);
+  if (e2) throw e2;
+  const byId = new Map((profs ?? []).map((p: any) => [p.id, p]));
+  return {
+    total: count ?? ids.length,
+    recent: ids
+      .map((id) => byId.get(id))
+      .filter(Boolean)
+      .map((p: any) => ({ id: p.id, name: nameOf(p), avatar: p.avatar_url ?? undefined, color: p.avatar_color || COLOR })),
+  };
+}
