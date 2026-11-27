@@ -108,3 +108,29 @@ export function popEdge(raised = false) {
   const o = raised && popMode.offset ? Math.max(2, Math.round(popMode.offset * 0.6)) : 0;
   return { borderWidth: Math.min(popMode.line, 2.5), borderColor: popMode.ink, borderCurve: 'circular' as const, ...(o ? { boxShadow: `${o}px ${o}px 0px ${popMode.shadow}` } : null) };
 }
+
+// Pop rows (approved cards mockup 27/11): every song row is a flat outlined card — outline only, no shadow, since
+// lists can be hundreds of rows long. The song playing now becomes an accent-coloured card.
+export function popRow(playing = false, accent: string = POP_ACCENTS.lime) {
+  if (!popMode.on) return null;
+  return {
+    backgroundColor: playing ? accent : popMode.fill,
+    borderWidth: Math.min(popMode.line, 2),
+    borderColor: popMode.ink,
+    borderRadius: 14,
+    borderCurve: 'circular' as const,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    marginVertical: 4,
+  };
+}
+// Cover art inside a Pop card: a thin outline
+export function popThumb(radius = 9) {
+  if (!popMode.on) return null;
+  return { borderWidth: 2, borderColor: popMode.ink, borderRadius: radius };
+}
+// Card inside a card (e.g. a song attached to a post): thinner outline, no shadow
+export function popInner() {
+  if (!popMode.on) return null;
+  return { backgroundColor: popMode.fill, borderWidth: 2, borderColor: popMode.ink, borderCurve: 'circular' as const };
+}

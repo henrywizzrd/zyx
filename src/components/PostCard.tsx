@@ -13,6 +13,8 @@ import { CommentsSheet } from './CommentsSheet';
 import { currentAccount } from '../data/auth';
 import { emitPostPatch, findSharedPlaylist, NeedAccount, setLike, setRepost } from '../data/community';
 import { getPlaylist } from '../data/db';
+import { popInner, popMode } from '../theme/pop';
+import { solidShadow } from './Glass';
 
 const AVATAR = 38;
 
@@ -67,7 +69,7 @@ export function AttachmentCard({ a, onPress, onRemove }: { a: Attachment; onPres
   const { text, textSecondary, border } = theme.colors;
   const kindLabel = t(a.kind === 'song' ? 'social.kindSong' : a.kind === 'album' ? 'kind.album' : a.kind === 'artist' ? 'kind.artist' : 'kind.playlist');
   return (
-    <Pressable onPress={onPress} disabled={!onPress} style={[styles.attach, { borderColor: border }]}>
+    <Pressable onPress={onPress} disabled={!onPress} style={[styles.attach, { borderColor: border }, popInner()]}>
       <AttachThumb a={a} size={52} />
       <View style={{ flex: 1 }}>
         <Text numberOfLines={1} style={{ color: text, fontSize: 15, fontWeight: '700' }}>{a.title}</Text>
@@ -146,7 +148,14 @@ export function PostCard({ post, showDivider = true }: { post: Post; showDivider
 
   const me = post.repostedBy && post.repostedBy.id === myId;
   return (
-    <View style={showDivider && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: border }}>
+    // Pop: every post is its own outlined card with a hard shadow (no divider lines)
+    <View
+      style={
+        popMode.on
+          ? [{ backgroundColor: popMode.fill, borderWidth: popMode.line, borderColor: popMode.ink, borderRadius: 18, borderCurve: 'circular', paddingHorizontal: 12, marginBottom: 14 }, solidShadow(1)]
+          : showDivider && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: border }
+      }
+    >
     {post.repostedBy && (
       <Pressable onPress={() => !me && openUser(post.repostedBy!.id)} style={styles.repostLine}>
         <Ionicons name="repeat" size={14} color={textSecondary} />

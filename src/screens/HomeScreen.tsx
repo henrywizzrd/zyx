@@ -25,7 +25,7 @@ import { SmartImage } from '../components/Cover';
 import { checkNetwork, useOffline } from '../data/net';
 import { cacheGet, cacheSet, createPlaylist, getDownloadedTracks, getPlaylists, getRecent, getTopArtists, RecentItem, useDbVersion } from '../data/db';
 import { useDisplayFont } from '../theme/fonts';
-import { popEdge } from '../theme/pop';
+import { popEdge, popMode, popRow, popThumb } from '../theme/pop';
 
 const PAD = 16;
 type ScrollViewRef = React.ComponentRef<typeof ScrollView>;
@@ -220,19 +220,23 @@ function CoverCard({ title, subtitle, thumb, round, onPress, onLongPress, icon }
   onPress: () => void; onLongPress?: () => void;
 }) {
   const { theme } = useTheme();
-  const r = round ? CARD / 2 : 8;
+  // Pop: a card around the cover + title (outline + shadow); round (artist) items stay as they are
+  const card = popMode.on && !round;
+  const S = card ? CARD - 16 : CARD;
+  const r = round ? CARD / 2 : card ? 10 : 8;
   return (
-    <ScalePressable onPress={onPress} onLongPress={onLongPress} style={{ width: CARD }}>
+    <ScalePressable onPress={onPress} onLongPress={onLongPress} style={[{ width: CARD }, card && { padding: 8, borderRadius: 16 }, card && glassShadow(1)]}>
+      {card && <GlassFill radius={16} solid={0.5} slab />}
       {thumb ? (
         // Xin ảnh đúng cỡ hiển thị thật trên màn hình (CARD × mật độ điểm ảnh, iPhone là ×3).
         // Ảnh bài hát lưu từ kết quả tìm kiếm chỉ có 120px nên phóng lên 148pt sẽ bị mờ
         <SmartImage
           url={thumb}
           size={Math.round(CARD * PixelRatio.get())}
-          style={{ width: CARD, height: CARD, borderRadius: r, backgroundColor: theme.colors.surface }}
+          style={[{ width: S, height: S, borderRadius: r, backgroundColor: theme.colors.surface }, card && popThumb(r)]}
         />
       ) : (
-        <View style={{ width: CARD, height: CARD, borderRadius: r, backgroundColor: theme.colors.surface, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={[{ width: S, height: S, borderRadius: r, backgroundColor: theme.colors.surface, alignItems: 'center', justifyContent: 'center' }, card && popThumb(r)]}>
           <Ionicons name={icon ?? 'musical-notes'} size={40} color={theme.colors.textSecondary} />
         </View>
       )}
@@ -246,7 +250,7 @@ function CoverCard({ title, subtitle, thumb, round, onPress, onLongPress, icon }
 
 function HRow({ children, scrollRef }: { children: React.ReactNode; scrollRef?: React.RefObject<ScrollViewRef | null> }) {
   return (
-    <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingHorizontal: PAD }} style={{ marginHorizontal: -PAD }}>
+    <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[{ gap: 14, paddingHorizontal: PAD }, popMode.on && { paddingBottom: 10, paddingTop: 2 }]} style={{ marginHorizontal: -PAD }}>
       {children}
     </ScrollView>
   );
@@ -457,12 +461,17 @@ function Recent({ list }: { list?: boolean }) {
       {head}
       <View style={styles.grid}>
         {items.map((r) => (
-          <Pressable key={`${r.kind}:${r.id}`} onPress={() => open(r)} style={({ pressed }) => [styles.bigItem, pressed && { opacity: 0.7 }]}>
+          <Pressable
+            key={`${r.kind}:${r.id}`}
+            onPress={() => open(r)}
+            style={({ pressed }) => [styles.bigItem, popMode.on && { padding: 8, borderRadius: 16 }, popMode.on && glassShadow(1), pressed && { opacity: 0.7 }]}
+          >
+            {popMode.on && <GlassFill radius={16} solid={0.5} slab />}
             {r.kind !== 'liked' && r.thumb ? (
               // Ảnh nét theo cỡ ô to (ảnh nhỏ của hàng trượt ngang phóng lên bị mờ)
-              <SmartImage url={r.thumb} size={600} style={[styles.bigCover, r.kind === 'artist' && { borderRadius: 999 }]} />
+              <SmartImage url={r.thumb} size={600} style={[styles.bigCover, popThumb(10), r.kind === 'artist' && { borderRadius: 999 }]} />
             ) : (
-              <View style={[styles.bigCover, { backgroundColor: r.kind === 'liked' ? '#5B3CC4' : theme.colors.skeleton, alignItems: 'center', justifyContent: 'center' }]}>
+              <View style={[styles.bigCover, { backgroundColor: r.kind === 'liked' ? '#5B3CC4' : theme.colors.skeleton, alignItems: 'center', justifyContent: 'center' }, popThumb(10)]}>
                 <Ionicons name={r.kind === 'liked' ? 'heart' : 'musical-notes'} size={44} color={r.kind === 'liked' ? '#FFFFFF' : theme.colors.textSecondary} />
               </View>
             )}
@@ -588,16 +597,24 @@ function Trending() {
               testID={`trending-${i}`}
               onPress={() => playTrack(s, data.songs, ctx!)}
               onLongPress={() => songMenu(s)}
-              style={styles.rankRow}
+              style={[styles.rankRow, popRow(s.id === track.id, accent)]}
             >
-              <Text style={{ width: 26, color: i < 3 ? accentText : textSecondary, fontSize: 16, fontWeight: '800', textAlign: 'center' }}>{i + 1}</Text>
-              {s.thumb ? <Image source={{ uri: s.thumb }} style={styles.rankThumb} /> : <View style={[styles.rankThumb, { backgroundColor: surface }]} />}
-              <View style={{ flex: 1 }}>
-                <Text numberOfLines={1} style={{ color: s.id === track.id ? accentText : text, fontSize: 15, fontWeight: '600' }}>{s.title}</Text>
-                <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13 }}>{s.artist}</Text>
-              </View>
+              {(() => {
+                // Pop: the playing song is an accent card, so everything on it uses the accent's text colour
+                const onCard = popMode.on && s.id === track.id;
+                return (
+                  <>
+                    <Text style={{ width: 26, color: onCard ? theme.colors.onAccent : popMode.on ? text : i < 3 ? accentText : textSecondary, fontSize: 16, fontWeight: '800', textAlign: 'center' }}>{i + 1}</Text>
+                    {s.thumb ? <Image source={{ uri: s.thumb }} style={[styles.rankThumb, popThumb()]} /> : <View style={[styles.rankThumb, { backgroundColor: surface }, popThumb()]} />}
+                    <View style={{ flex: 1 }}>
+                      <Text numberOfLines={1} style={{ color: onCard ? theme.colors.onAccent : s.id === track.id ? accentText : text, fontSize: 15, fontWeight: popMode.on ? '800' : '600' }}>{s.title}</Text>
+                      <Text numberOfLines={1} style={{ color: onCard ? theme.colors.onAccent : textSecondary, fontSize: 13 }}>{s.artist}</Text>
+                    </View>
+                  </>
+                );
+              })()}
               <Pressable onPress={() => songMenu(s)} hitSlop={12} style={{ paddingLeft: 6 }}>
-                <Ionicons name="ellipsis-horizontal" size={20} color={textSecondary} />
+                <Ionicons name="ellipsis-horizontal" size={20} color={popMode.on && s.id === track.id ? theme.colors.onAccent : textSecondary} />
               </Pressable>
             </Pressable>
             </Stagger>

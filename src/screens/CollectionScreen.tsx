@@ -35,6 +35,7 @@ import { deleteAppFile, pickSquareImage } from '../data/images';
 import { openComposer } from '../components/PostComposer';
 import { currentAccount } from '../data/auth';
 import { fetchSharedPlaylist } from '../data/community';
+import { popMode, popRow, popThumb } from '../theme/pop';
 
 type Row = Track & { position?: number };
 const DL_GREEN = '#34C759'; // xanh lá kiểu iOS: cả danh sách đã tải về máy
@@ -508,7 +509,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
           initialNumToRender={14}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingTop: pad.top + 8, paddingHorizontal: 16, paddingBottom: pad.bottom + pad.endPadding }}
-          ItemSeparatorComponent={() => <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: border }} />}
+          ItemSeparatorComponent={popMode.on ? undefined : () => <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: border }} />}
           extraData={rowExtra}
           renderItem={renderRow}
         />
@@ -542,7 +543,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
             gapY={0}
             estimatedHeight={73}
             renderItem={(it) => (
-              <View style={{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: border }}>
+              <View style={popMode.on ? null : { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: border }}>
                 <SongRow item={it.row} playing={it.row.id === track.id} isLiked={liked.has(it.row.id)} dl={downloadState(it.row.id)} dlProgress={downloadProgress(it.row.id)} showThumb handlers={handlers} colors={theme.colors} longPressMenu={false} />
               </View>
             )}
@@ -565,7 +566,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
         ListFooterComponent={Footer}
         initialNumToRender={14}
         contentContainerStyle={{ paddingHorizontal: pad.left + 16, paddingBottom: pad.bottom + pad.endPadding }}
-        ItemSeparatorComponent={() => <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: border }} />}
+        ItemSeparatorComponent={popMode.on ? undefined : () => <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: border }} />}
         extraData={rowExtra}
         renderItem={renderRow}
       />
@@ -599,23 +600,24 @@ const SongRow = React.memo(function SongRow({
   item, playing, isLiked, showHeart = true, dl = 'none', dlProgress = 0, showThumb, handlers, colors, longPressMenu = true,
 }: {
   item: Row; playing: boolean; isLiked: boolean; showHeart?: boolean; dl?: DownloadState; dlProgress?: number; showThumb: boolean; handlers: Handlers;
-  colors: { text: string; textSecondary: string; accent: string; accentText: string; surface: string; border?: string }; longPressMenu?: boolean;
+  colors: { text: string; textSecondary: string; accent: string; accentText: string; onAccent?: string; surface: string; border?: string }; longPressMenu?: boolean;
 }) {
   // In a user playlist, holding a row lifts it for drag-to-reorder, so the menu is only on the "…" button there
+  const pop = popMode.on;
   return (
-    <Pressable onPress={() => handlers.current.play(item)} onLongPress={longPressMenu ? () => handlers.current.menu(item) : undefined} style={styles.row}>
+    <Pressable onPress={() => handlers.current.play(item)} onLongPress={longPressMenu ? () => handlers.current.menu(item) : undefined} style={[styles.row, popRow(playing, colors.accent)]}>
       {/* Album: các bài cùng ảnh bìa nên bỏ ảnh đi (giống Spotify); playlist thì giữ ảnh từng bài */}
       {showThumb &&
         (item.thumb ? (
-          <Image source={{ uri: item.thumb }} style={[styles.thumb, { backgroundColor: colors.surface }]} />
+          <Image source={{ uri: item.thumb }} style={[styles.thumb, { backgroundColor: colors.surface }, popThumb()]} />
         ) : (
-          <View style={[styles.thumb, { backgroundColor: colors.surface }]} />
+          <View style={[styles.thumb, { backgroundColor: colors.surface }, popThumb()]} />
         ))}
       <View style={{ flex: 1 }}>
-        <Text numberOfLines={1} style={{ color: playing ? colors.accentText : colors.text, fontSize: 17, fontWeight: '600' }}>{item.title}</Text>
+        <Text numberOfLines={1} style={{ color: pop && playing ? colors.onAccent ?? '#111111' : playing ? colors.accentText : colors.text, fontSize: 17, fontWeight: pop ? '800' : '600' }}>{item.title}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
           <DownloadMark state={dl} progress={dlProgress} track={colors.border ?? 'rgba(255,255,255,0.2)'} />
-          <Text numberOfLines={1} style={{ flex: 1, color: colors.textSecondary, fontSize: 14 }}>{item.artist}</Text>
+          <Text numberOfLines={1} style={{ flex: 1, color: pop && playing ? colors.onAccent ?? '#111111' : colors.textSecondary, fontSize: 14 }}>{item.artist}</Text>
         </View>
       </View>
       {showHeart && (

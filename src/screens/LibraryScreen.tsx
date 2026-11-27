@@ -32,7 +32,7 @@ import { useDockCollapse } from '../components/dockCollapse';
 import { useRenderProbe } from '../components/JankMonitor';
 import { GlassFill, glassShadow, solidShadow } from '../components/Glass';
 import { useDisplayFont } from '../theme/fonts';
-import { popEdge, popMode } from '../theme/pop';
+import { POP_ACCENTS, popEdge, popMode, popRow, popThumb } from '../theme/pop';
 
 const H_PAD = 16;
 const COVER_H = 520; // chiều cao vùng ảnh bìa: phủ phần đầu trang rồi mờ dần xuống tận danh sách
@@ -59,6 +59,14 @@ type Item = LibraryEntry & { id: string }; // Reorderable cần trường id: d�
 type Sort = 'recents' | 'alpha';
 
 // Ảnh của một mục trong thư viện: ảnh thật nếu có; Liked Songs là ô tím có trái tim; nghệ sĩ thì ảnh tròn
+// Pop folder tab colour: picked from the Pop accents by the item's id, so a playlist keeps its colour
+const FOLDER_COLORS = [POP_ACCENTS.lilac, POP_ACCENTS.mint, POP_ACCENTS.coral, POP_ACCENTS.yellow, POP_ACCENTS.sky, POP_ACCENTS.pink];
+function folderColor(id: string) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+  return FOLDER_COLORS[Math.abs(h) % FOLDER_COLORS.length];
+}
+
 function CoverBox({ item, size, radius }: { item: LibraryEntry; size: number; radius: number }) {
   const { theme } = useTheme();
   const r = item.kind === 'artist' ? size / 2 : radius;
@@ -67,14 +75,14 @@ function CoverBox({ item, size, radius }: { item: LibraryEntry; size: number; ra
       <SmartImage
         url={item.thumb}
         size={Math.round(size * PixelRatio.get())}
-        style={{ width: size, height: size, borderRadius: r, backgroundColor: theme.colors.surface }}
+        style={[{ width: size, height: size, borderRadius: r, backgroundColor: theme.colors.surface }, popThumb(r)]}
       />
     );
   }
   const liked = item.kind === 'liked';
   const icon: keyof typeof Ionicons.glyphMap = liked ? 'heart' : item.kind === 'album' ? 'disc' : item.kind === 'artist' ? 'person' : 'musical-notes';
   return (
-    <View style={{ width: size, height: size, borderRadius: r, backgroundColor: liked ? '#5B3CC4' : theme.colors.surface, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={[{ width: size, height: size, borderRadius: r, backgroundColor: liked ? '#5B3CC4' : theme.colors.surface, alignItems: 'center', justifyContent: 'center' }, popThumb(r)]}>
       <Ionicons name={icon} size={Math.max(16, size * 0.38)} color={liked ? 'rgba(255,255,255,0.85)' : theme.colors.textSecondary} />
     </View>
   );
@@ -255,8 +263,8 @@ export function LibraryScreen() {
       renderItem = (it) =>
         tap(
           it,
-          <View style={styles.listRow}>
-            <CoverBox item={it} size={56} radius={4} />
+          <View style={[styles.listRow, popRow()]}>
+            <CoverBox item={it} size={pop ? 50 : 56} radius={pop ? 9 : 4} />
             <View style={{ flex: 1 }}>
               <Text numberOfLines={1} style={{ color: text, fontSize: 16, fontWeight: '600' }}>{titleOf(it)}</Text>
               <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>{subtitleOf(it)}</Text>
@@ -276,6 +284,36 @@ export function LibraryScreen() {
             <Text numberOfLines={2} style={{ color: text, flex: 1, marginHorizontal: 10, fontSize: 13, fontWeight: '600' }}>
               {titleOf(it)}
             </Text>
+          </View>
+        );
+    } else if (pop) {
+      // Pop (approved cards mockup 27/11): playlists as folder cards — a coloured tab on top, the cover in the corner,
+      // the count top-right and the name at the bottom. Covers 3 just makes the folders smaller
+      const base = layout === 'covers2' ? 2 : 3;
+      const cols = Math.max(base, Math.floor(innerW / (layout === 'covers2' ? 200 : 140)));
+      const gapX = 12;
+      const w = (innerW - gapX * (cols - 1)) / cols;
+      const small = cols >= 3;
+      grid = { columns: cols, cellWidth: w, gapX, gapY: 16 };
+      renderItem = (it) =>
+        tap(
+          it,
+          <View style={{ paddingTop: 12 }}>
+            <View style={[styles.folderTab, { backgroundColor: folderColor(it.id), borderColor: theme.colors.border, borderWidth: Math.min(popMode.line, 2.5) }]} />
+            <View style={[styles.folderCard, { minHeight: small ? 104 : 124, padding: small ? 8 : 10 }, glassShadow(1)]}>
+              <GlassFill radius={14} solid={0.5} slab />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <CoverBox item={it} size={small ? 38 : 46} radius={9} />
+                {!small && (
+                  <Text numberOfLines={2} style={{ color: textSecondary, fontSize: 12, fontWeight: '700', textAlign: 'right', flexShrink: 1, marginLeft: 6 }}>
+                    {subtitleOf(it)}
+                  </Text>
+                )}
+              </View>
+              <Text numberOfLines={2} style={{ color: text, fontSize: small ? 13 : 14.5, fontWeight: '800', marginTop: 10 }}>
+                {titleOf(it)}
+              </Text>
+            </View>
           </View>
         );
     } else {
@@ -666,5 +704,7 @@ const styles = StyleSheet.create({
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, borderCurve: 'continuous' },
   searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderCurve: 'continuous', paddingHorizontal: 12 },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 },
+  folderTab: { position: 'absolute', top: 0, left: 8, width: '58%', height: 24, borderBottomWidth: 0, borderTopLeftRadius: 10, borderTopRightRadius: 14 },
+  folderCard: { borderRadius: 14, justifyContent: 'space-between' },
   chipRow: { height: 60, borderRadius: 14, borderCurve: 'continuous', flexDirection: 'row', alignItems: 'center', paddingLeft: 6 },
 });
