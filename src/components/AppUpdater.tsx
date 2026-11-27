@@ -33,6 +33,13 @@ export function AppUpdater() {
         const f = await Updates.fetchUpdateAsync();
         if (!f.isNew) return;
         asked = true;
+        // Normal updates: downloaded now, used the next time the app is opened (no popup, no restart mid-song).
+        // Only updates published as critical ([hotfix]) ask to restart right away.
+        const m = (f.manifest ?? r.manifest) as { extra?: { expoClient?: { extra?: { updatePriority?: string } } } } | undefined;
+        if (m?.extra?.expoClient?.extra?.updatePriority !== 'critical') {
+          log('ui', 'update downloaded, applies next time the app opens');
+          return;
+        }
         const tt = tRef.current;
         Alert.alert(tt('update.title'), tt('update.body'), [
           { text: tt('update.later'), style: 'cancel' },

@@ -232,6 +232,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     stallRef.current = { t: -1, at: t0 };
     loadAtRef.current = 0;
     flog(`tải bài: ${t.title}${t.artist ? ` — ${t.artist}` : ''}`, 'music');
+    loadStartedAt.current = Date.now();
     try {
       const uri = await resolveUrl(t.id);
       if (id !== reqId.current) return; // đã bấm bài khác
@@ -560,6 +561,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const togglePlay = useCallback(() => {
     if (!musicSupported || queueRef.current.length === 0) return;
     flog('người dùng bấm phát / dừng trong app', 'music');
+    userToggleAt.current = Date.now();
     // Hàng đợi khôi phục từ lần mở app trước: nạp bài rồi tua tới chỗ đang nghe dở
     if (needsLoad.current) {
       const cur = queueRef.current[indexRef.current];
@@ -641,6 +643,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return () => sub.remove();
   }, []);
   const lastStatus = useRef<{ playing: boolean; isBuffering: boolean; isLoaded: boolean; currentTime: number } | null>(null);
+  const userToggleAt = useRef(0); // when the user last pressed play / pause inside the app
+  const loadStartedAt = useRef(0); // when the current song started loading
   // Theo dõi trạng thái thật của trình phát
   useEffect(() => {
     if (!musicSupported) return;
@@ -673,6 +677,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         setProgress(s.currentTime);
         checkFrameLoop('trình phát (báo giờ)');
       }
+      // The song stopped and the app didn't ask for it: iOS / Android paused it (call, notification sound, Siri, alarm,
+      // headphones or Bluetooth disconnected, or pause pressed on the lock screen / headphones). Logged so we can tell
+      // these apart from bugs (log 24/11 00:40: music stopped at 193/205 s in the background and never came back).
+      const prev = lastStatus.current;
+      if (prev?.playing && !s.playing && !s.isBuffering && s.isLoaded && !loadingRef.current && Date.now() - userToggleAt.current > 1500 && !(s.duration > 0 && s.currentTime >= s.duration - 1)) {
+        flog(`dừng không phải do app (cuộc gọi / thông báo / Siri, tai nghe hoặc Bluetooth ngắt, hay bấm dừng ở màn hình khoá / tai nghe) · ${AppState.currentState === 'active' ? 'đang mở app' : 'app ở nền'}`, 'music');
+      }
       lastStatus.current = { playing: s.playing, isBuffering: s.isBuffering, isLoaded: s.isLoaded, currentTime: s.currentTime };
       if (s.isLoaded) loadAtRef.current = 0; // bài đã nạp xong
       checkStallRef.current();
@@ -699,7 +710,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       // Android: when a new song is loaded, the player sometimes reports "finished" for it after 0.2 s
       // (log 23/11, Galaxy S21 FE: the app skipped through songs on its own, several times a second).
       // Trust "finished" only near the real end of the song.
-      const nearEnd = !(s.duration > 0) || s.currentTime >= s.duration - 2; // length unknown: keep trusting it
+      // Length unknown (0.0/0.0s, seen right after a new song loads on Android, log 23/11): only trust "finished" once the
+      // song has had time to really play, otherwise the app skipped 2-3 songs after one tap (user report 27/11)
+      const nearEnd = s.duration > 0 ? s.currentTime >= s.duration - 2 : Date.now() - loadStartedAt.current > 10000;
       if (s.didJustFinish && !nearEnd) flog(`báo hết sai (ở ${s.currentTime.toFixed(1)}/${(s.duration ?? 0).toFixed(1)}s) → bỏ qua`, 'music');
       const ended =
         (s.didJustFinish && nearEnd) ||
