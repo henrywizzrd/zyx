@@ -46,6 +46,13 @@ export function setDuck(d: number) {
   duck = Math.max(0, Math.min(1, d));
   applyVolume();
 }
+// Diagnostics: the main player's real volume and what it is made of (log 27/11: a song played with the timeline
+// moving but no sound while the effects source was stuck at 0 s)
+export function volumeDebug(): string {
+  const v = (n: number) => n.toFixed(2);
+  return `main=${pl ? v(pl.volume) : '-'} (user ${v(userVol)} · fx ${v(fxMix)} · duck ${v(duck)} · fadeIn ${v(xIn)})`;
+}
+
 export function setFxMix(m: number) {
   fxMix = Math.max(0, Math.min(1, m));
   applyVolume();

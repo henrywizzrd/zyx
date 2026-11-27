@@ -1019,7 +1019,7 @@ function sync(force = false) {
   }
   if (now - lastLog > (bg ? 10000 : 2000)) { // app ở nền: ghi thưa hơn cho nhẹ máy
     lastLog = now;
-    flog(`ctx=${c.state} t=${c.currentTime.toFixed(1)} pos=${p.toFixed(1)} want=${want.toFixed(1)} mix=${mix.toFixed(2)} duck=${duck.toFixed(2)} vol=${audio().getUserVolume().toFixed(2)}`);
+    flog(`ctx=${c.state} t=${c.currentTime.toFixed(1)} pos=${p.toFixed(1)} want=${want.toFixed(1)} mix=${mix.toFixed(2)} duck=${duck.toFixed(2)} vol=${audio().getUserVolume().toFixed(2)} · ${audio().volumeDebug()}`);
   }
   if (wantMix !== 1 && !prog.ok) {
     // nguồn chưa chạy: tiếng vẫn ở trình phát chính (lần sau đồng bộ, nguồn nhích rồi mới chuyển)
