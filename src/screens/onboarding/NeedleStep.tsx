@@ -1,6 +1,7 @@
-// Last welcome screen: "Drop the needle". The record sits in its sleeve with only its top edge showing and gently
-// rises to hint the gesture. One job: swipe up anywhere on the sleeve — the record slides out, flies onto the
-// tilted turntable, the arm swings in, then the camera dives into the label and the app opens.
+// Last welcome screen: "Drop the needle". 27/11 v2: a flat, top-down turntable (like the reference Tyson sent),
+// no 3D tilt — the tilted deck kept covering the record on iOS. The record sits in its sleeve with only its top edge
+// showing and gently rises to hint the gesture. One job: swipe up anywhere on the sleeve — the record slides out and
+// lands on the platter, the tone arm swings onto it, it spins, then the camera dives into the label and the app opens.
 import React, { useEffect, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
@@ -18,19 +19,16 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets';
 import { hapticSnap } from '../../components/haptics';
 import { CONDENSED_FONT } from '../../theme/fonts';
-import { EASE_IN_OUT, EASE_OUT, Headline, OB, Vinyl } from './kit';
+import { EASE_IN_OUT, EASE_OUT, Hard, Headline, OB, Vinyl } from './kit';
 
 const REC = 124; // record in the sleeve
 const SLEEVE = 150;
 const PEEK = 16; // how much of the record shows above the sleeve
 const REC_BOTTOM = SLEEVE - REC + PEEK; // record's bottom edge, measured from the sleeve's bottom
 const OUT = REC - PEEK; // rise needed to clear the sleeve
-const TILT = 52; // turntable tilt, degrees
-const COS = Math.cos((TILT * Math.PI) / 180);
-// Turntable drawn at 300×250; platter 200 wide at (24, 22)
-const DECK_W = 300;
-const DECK_H = 250;
-const PLAT = { x: 24, y: 22, d: 200 };
+const GAP = 44; // between the turntable and the sleeve
+const ARM_REST = 6; // tone arm angles, degrees (0 = pointing straight down)
+const ARM_PLAY = 30;
 
 export function NeedleStep({ onDone, scale }: { onDone: () => void; scale: number }) {
   const reduced = useReducedMotion();
@@ -38,25 +36,28 @@ export function NeedleStep({ onDone, scale }: { onDone: () => void; scale: numbe
   const [touched, setTouched] = useState(false);
   const [landed, setLanded] = useState(false);
 
-  // geometry (all in this screen's coordinates)
+  // geometry, in this screen's coordinates
   const W = box?.w ?? 0;
   const H = box?.h ?? 0;
-  const k = Math.min(W * 0.82, 270) / DECK_W; // turntable scale
-  const dw = DECK_W * k;
-  const dh = DECK_H * k;
-  const deckCx = W / 2;
-  const deckCy = H - SLEEVE - 36 - (dh * COS) / 2 - 14 * k;
-  const platCx = deckCx + (PLAT.x + PLAT.d / 2 - DECK_W / 2) * k;
-  const platCy = deckCy + (PLAT.y + PLAT.d / 2 - DECK_H / 2) * k * COS;
+  const top = 150 * scale; // below the headline and the line under it
+  const D = Math.max(200, Math.min(W, 340, H - SLEEVE - GAP - top)); // square turntable
+  const deckX = (W - D) / 2;
+  const deckY = H - SLEEVE - GAP - D;
+  const P = D * 0.78; // platter
+  const platCx = deckX + D * 0.45;
+  const platCy = deckY + D * 0.5;
+  const disc = P * 0.94; // record on the platter
   const recCy = H - REC_BOTTOM - REC / 2;
+  // tone arm: pivot near the top right corner, rod hanging down along the right side
+  const pivX = deckX + D * 0.86;
+  const pivY = deckY + D * 0.15;
+  const armLen = D * 0.6;
 
-  // record motion
   const ty = useSharedValue(0);
   const tx = useSharedValue(0);
-  const sx = useSharedValue(1);
-  const sy = useSharedValue(1);
+  const sc = useSharedValue(1);
   const bob = useSharedValue(0);
-  const arm = useSharedValue(8);
+  const arm = useSharedValue(ARM_REST);
   const zoom = useSharedValue(1);
   const busy = useSharedValue(0);
 
@@ -69,7 +70,7 @@ export function NeedleStep({ onDone, scale }: { onDone: () => void; scale: numbe
   const afterLanding = () => {
     setLanded(true);
     hapticSnap();
-    arm.value = withDelay(250, withTiming(24, { duration: 700, easing: EASE_OUT }));
+    arm.value = withDelay(200, withTiming(ARM_PLAY, { duration: 700, easing: EASE_OUT }));
     if (reduced) {
       setTimeout(onDone, 900);
       return;
@@ -78,22 +79,23 @@ export function NeedleStep({ onDone, scale }: { onDone: () => void; scale: numbe
     setTimeout(onDone, 1250 + 800); // the lime flash (drawn by AuthGate) covers the rest of the dive
   };
 
-  const fly = (targetX: number, targetY: number, scaleX: number, scaleY: number, from: number) => {
-    'worklet';
-    busy.value = 1;
-    const first = from > -OUT ? 220 : 0; // still in the sleeve: finish pulling it out first
-    ty.value = withSequence(withTiming(-OUT - 8, { duration: first }), withTiming(targetY, { duration: 560, easing: EASE_OUT }, (done) => {
-      if (done) scheduleOnRN(afterLanding);
-    }));
-    tx.value = withDelay(first, withTiming(targetX, { duration: 560, easing: EASE_OUT }));
-    sx.value = withDelay(first, withTiming(scaleX, { duration: 560, easing: EASE_OUT }));
-    sy.value = withDelay(first, withTiming(scaleY, { duration: 560, easing: EASE_OUT }));
-  };
-
   const targetX = platCx - W / 2;
   const targetY = platCy - recCy;
-  const scaleX = (PLAT.d * k * 0.96) / REC;
-  const scaleY = (PLAT.d * k * COS * 0.96) / REC;
+  const targetS = disc / REC;
+  const fly = (from: number) => {
+    'worklet';
+    busy.value = 1;
+    const first = from > -OUT ? 200 : 0; // still in the sleeve: finish pulling it out first
+    ty.value = withSequence(
+      withTiming(-OUT - 8, { duration: first }),
+      withTiming(targetY, { duration: 560, easing: EASE_OUT }, (done) => {
+        if (done) scheduleOnRN(afterLanding);
+      })
+    );
+    tx.value = withDelay(first, withTiming(targetX, { duration: 560, easing: EASE_OUT }));
+    sc.value = withDelay(first, withTiming(targetS, { duration: 560, easing: EASE_OUT }));
+  };
+
   const pan = usePanGesture({
     activeOffsetY: [-4, 4],
     onBegin: () => {
@@ -112,19 +114,16 @@ export function NeedleStep({ onDone, scale }: { onDone: () => void; scale: numbe
     onDeactivate: (e) => {
       'worklet';
       if (busy.value) return;
-      if (-ty.value > 60 || e.velocityY < -600) fly(targetX, targetY, scaleX, scaleY, ty.value);
+      if (-ty.value > 60 || e.velocityY < -600) fly(ty.value);
       else ty.value = withSpring(0, { duration: 400, dampingRatio: 0.8, velocity: e.velocityY });
     },
   });
 
-  const recStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: tx.value }, { translateY: ty.value + bob.value }, { scaleX: sx.value }, { scaleY: sy.value }],
-  }));
+  const recStyle = useAnimatedStyle(() => ({ transform: [{ translateX: tx.value }, { translateY: ty.value + bob.value }, { scale: sc.value }] }));
   const armStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${arm.value}deg` }] }));
   const worldStyle = useAnimatedStyle(() => ({ transform: [{ scale: zoom.value }] }));
-  const sleeveStyle = useAnimatedStyle(() => ({ opacity: zoom.value > 1.05 ? 0 : 1 }));
+  const fade = useAnimatedStyle(() => ({ opacity: zoom.value > 1.05 ? 0 : 1 }));
 
-  const deckTransform = [{ perspective: 900 }, { rotateX: `${TILT}deg` }];
   return (
     <View style={{ flex: 1 }} onLayout={(e: LayoutChangeEvent) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
       <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: `${platCx}px ${platCy}px` }, worldStyle]}>
@@ -135,33 +134,33 @@ export function NeedleStep({ onDone, scale }: { onDone: () => void; scale: numbe
 
         {box && (
           <>
-            {/* turntable: a solid base under the tilted deck gives it thickness.
-                Both sit in their own flat box: iOS sorts sibling layers in 3D, so the tilted deck's near half used to
-                cover the record (in the sleeve and while flying in). Inside a 2D box the record simply draws on top. */}
-            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-              <View style={{ position: 'absolute', left: deckCx - dw / 2, top: deckCy - dh / 2 + 14 * k, width: dw, height: dh, borderRadius: 26 * k, backgroundColor: OB.ink, transform: deckTransform }} />
-              <View style={[styles.deck, { left: deckCx - dw / 2, top: deckCy - dh / 2, width: dw, height: dh, borderRadius: 26 * k, transform: deckTransform }]}>
-                <View style={{ position: 'absolute', left: PLAT.x * k, top: PLAT.y * k, width: PLAT.d * k, height: PLAT.d * k, borderRadius: PLAT.d, backgroundColor: '#2A2A2E', borderWidth: 3, borderColor: OB.ink, alignItems: 'center', justifyContent: 'center' }}>
-                  {landed ? <Vinyl size={PLAT.d * k - 10} spin={1600} border={2} /> : <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#CCCCCC', borderWidth: 2, borderColor: OB.ink }} />}
-                </View>
-                {/* tone arm, same geometry as the approved HTML: pivot at the top right, a thin rod, then a thicker
-                    lower rod that runs past the deck's front edge; it turns around the pivot centre (8, 8) */}
-                <Animated.View style={[{ position: 'absolute', right: 20 * k, top: 24 * k, width: 16 * k, height: 250 * k, transformOrigin: `${8 * k}px ${8 * k}px` }, armStyle]}>
-                  <View style={{ position: 'absolute', left: 5 * k, top: 8 * k, width: 6 * k, height: 118 * k, borderRadius: 4 * k, backgroundColor: OB.ink }} />
-                  <View style={{ position: 'absolute', left: -2 * k, top: 120 * k, width: 10 * k, height: 122 * k, borderRadius: 6 * k, backgroundColor: OB.ink }} />
-                  <View style={{ position: 'absolute', left: 0, top: 0, width: 16 * k, height: 16 * k, borderRadius: 8 * k, backgroundColor: OB.ink }} />
-                </Animated.View>
-                <View style={{ position: 'absolute', right: 22 * k, bottom: 18 * k, width: 34 * k, height: 34 * k, borderRadius: 17 * k, backgroundColor: OB.acc, borderWidth: 3, borderColor: OB.ink }} />
-              </View>
+            {/* turntable, seen from above */}
+            <Hard radius={D * 0.08} offset={6} outer={{ position: 'absolute', left: deckX, top: deckY }} style={{ width: D, height: D, borderRadius: D * 0.08, borderWidth: 3, backgroundColor: OB.paper }} />
+            <View pointerEvents="none" style={[styles.platter, { left: platCx - P / 2, top: platCy - P / 2, width: P, height: P, borderRadius: P / 2 }]}>
+              {landed ? <Vinyl size={disc} spin={1600} border={2} /> : <View style={styles.spindle} />}
+            </View>
+            {/* start lever, bottom left, and speed knob, bottom right */}
+            <View pointerEvents="none" style={[styles.lever, { left: deckX + D * 0.06, top: deckY + D * 0.74, width: D * 0.05, height: D * 0.16, borderRadius: D * 0.03 }]} />
+            <View pointerEvents="none" style={[styles.knob, { left: deckX + D * 0.84, top: deckY + D * 0.8, width: D * 0.09, height: D * 0.09, borderRadius: D * 0.05 }]} />
+            {/* tone arm: hangs from the pivot; turns onto the record once it lands */}
+            <Animated.View
+              pointerEvents="none"
+              style={[{ position: 'absolute', left: pivX - 8, top: pivY, width: 16, height: armLen + 24, transformOrigin: '8px 0px' }, armStyle]}
+            >
+              <View style={{ position: 'absolute', left: 5, top: 0, width: 6, height: armLen, borderRadius: 3, backgroundColor: OB.ink }} />
+              <View style={{ position: 'absolute', left: 0, top: armLen - 4, width: 16, height: 26, borderRadius: 4, backgroundColor: OB.ink }} />
+            </Animated.View>
+            <View pointerEvents="none" style={[styles.pivot, { left: pivX - D * 0.07, top: pivY - D * 0.07, width: D * 0.14, height: D * 0.14, borderRadius: D * 0.07 }]}>
+              <View style={{ width: D * 0.05, height: D * 0.05, borderRadius: D * 0.025, backgroundColor: OB.ink }} />
             </View>
 
-            {/* the record (behind the sleeve until it rises out of it) */}
+            {/* the record, behind the sleeve until it rises out of it */}
             {!landed && (
               <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: W / 2 - REC / 2, top: recCy - REC / 2 }, recStyle]}>
                 <Vinyl size={REC} />
               </Animated.View>
             )}
-            <Animated.View pointerEvents="none" style={[styles.sleeve, { left: W / 2 - SLEEVE / 2 }, sleeveStyle]}>
+            <Animated.View pointerEvents="none" style={[styles.sleeve, { left: W / 2 - SLEEVE / 2 }, fade]}>
               <View style={[StyleSheet.absoluteFill, { left: 5, top: 5, right: -5, bottom: -5, borderRadius: 14, backgroundColor: OB.ink }]} />
               <View style={styles.sleeveFace}>
                 <Text allowFontScaling={false} style={styles.sleeveText}>
@@ -170,8 +169,8 @@ export function NeedleStep({ onDone, scale }: { onDone: () => void; scale: numbe
               </View>
             </Animated.View>
             {!touched && (
-              <View pointerEvents="none" style={[styles.hint, { right: 0, bottom: SLEEVE + 38 }]}>
-                <Text style={styles.hintText}>↑ Swipe up</Text>
+              <View pointerEvents="none" style={[styles.hint, { left: W / 2 + SLEEVE / 2 + 8, bottom: SLEEVE / 2 - 18 }]}>
+                <Text style={styles.hintText}>↑ Swipe</Text>
               </View>
             )}
             {/* touch area: the whole sleeve plus the record above it */}
@@ -180,7 +179,7 @@ export function NeedleStep({ onDone, scale }: { onDone: () => void; scale: numbe
                 accessible
                 accessibilityRole="button"
                 accessibilityLabel="Put the record on the turntable"
-                onAccessibilityTap={() => fly(targetX, targetY, scaleX, scaleY, 0)}
+                onAccessibilityTap={() => fly(0)}
                 style={{ position: 'absolute', left: W / 2 - 90, bottom: 0, width: 180, height: SLEEVE + 70 }}
               />
             </GestureDetector>
@@ -193,10 +192,14 @@ export function NeedleStep({ onDone, scale }: { onDone: () => void; scale: numbe
 
 const styles = StyleSheet.create({
   sub: { fontWeight: '700', fontSize: 15, color: OB.ink, marginTop: 10 },
-  deck: { position: 'absolute', backgroundColor: OB.paper, borderWidth: 3, borderColor: OB.ink },
+  platter: { position: 'absolute', backgroundColor: '#2A2A2E', borderWidth: 3, borderColor: OB.ink, alignItems: 'center', justifyContent: 'center' },
+  spindle: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#CCCCCC', borderWidth: 2, borderColor: OB.ink },
+  lever: { position: 'absolute', backgroundColor: OB.ink },
+  knob: { position: 'absolute', backgroundColor: OB.acc, borderWidth: 3, borderColor: OB.ink },
+  pivot: { position: 'absolute', backgroundColor: OB.acc, borderWidth: 3, borderColor: OB.ink, alignItems: 'center', justifyContent: 'center' },
   sleeve: { position: 'absolute', bottom: 0, width: SLEEVE, height: SLEEVE },
   sleeveFace: { flex: 1, borderRadius: 14, backgroundColor: OB.acc, borderWidth: 3, borderColor: OB.ink, justifyContent: 'flex-end', padding: 12 },
   sleeveText: { fontFamily: CONDENSED_FONT, fontWeight: 'normal', fontSize: 26, lineHeight: 25, color: OB.ink, textTransform: 'uppercase', includeFontPadding: false },
-  hint: { position: 'absolute', backgroundColor: OB.ink, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  hintText: { color: OB.acc, fontWeight: '900', fontSize: 14 },
+  hint: { position: 'absolute', backgroundColor: OB.ink, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
+  hintText: { color: OB.acc, fontWeight: '900', fontSize: 13 },
 });
