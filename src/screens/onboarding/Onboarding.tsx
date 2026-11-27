@@ -1,5 +1,5 @@
 // Welcome screens after sign-in (27/11): genres → what's inside → pick your look → drop the needle.
-// Shown once per device to people who arrive at the sign-in screen without a saved session (new installs).
+// Shown once per account (and once for guest) on each device, after signing in from the sign-in screen.
 // English only. preview: opened from the admin screen; nothing is saved or applied.
 import React, { useState } from 'react';
 import { View, useWindowDimensions } from 'react-native';
@@ -55,7 +55,6 @@ export function Onboarding({ onDone, preview }: { onDone: () => void; preview?: 
       }
       if (theme.dock.mode !== 'apple') setDockMode('apple');
       kvSet(FAV_GENRES_KEY, picked);
-      kvSet(ONBOARDED_KEY, true);
     }
     appLog('ui', `welcome done${preview ? ' (preview)' : ''}: ${look.kind === 'pop' ? `Pop ${look.theme}` : `Default ${look.preset}`}, ${picked.length} genres`);
     onDone();
