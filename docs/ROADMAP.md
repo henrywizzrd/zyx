@@ -5,6 +5,7 @@ Working notes for what's next. Agreed items are done one at a time on the `beta`
 ## Release rules (agreed 24/11)
 - Stable gets about **one update a week**. Updates download quietly and apply the next time the app opens.
 - `[hotfix]` / `[critical]` only for bugs that stop people listening; those still ask to restart right away.
+- The weekly stable update is a `[stable]` commit on main: production OTA, applied quietly (no popup, no GitHub Release).
 
 ## 1. Use less memory, keep the same animations
 Goal: old / low-RAM phones (iPhone 8 Plus, 3 GB) stop getting closed by iOS in the background, without changing how the app looks or moves. Animations themselves cost almost nothing; memory goes to what is drawn.
