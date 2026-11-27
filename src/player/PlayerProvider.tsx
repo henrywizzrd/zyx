@@ -32,6 +32,9 @@ function resolveUrl(id: string): Promise<string> {
   const job = ytmusic()
     .getAudio(id, undefined, true)
     .then((a) => {
+      // Log which client and format we got: a format without an audio codec (no "mp4a") plays silently
+      // while the timeline moves (log 27/11, "Nơi Tình Yêu Kết Thúc")
+      flog(`link ${id}: ${a.client} · ${a.mime ?? '?'}${a.mime && !/mp4a|opus|audio/i.test(a.mime) ? ' · NO AUDIO TRACK' : ''}`, 'music');
       urlCache.set(id, { url: a.url, at: Date.now() });
       return a.url;
     })
