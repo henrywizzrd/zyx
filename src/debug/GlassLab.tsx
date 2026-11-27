@@ -10,7 +10,6 @@ const MATERIALS: { id: GlassMaterial; label: string }[] = [
   { id: 'clear', label: 'Clear' },
   { id: 'frost', label: 'Frosted' },
   { id: 'smoke', label: 'Smoked' },
-  { id: 'matte', label: 'Matte' },
   { id: 'neon', label: 'Neon' },
 ];
 

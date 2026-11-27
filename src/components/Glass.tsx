@@ -57,12 +57,11 @@ export function GlassInside({ children }: { children: React.ReactNode }) {
 }
 
 // Ba loại kính (Theme Studio): Trong / Mờ / Khói. Thanh "Độ mờ kính" chỉnh độ đậm bên trong loại đó
-// Mờ (frost) làm theo kính của màn đa nhiệm iOS: nhoè đậm, phủ màu theme dày hơn (ngả tối với theme tối),
-// chữ / ảnh phía sau chỉ còn là mảng màu, không đọc được
-// Mờ tối (matte): kiểu kính iOS cổ điển — đúng cái Tyson thấy khi xem app ở màn đa nhiệm (iOS thay Liquid Glass bằng lớp vật liệu
-// nhoè dày "material" của hệ thống): nhoè rất đậm, ngả tối + nhuộm nhẹ màu theme, mép chỉ một viền sáng mảnh, không phản chiếu,
-// không khúc xạ. Không dùng Liquid Glass
-export type GlassMaterial = 'clear' | 'frost' | 'smoke' | 'matte' | 'neon';
+// Frosted (frost): the system's thick blur material, like the glass Tyson sees in the iOS app switcher — heavy blur,
+// darkened + lightly tinted with the theme colour, a thin light rim, no reflection or refraction. Not Liquid Glass
+// 27/11: the old self-drawn 'frost' was removed; 'frost' (Frosted) now uses the system thick-blur material that used to be
+// called 'matte' (Tyson: that one is the real frosted look). Saved 'matte' themes are migrated to 'frost' in ThemeProvider.
+export type GlassMaterial = 'clear' | 'frost' | 'smoke' | 'neon';
 
 // Bóng hai lớp của tấm kính đặt nổi trên mặt bàn (công thức chốt từ trang thử kính):
 // một bóng đậm, gọn sát chân + một bóng mềm, rộng. lift: độ nổi (1 = bình thường, cầm lên thì lớn hơn)
@@ -130,8 +129,8 @@ export function GlassFill({
     );
   }
 
-  // ---- Mờ tối: vật liệu nhoè dày của hệ thống
-  if (material === 'matte') {
+  // ---- Frosted: the system's thick blur material
+  if (material === 'frost') {
     const ios = Platform.OS === 'ios';
     return (
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, overflow: 'hidden' }]}>
@@ -172,15 +171,13 @@ export function GlassFill({
     const tint =
       material === 'smoke'
         ? `rgba(0,0,0,${(0.22 + 0.33 * g.level).toFixed(2)})`
-        : material === 'frost'
-        ? `rgba(${glassRgb},${Math.min(0.85, 0.34 + 0.36 * g.level + solid * 0.12).toFixed(2)})`
         : g.level > 0.02 || solid > 0
         ? `rgba(${glassRgb},${(0.22 * g.level + solid * 0.08).toFixed(2)})`
         : undefined;
     return (
       <LG.GlassView
         pointerEvents="none"
-        glassEffectStyle={material === 'frost' ? 'regular' : 'clear'}
+        glassEffectStyle="clear"
         tintColor={tint}
         colorScheme={dark ? 'dark' : 'light'}
         style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, overflow: 'hidden' }]}
@@ -191,12 +188,9 @@ export function GlassFill({
   // ---- Self-drawn glass (everything inside pages): each material has its own clear signature so the choice in
   // Theme Studio is visible across the whole app, modelled on the dock's real Liquid Glass:
   //  clear  — almost no blur or tint, strong edge light (lens rim) and a bright diagonal reflection
-  //  frost  — heavy blur + milky tint (iOS "regular" glass), soft inner glow
   //  smoke  — dark tinted glass, medium blur, crisp light rim
   const P =
-    material === 'frost'
-      ? { blur: 55 + g.level * 45, tintA: 0.42 + 0.33 * g.level, sheen: 0.12, glow: 'inset 0px 0px 18px rgba(255,255,255,0.32)' }
-      : material === 'smoke'
+    material === 'smoke'
       ? { blur: 18 + g.level * 40, tintA: 0, sheen: 0.1, glow: 'inset 0px 0px 12px rgba(255,255,255,0.07)' }
       : { blur: 3 + g.level * 14, tintA: 0.02 + 0.18 * g.level, sheen: 0.28, glow: `inset 0px 0px 14px rgba(255,255,255,${dark ? 0.16 : 0.28})` };
   const androidBoost = Platform.OS === 'android' ? 0.2 : 0;

@@ -371,7 +371,7 @@ export function ThemeStudioScreen() {
         {/* Loại kính: Trong / Mờ / Khói / Mờ tối (dock, mini player, bảng bật lên, thẻ...) */}
         <Text style={[styles.label, { color: text, marginTop: 18 }]}>{t('studio.material')}</Text>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-          {(['clear', 'frost', 'smoke', 'matte', 'neon'] as const).map((m) => {
+          {(['clear', 'frost', 'smoke', 'neon'] as const).map((m) => {
             const on = (theme.glass.material ?? 'clear') === m;
             return (
               <Pressable
@@ -379,7 +379,7 @@ export function ThemeStudioScreen() {
                 onPress={() => {
                   setGlassMaterial(m);
                   // Mờ tối: mặc định bản MỎNG (nhoè nhẹ, trong) — kéo thanh Độ mờ kính sang phải để dày / đặc hơn
-                  if (m === 'matte' && (theme.glass.material ?? 'clear') !== 'matte') setGlassBlur(15);
+                  if (m === 'frost' && (theme.glass.material ?? 'clear') !== 'frost') setGlassBlur(15);
                 }}
                 style={{ flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 14, borderCurve: 'continuous', backgroundColor: on ? accent : theme.colors.surface }}
               >
