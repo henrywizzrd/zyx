@@ -13,7 +13,11 @@ import { Cover } from './Cover';
 import { Reorderable } from './Reorderable';
 import { ReorderableScrollView } from './ReorderableScrollView';
 
-const SOFT = 'rgba(255,255,255,0.6)';
+// Colours: white on dark glass normally; in Pop the sheet is a flat outlined card in the theme's card colour,
+// so text follows the theme (set on every render of the sheet)
+let SOFT = 'rgba(255,255,255,0.6)';
+let FG = '#FFFFFF';
+let POP = false;
 const PAD = 16;
 const ROW_H = 60;
 const PAGE = 40; // số bài chờ dựng mỗi lần // mỗi bài trong hàng đợi cao đúng chừng này (ảnh 48 + đệm 6 trên dưới)
@@ -35,6 +39,9 @@ export function QueueSheet({ visible, onClose, inModal }: { visible: boolean; on
   const insets = useSafeAreaInsets();
   const { queue, index, jumpTo, removeFromQueue, reorderUpNext, autoplay, setAutoplay, radioLoading, loadMoreSuggestions } = usePlayerPick('queue', 'index', 'jumpTo', 'removeFromQueue', 'reorderUpNext', 'autoplay', 'setAutoplay', 'radioLoading', 'loadMoreSuggestions');
   const accent = theme.colors.accent;
+  POP = theme.style === 'pop';
+  FG = POP ? theme.colors.text : '#FFFFFF';
+  SOFT = POP ? theme.colors.textSecondary : 'rgba(255,255,255,0.6)';
 
   const [box, setBox] = useState({ width: 0, height: 0 });
   // Tấm luôn cao gần hết màn hình, chỉ trượt lên xuống:
@@ -171,11 +178,11 @@ export function QueueSheet({ visible, onClose, inModal }: { visible: boolean; on
 
   const row = (q: QueueItem, current: boolean) => (
     <View style={styles.row}>
-      <Cover track={q} style={{ width: 48, height: 48, borderRadius: 4 }}>
+      <Cover track={q} style={[{ width: 48, height: 48, borderRadius: 4 }, POP && { borderRadius: 9, borderWidth: 2, borderColor: theme.colors.border }]}>
         <Ionicons name="musical-notes" size={18} color="rgba(255,255,255,0.8)" />
       </Cover>
       <View style={{ flex: 1 }}>
-        <Text numberOfLines={1} style={{ color: current ? accent : '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
+        <Text numberOfLines={1} style={{ color: current ? (POP ? theme.colors.accentText : accent) : FG, fontSize: 15, fontWeight: POP ? '800' : '600' }}>
           {q.title}
         </Text>
         <Text numberOfLines={1} style={{ color: SOFT, fontSize: 13, marginTop: 2 }}>
@@ -185,8 +192,8 @@ export function QueueSheet({ visible, onClose, inModal }: { visible: boolean; on
       </View>
       {/* Suggested songs: why this one (an artist you listen to a lot, or similar to what's playing) */}
       {q.auto && q.why && !current && (
-        <View style={styles.why}>
-          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>{t(q.why === 'artist' ? 'queue.why.artist' : 'queue.why.similar')}</Text>
+        <View style={[styles.why, POP && { backgroundColor: '#D4F25A', borderWidth: 1.5, borderColor: '#111111' }]}>
+          <Text style={{ color: POP ? '#111111' : '#FFFFFF', fontSize: 11, fontWeight: '800' }}>{t(q.why === 'artist' ? 'queue.why.artist' : 'queue.why.similar')}</Text>
         </View>
       )}
     </View>
@@ -207,15 +214,15 @@ export function QueueSheet({ visible, onClose, inModal }: { visible: boolean; on
       <GestureDetector gesture={bodyPan}>
       <Animated.View style={[styles.sheet, { height: sheetH, width: Math.min(box.width, 520) }, sheetStyle]}>
         {/* Kính trong suốt, mờ nhẹ phần player phía sau */}
-        <GlassFill radius={24} solid={0.6} slab dark />
+        <GlassFill radius={24} solid={0.6} slab dark={!POP} />
         {/* Thanh trên: kéo lên / xuống */}
         <GestureDetector gesture={headerPan}>
         <View collapsable={false} style={{ paddingHorizontal: PAD, paddingBottom: 8 }}>
-          <View style={styles.grab} />
+          <View style={[styles.grab, POP && { backgroundColor: SOFT }]} />
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ flex: 1, color: '#FFFFFF', fontSize: 20, fontWeight: '800' }}>{t('queue.title')}</Text>
+            <Text style={{ flex: 1, color: FG, fontSize: 20, fontWeight: '800' }}>{t('queue.title')}</Text>
             <Text style={{ color: SOFT, fontSize: 13, fontWeight: '600', marginRight: 8 }}>{t('queue.autoplay')}</Text>
-            <Switch value={autoplay} onValueChange={setAutoplay} trackColor={{ true: accent, false: '#3A3A3A' }} />
+            <Switch value={autoplay} onValueChange={setAutoplay} trackColor={{ true: accent, false: POP ? theme.colors.switchOff : '#3A3A3A' }} />
           </View>
         </View>
         </GestureDetector>
@@ -227,10 +234,10 @@ export function QueueSheet({ visible, onClose, inModal }: { visible: boolean; on
           nativeGesture={listNative}
           // Scrolled to the bottom: show the next page of the queue, or (at the very end) load more suggestions
           onNearEnd={() => (allNext > upNext.length ? setLimit((l) => l + PAGE) : loadMoreSuggestions())} contentContainerStyle={{ paddingHorizontal: PAD, paddingBottom: insets.bottom + 32 }}>
-          <Text style={styles.section}>{t('queue.nowPlaying')}</Text>
+          <Text style={[styles.section, { color: SOFT }]}>{t('queue.nowPlaying')}</Text>
           {current ? row(current, true) : <Text style={{ color: SOFT }}>{t('queue.nothing')}</Text>}
 
-          <Text style={[styles.section, { marginTop: 20 }]}>{t('queue.next')}</Text>
+          <Text style={[styles.section, { color: SOFT, marginTop: 20 }]}>{t('queue.next')}</Text>
           {upNext.length === 0 && !radioLoading && (
             <Text style={{ color: SOFT, fontSize: 14 }}>
               {t(autoplay ? 'queue.endAuto' : 'queue.end')}

@@ -53,6 +53,8 @@ const inkA = (ink: string, a: number) => {
   return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`;
 };
 const useInk = () => React.useContext(InkCtx);
+// Pop player: the line being sung gets a highlighter-pen background in this colour
+const MarkCtx = React.createContext<string | null>(null);
 
 const LyricLine = React.memo(function LyricLine({ text, state, near }: { text: string; state: LineState; near: boolean }) {
   const lit = state === 'active' || state === 'plain';
@@ -70,10 +72,16 @@ const LyricLine = React.memo(function LyricLine({ text, state, near }: { text: s
   const ink = useInk();
   const base = ink ? { color: inkA(ink, state === 'browse' ? 0.5 : 0.3) } : state === 'browse' ? styles.browse : styles.dim;
   const on = ink ? { color: ink } : styles.active;
+  const mark = React.useContext(MarkCtx);
   return (
     <View>
       <Animated.Text style={[styles.line, base, { opacity: d }]}>{text}</Animated.Text>
-      {(near || lit) && <Animated.Text style={[styles.line, on, { position: 'absolute', left: 0, right: 0, top: 0, opacity: a }]}>{text}</Animated.Text>}
+      {(near || lit) && (
+        <Animated.Text style={[styles.line, on, { position: 'absolute', left: 0, right: 0, top: 0, opacity: a }]}>
+          {/* a nested span: its background follows each wrapped line of text, like a marker */}
+          {mark ? <Text style={{ backgroundColor: mark }}>{text}</Text> : text}
+        </Animated.Text>
+      )}
     </View>
   );
 });
@@ -151,10 +159,12 @@ function MusicNotes({ active }: { active: boolean }) {
   );
 }
 
-export function LyricsView(props: React.ComponentProps<typeof LyricsViewInner> & { ink?: string }) {
+export function LyricsView(props: React.ComponentProps<typeof LyricsViewInner> & { ink?: string; mark?: string }) {
   return (
     <InkCtx.Provider value={props.ink ?? null}>
-      <LyricsViewInner {...props} />
+      <MarkCtx.Provider value={props.mark ?? null}>
+        <LyricsViewInner {...props} />
+      </MarkCtx.Provider>
     </InkCtx.Provider>
   );
 }

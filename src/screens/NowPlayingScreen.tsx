@@ -88,6 +88,16 @@ const popOn = {
   borderColor: '#111111',
   boxShadow: '3px 3px 0px #111111',
 };
+// Pop: like / more buttons next to the title — outlined white circles; liked = coral
+const popRound = (on: boolean) => ({
+  width: 38,
+  height: 38,
+  borderRadius: 19,
+  backgroundColor: on ? '#FF7A59' : '#FFFFFF',
+  borderWidth: 2.5,
+  borderColor: '#111111',
+  boxShadow: '3px 3px 0px #111111',
+});
 const popPlayInk = () => (POP_DARK ? '#111111' : '#D4F25A');
 
 // Nút lặp: hai mũi tên chạy vòng quanh thành hình vuông bo góc (vẽ bằng Skia, khung 24×24).
@@ -594,15 +604,15 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
 
 
   const LikeButton = (
-    <Pressable onPress={() => track.id !== 'none' && toggleLike(track.id)} hitSlop={10} style={styles.roundBtn}>
-      <LikePop on={isLiked} color={ON}>
-        <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? ON : FG} />
+    <Pressable onPress={() => track.id !== 'none' && toggleLike(track.id)} hitSlop={10} style={[styles.roundBtn, POP && popRound(isLiked)]}>
+      <LikePop on={isLiked} color={POP ? '#111111' : ON}>
+        <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={POP ? '#111111' : isLiked ? ON : FG} />
       </LikePop>
     </Pressable>
   );
   const MoreButton = (
-    <Pressable onPress={() => track.id !== 'none' && songMenu(track)} hitSlop={10} style={styles.roundBtn}>
-      <Ionicons name="ellipsis-horizontal" size={20} color={FG} />
+    <Pressable onPress={() => track.id !== 'none' && songMenu(track)} hitSlop={10} style={[styles.roundBtn, POP && popRound(false)]}>
+      <Ionicons name="ellipsis-horizontal" size={20} color={POP ? '#111111' : FG} />
     </Pressable>
   );
 
@@ -847,7 +857,7 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
             </View>
           </View></CloseZone>
           <View style={{ flex: 1, transformOrigin: 'left center', transform: [{ perspective: 1400 }, { rotateY: flat ? '0deg' : '-10deg' }] }}>
-            <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} ink={POP && !POP_DARK ? '#111111' : undefined} />
+            <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} ink={POP && !POP_DARK ? '#111111' : undefined} mark={POP && !POP_DARK ? '#D4F25A' : undefined} />
           </View>
           <CloseZone><View  style={sideZone}>{SideButtons}</View></CloseZone>
         </View>
@@ -996,7 +1006,7 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
               >
                 <View style={{ flex: 1, marginHorizontal: 30 }}>
                   {/* Lời có ngay từ lần vẽ đầu (đã tải thì lấy từ bộ nhớ), không phải chờ */}
-                  <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} focus={lyricFocus} fade={false} ink={POP && !POP_DARK ? '#111111' : undefined} />
+                  <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} focus={lyricFocus} fade={false} ink={POP && !POP_DARK ? '#111111' : undefined} mark={POP && !POP_DARK ? '#D4F25A' : undefined} />
                 </View>
               </MaskedView>
             </RAnimated.View>
