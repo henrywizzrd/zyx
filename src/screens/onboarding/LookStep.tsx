@@ -80,7 +80,8 @@ export function LookStep({ look, setLook, onBack, onNext, scale }: { look: LookC
       <Headline size={44 * scale} style={{ marginTop: 14 }}>
         Pick your look
       </Headline>
-      <Hard outer={{ marginTop: 14 }} style={{ flexDirection: 'row', overflow: 'hidden', backgroundColor: OB.paper }}>
+      {/* ink behind the halves: where a half meets the rounded border, any sub-pixel gap shows ink, not a white hairline */}
+      <Hard outer={{ marginTop: 14 }} style={{ flexDirection: 'row', overflow: 'hidden', backgroundColor: OB.ink }}>
         {seg('glass', 'Default')}
         {seg('pop', 'Pop')}
       </Hard>
@@ -123,7 +124,7 @@ export function LookStep({ look, setLook, onBack, onNext, scale }: { look: LookC
 }
 
 const styles = StyleSheet.create({
-  seg: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center' },
+  seg: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: OB.paper },
   segText: { fontSize: 15, fontWeight: '900', color: OB.ink },
   swatches: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 14 },
   swRing: { padding: 2, borderRadius: 22, borderWidth: 2.5, borderColor: 'transparent' },
