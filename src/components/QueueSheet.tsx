@@ -33,7 +33,7 @@ export function QueueSheet({ visible, onClose, inModal }: { visible: boolean; on
   const { theme } = useTheme();
   const t = useT();
   const insets = useSafeAreaInsets();
-  const { queue, index, jumpTo, removeFromQueue, reorderUpNext, autoplay, setAutoplay, radioLoading } = usePlayerPick('queue', 'index', 'jumpTo', 'removeFromQueue', 'reorderUpNext', 'autoplay', 'setAutoplay', 'radioLoading');
+  const { queue, index, jumpTo, removeFromQueue, reorderUpNext, autoplay, setAutoplay, radioLoading, loadMoreSuggestions } = usePlayerPick('queue', 'index', 'jumpTo', 'removeFromQueue', 'reorderUpNext', 'autoplay', 'setAutoplay', 'radioLoading', 'loadMoreSuggestions');
   const accent = theme.colors.accent;
 
   const [box, setBox] = useState({ width: 0, height: 0 });
@@ -183,6 +183,12 @@ export function QueueSheet({ visible, onClose, inModal }: { visible: boolean; on
           {q.artist}
         </Text>
       </View>
+      {/* Suggested songs: why this one (an artist you listen to a lot, or similar to what's playing) */}
+      {q.auto && q.why && !current && (
+        <View style={styles.why}>
+          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>{t(q.why === 'artist' ? 'queue.why.artist' : 'queue.why.similar')}</Text>
+        </View>
+      )}
     </View>
   );
 
@@ -214,7 +220,13 @@ export function QueueSheet({ visible, onClose, inModal }: { visible: boolean; on
         </View>
         </GestureDetector>
 
-        <ReorderableScrollView scrollEnabled={full} scrollYOut={listY} reorderingOut={reordering} nativeGesture={listNative} contentContainerStyle={{ paddingHorizontal: PAD, paddingBottom: insets.bottom + 32 }}>
+        <ReorderableScrollView
+          scrollEnabled={full}
+          scrollYOut={listY}
+          reorderingOut={reordering}
+          nativeGesture={listNative}
+          // Scrolled to the bottom: show the next page of the queue, or (at the very end) load more suggestions
+          onNearEnd={() => (allNext > upNext.length ? setLimit((l) => l + PAGE) : loadMoreSuggestions())} contentContainerStyle={{ paddingHorizontal: PAD, paddingBottom: insets.bottom + 32 }}>
           <Text style={styles.section}>{t('queue.nowPlaying')}</Text>
           {current ? row(current, true) : <Text style={{ color: SOFT }}>{t('queue.nothing')}</Text>}
 
@@ -296,4 +308,5 @@ const styles = StyleSheet.create({
   grab: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.3)', marginTop: 8, marginBottom: 12 },
   section: { color: SOFT, fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 },
+  why: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.14)' },
 });

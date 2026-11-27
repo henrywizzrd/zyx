@@ -69,9 +69,12 @@ interface Props {
   // Cử chỉ cuộn gốc của danh sách (tạo ở ngoài bằng useNativeGesture), để cử chỉ khác (kéo tấm Hàng đợi)
   // chạy song song với việc cuộn thay vì bị việc cuộn giành mất
   nativeGesture?: ReturnType<typeof useNativeGesture>;
+  // Called once each time the list is scrolled to (near) the bottom, e.g. the Queue loads more songs
+  onNearEnd?: () => void;
 }
 
-export function ReorderableScrollView({ children, contentContainerStyle, style, scrollEnabled: allowScroll = true, scrollYOut, reorderingOut, nativeGesture, bounces = false }: Props) {
+export function ReorderableScrollView({ children, contentContainerStyle, style, scrollEnabled: allowScroll = true, scrollYOut, reorderingOut, nativeGesture, bounces = false, onNearEnd }: Props) {
+  const nearEnd = useSharedValue(false);
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const { height: winHeight } = useScreenSize();
   const [scrollEnabled, setScrollEnabled] = useState(true);
@@ -108,6 +111,11 @@ export function ReorderableScrollView({ children, contentContainerStyle, style, 
   // Chỉ lấy vị trí cuộn từ sự kiện native khi không kéo và không đang trôi theo quán tính
   const onScroll = useAnimatedScrollHandler((e) => {
     if (scrollYOut) scrollYOut.value = e.contentOffset.y;
+    if (onNearEnd) {
+      const near = e.contentOffset.y + e.layoutMeasurement.height > e.contentSize.height - 160;
+      if (near && !nearEnd.value) scheduleOnRN(onNearEnd);
+      nearEnd.value = near;
+    }
     if (trackedId.value >= 0 || flinging.value) return;
     scrollY.value = e.contentOffset.y;
   });

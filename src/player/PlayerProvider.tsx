@@ -13,6 +13,7 @@ import { isOnline, useOffline as useOfflineState } from '../data/net';
 import { engineOn, flog, fxPrefetch, fxTick, getLiveRate, setFxResolver } from './fxEngine';
 import './crossfade'; // nạp cài đặt Chuyển bài mượt
 import { bgStats, checkFrameLoop } from '../data/applog';
+import { noteListen, suggestNext, type SuggestReason } from '../music/recommend';
 
 // ---- Link phát của từng bài, lấy sẵn trước khi cần
 // Ở chế độ nền (tắt màn hình), iPhone chỉ cho app chạy tiếp khi đang PHÁT âm thanh. Hết bài mà phải đợi vài giây lấy link
@@ -61,7 +62,8 @@ export type Repeat = 'off' | 'all' | 'one';
 // Một bài trong hàng đợi. qid là mã riêng của lần xếp hàng này (cùng một bài thêm 2 lần vẫn phân biệt được).
 // auto = bài do app tự thêm (radio khi hết hàng đợi).
 // ctx = bài này được phát từ đâu (playlist, album, mix...), để ghi vào lịch sử nghe.
-export type QueueItem = Track & { qid: string; auto?: boolean; ctx: PlayContext };
+// auto: added by suggestions (not chosen by the user); why: reason shown in the Queue for suggested songs
+export type QueueItem = Track & { qid: string; auto?: boolean; why?: SuggestReason; ctx: PlayContext };
 let qidSeq = 0;
 const single = (t: Track): PlayContext => ({ kind: 'search', id: t.id, title: t.title, thumb: t.thumb });
 const enqueue = (t: Track, ctx: PlayContext, auto = false): QueueItem => ({ ...t, qid: `q${++qidSeq}`, auto, ctx });
@@ -106,6 +108,7 @@ interface PlayerContextValue {
   autoplay: boolean; // hết hàng đợi thì tự phát bài liên quan
   setAutoplay: (v: boolean) => void;
   radioLoading: boolean;
+  loadMoreSuggestions: () => void; // Queue scrolled to the bottom: add the next batch of suggestions
   // Phần dưới dùng cho kéo thả / hợp nhất / tách dock và mini player
   dockRef: React.RefObject<ViewRef | null>;
   playerRef: React.RefObject<ViewRef | null>;
@@ -402,24 +405,36 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     [goTo]
   );
 
-  // Nối thêm bài liên quan (radio của YouTube Music) vào cuối hàng đợi. Trả về true nếu có thêm được bài.
+  // Add the next batch of suggestions (src/music/recommend.ts: 10 songs picked from the user's taste) to the end of
+  // the queue. If that finds too little (no network for some seeds, a brand-new user…), fall back to the plain
+  // radio of the last song like before. Returns true if songs were added.
   const extendRadio = useCallback((): Promise<boolean> => {
     if (radioBusy.current) return radioBusy.current;
     const q = queueRef.current;
-    const seed = q[q.length - 1] ?? q[indexRef.current];
-    if (!musicSupported || !seed) return Promise.resolve(false);
+    const cur = q[indexRef.current];
+    const last = q[q.length - 1] ?? cur;
+    if (!musicSupported || !cur) return Promise.resolve(false);
     setRadioLoading(true);
-    const job = ytmusic()
-      .getUpNext(seed.id)
-      .then((songs) => {
-        const cur = queueRef.current;
-        const have = new Set(cur.map((x) => x.id));
-        const add = songs.filter((s) => !have.has(s.id)).slice(0, 25).map((s) => enqueue(toTrack(s), { kind: 'mix', id: seed.id, title: `Mix ${seed.artist.split(',')[0]}`, thumb: seed.thumb }, true));
-        if (add.length) commitQueue([...cur, ...add]);
+    const chosen = [...q].reverse().find((x) => !x.auto);
+    const mixCtx = (seed: Track) => ({ kind: 'mix' as const, id: seed.id, title: `Mix ${seed.artist.split(',')[0]}`, thumb: seed.thumb });
+    const job = suggestNext({
+      seeds: [cur, ...(chosen ? [chosen] : [])],
+      exclude: new Set(q.map((x) => x.id)),
+      count: 10,
+      fetchRadio: (id) => ytmusic().getUpNext(id),
+    })
+      .then(async (picks) => {
+        let add: QueueItem[] = picks.map((p) => ({ ...enqueue(toTrack(p.song), mixCtx(p.seed), true), why: p.reason }));
+        if (add.length < 3) {
+          const songs = await ytmusic().getUpNext(last.id);
+          const have = new Set([...queueRef.current.map((x) => x.id), ...add.map((x) => x.id)]);
+          add = [...add, ...songs.filter((s) => !have.has(s.id)).slice(0, 10 - add.length).map((s) => enqueue(toTrack(s), mixCtx(last), true))];
+        }
+        if (add.length) commitQueue([...queueRef.current, ...add]);
         return add.length > 0;
       })
       .catch((e) => {
-        console.warn('Không lấy được bài liên quan', e);
+        flog(`suggestions failed: ${String(e?.message ?? e)}`, 'music');
         return false;
       })
       .finally(() => {
@@ -430,10 +445,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return job;
   }, [commitQueue]);
 
+  const loadMoreSuggestions = useCallback(() => {
+    if (autoplayRef.current && repeatRef.current === 'off') extendRadio();
+  }, [extendRadio]);
+
   // Sắp hết hàng đợi thì lấy sẵn bài liên quan, để chuyển bài không phải chờ
   useEffect(() => {
     if (!autoplay || repeat !== 'off' || queue.length === 0) return;
-    if (index >= queue.length - 2) extendRadio();
+    // 4 songs left (song 6 of a batch of 10): get the next batch ready so it never runs dry
+    if (index >= queue.length - 5) extendRadio();
   }, [index, queue.length, autoplay, repeat, extendRadio]);
 
   // Bài sẽ phát tiếp: lấy sẵn link rồi xếp ngay sau bài đang phát trong trình phát. Nhờ vậy:
@@ -699,6 +719,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const L = listenRef.current;
       if (L.id !== curId) {
         if (L.id && L.secs >= 5) setLastPlaySecs(L.id, L.secs);
+        // Suggestions learn from this: songs left early make their artist less likely for the rest of the session
+        const left = L.id ? queueRef.current.find((x) => x.id === L.id) : undefined;
+        if (left) noteListen(left, L.secs);
         listenRef.current = { id: curId, secs: 0, t: s.currentTime };
       } else {
         const dt = s.currentTime - L.t;
@@ -836,13 +859,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     () => ({
       track, isPlaying, duration, loading, failed, togglePlay, next, prev, seekTo, playTrack,
       shuffle, repeat, toggleShuffle, cycleRepeat, liked, toggleLike,
-      queue, index, playNext, addToQueue, removeFromQueue, reorderUpNext, jumpTo, autoplay, setAutoplay, radioLoading,
+      queue, index, playNext, addToQueue, removeFromQueue, reorderUpNext, jumpTo, autoplay, setAutoplay, radioLoading, loadMoreSuggestions,
       dockRef, playerRef, emergeFrom, setEmergeFrom,
     }),
     [
       track, isPlaying, duration, loading, failed, togglePlay, next, prev, seekTo, playTrack, shuffle, repeat, toggleShuffle,
       cycleRepeat, liked, toggleLike, queue, index, playNext, addToQueue, removeFromQueue, reorderUpNext, jumpTo, autoplay,
-      setAutoplay, radioLoading, emergeFrom,
+      setAutoplay, radioLoading, loadMoreSuggestions, emergeFrom,
     ]
   );
 

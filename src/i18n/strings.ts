@@ -222,6 +222,8 @@ export const vi = {
   'queue.endAuto': 'Hết hàng đợi. Bài liên quan sẽ được thêm tự động.',
   'queue.end': 'Hết hàng đợi.',
   'queue.finding': 'Đang tìm bài liên quan...',
+  'queue.why.artist': 'Bạn hay nghe',
+  'queue.why.similar': 'Tương tự',
   'queue.note': '✦ Bài liên quan do app tự thêm. Nhấn giữ một bài để kéo đổi thứ tự.',
 
   // Player
@@ -767,6 +769,8 @@ export const en: Record<StringKey, string> = {
   'queue.endAuto': 'End of queue. Related songs will be added automatically.',
   'queue.end': 'End of queue.',
   'queue.finding': 'Finding related songs...',
+  'queue.why.artist': 'You like',
+  'queue.why.similar': 'Similar',
   'queue.note': '✦ Added by autoplay. Long-press a song to drag it to a new spot.',
 
   'np.idleTitle': 'Nothing playing',
