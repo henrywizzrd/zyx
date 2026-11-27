@@ -7,7 +7,7 @@ import { loadTrendingSummed, trendingId } from '../data/trending';
 import { PostCard } from '../components/PostCard';
 import { feedKey, useFeed } from '../components/FeedList';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, PixelRatio, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, PixelRatio, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import Animated, { Easing, FadeOut, useAnimatedScrollHandler, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 import { useDockCollapse } from '../components/dockCollapse';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +25,7 @@ import { SmartImage } from '../components/Cover';
 import { checkNetwork, useOffline } from '../data/net';
 import { cacheGet, cacheSet, createPlaylist, getDownloadedTracks, getPlaylists, getRecent, getTopArtists, RecentItem, useDbVersion } from '../data/db';
 import { useDisplayFont } from '../theme/fonts';
+import { scheduleOnRN } from 'react-native-worklets';
 import { popEdge, popInner, popMode, popRow, popThumb } from '../theme/pop';
 
 const PAD = 16;
@@ -504,6 +505,96 @@ function Recent({ list }: { list?: boolean }) {
   );
 }
 
+const REGIONS: TrendingRegion[] = ['ZZ', 'VN', 'KR', 'US'];
+const REGION_FLAG: Record<TrendingRegion, string> = { ZZ: '🌍', VN: '🇻🇳', KR: '🇰🇷', US: '🇺🇸' };
+// search without accents / case: "viet" finds "Việt Nam"
+const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+
+// Small floating country picker under (or above) the Trending block. Opens / closes with a short scale + fade from
+// the block's corner; tapping outside closes it. Only regions with a chart are listed (the chart data is collected
+// for these on the server); the search box is ready for when more countries are added
+function RegionPicker({ open, anchor, region, onPick, onClose }: {
+  open: boolean;
+  anchor: { x: number; y: number; w: number; h: number } | null;
+  region: TrendingRegion;
+  onPick: (r: TrendingRegion) => void;
+  onClose: () => void;
+}) {
+  const { theme } = useTheme();
+  const t = useT();
+  const win = useWindowDimensions();
+  const [mounted, setMounted] = useState(open);
+  const [q, setQ] = useState('');
+  const p = useSharedValue(0);
+  const reduced = useReducedMotion();
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      setQ('');
+    }
+    const ease = Easing.bezier(0.23, 1, 0.32, 1);
+    p.value = withTiming(open ? 1 : 0, { duration: open ? 180 : 130, easing: ease }, (done) => {
+      if (done && !open) scheduleOnRN(setMounted, false);
+    });
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  const W = 250;
+  const LIST_H = 220;
+  const above = !!anchor && anchor.y + anchor.h + 8 + 60 + LIST_H > win.height - 120; // too close to the bottom: open upwards
+  const boxStyle = useAnimatedStyle(() => ({
+    opacity: p.value,
+    transform: reduced ? [] : [{ scale: 0.92 + 0.08 * p.value }, { translateY: (above ? 6 : -6) * (1 - p.value) }],
+  }));
+  if (!mounted || !anchor) return null;
+  const { text, textSecondary, surface, border, accent, onAccent } = theme.colors;
+  const pop = popMode.on;
+  const list = REGIONS.filter((k) => !q.trim() || fold(t(`home.region.${k}`)).includes(fold(q.trim())) || k.toLowerCase().includes(fold(q.trim())));
+  const left = Math.min(Math.max(12, anchor.x), win.width - W - 12);
+  return (
+    <Modal visible transparent animationType="none" statusBarTranslucent supportedOrientations={['portrait', 'landscape-left', 'landscape-right']} onRequestClose={onClose}>
+      {/* the whole screen behind the popup closes it — including the Trending block itself */}
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={t('common.cancel')} />
+      <Animated.View
+        style={[
+          styles.regionPop,
+          { left, width: W, backgroundColor: surface, transformOrigin: above ? 'left bottom' : 'left top' },
+          above ? { bottom: win.height - anchor.y + 8 } : { top: anchor.y + anchor.h + 8 },
+          pop ? [popEdge(true), { borderRadius: 16 }] : [{ borderColor: border, borderWidth: StyleSheet.hairlineWidth }, solidShadow(1.2, theme.colors.glassTint !== 'dark')],
+          boxStyle,
+        ]}
+      >
+        <View style={[styles.regionSearch, { borderColor: pop ? theme.colors.border : border, borderWidth: pop ? 2 : StyleSheet.hairlineWidth }]}>
+          <Ionicons name="search" size={16} color={textSecondary} />
+          <TextInput
+            value={q}
+            onChangeText={setQ}
+            placeholder={t('home.regionSearch')}
+            placeholderTextColor={textSecondary}
+            autoCorrect={false}
+            style={{ flex: 1, color: text, fontSize: 15, paddingVertical: 8 }}
+          />
+        </View>
+        <ScrollView style={{ maxHeight: LIST_H }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {list.map((k) => {
+            const on = k === region;
+            return (
+              <Pressable
+                key={k}
+                onPress={() => onPick(k)}
+                style={({ pressed }) => [styles.regionRow, on && { backgroundColor: accent }, on && pop && { borderWidth: 2, borderColor: theme.colors.border }, pressed && !on && { opacity: 0.6 }]}
+              >
+                <Text style={{ fontSize: 20 }}>{REGION_FLAG[k]}</Text>
+                <Text style={{ flex: 1, color: on ? onAccent : text, fontSize: 15, fontWeight: on ? '800' : '600' }}>{t(`home.region.${k}`)}</Text>
+                {on && <Ionicons name="checkmark" size={18} color={onAccent} />}
+              </Pressable>
+            );
+          })}
+          {list.length === 0 && <Text style={{ color: textSecondary, fontSize: 13, padding: 12 }}>{t('home.regionNone')}</Text>}
+        </ScrollView>
+      </Animated.View>
+    </Modal>
+  );
+}
+
 function Trending() {
   const { theme, setHome } = useTheme();
   const t = useT();
@@ -516,33 +607,37 @@ function Trending() {
   const r = useRemote(key, () => once(key, () => loadTrending(range, region)), true, 6 * 60 * 60 * 1000);
   const { text, textSecondary, accent, accentText, surface, border } = theme.colors;
   const regionName = (k: TrendingRegion) => t(`home.region.${k}`);
-  // Ô chọn khu vực: bấm vào thì trải xuống danh sách (Toàn cầu / Việt Nam / Hàn Quốc / Mỹ)
-  const [regionOpen, setRegionOpen] = useState(false);
-  const regionBox = (
-    <Pressable onPress={() => setRegionOpen((v) => !v)} style={[styles.regionBox, { backgroundColor: surface, borderColor: border }]}>
-      <Ionicons name="globe-outline" size={14} color={textSecondary} />
-      <Text style={{ color: text, fontSize: 13, fontWeight: '700' }}>{regionName(region)}</Text>
-      <Ionicons name={regionOpen ? 'chevron-up' : 'chevron-down'} size={14} color={textSecondary} />
+  // Trending is a block like the chips (27/11): title + flag of the country it shows. Tapping it opens a small
+  // country picker; tapping outside or on the block again closes it
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const blockRef = useRef<React.ComponentRef<typeof View>>(null);
+  const [anchor, setAnchor] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const df = useDisplayFont();
+  const pop = popMode.on;
+  const togglePicker = () => {
+    if (pickerOpen) return setPickerOpen(false);
+    blockRef.current?.measureInWindow((x, y, w, h) => {
+      setAnchor({ x, y, w, h });
+      setPickerOpen(true);
+    });
+  };
+  const trendingBlock = (
+    <Pressable
+      ref={blockRef}
+      onPress={togglePicker}
+      accessibilityRole="button"
+      accessibilityLabel={`${t('home.section.trending')}, ${regionName(region)}`}
+      style={({ pressed }) => [
+        styles.trendBlock,
+        pop ? [{ backgroundColor: surface }, popEdge(true)] : glassShadow(0.7, theme.colors.glassTint !== 'dark'),
+        pressed && { transform: [{ scale: 0.97 }] },
+      ]}
+    >
+      {!pop && <GlassFill radius={16} solid={0.45} slab />}
+      <Text style={[styles.sectionTitle, { color: text, fontSize: 19 }, df]}>{t('home.section.trending')}</Text>
+      <Text style={{ fontSize: 20 }}>{REGION_FLAG[region]}</Text>
+      <Ionicons name={pickerOpen ? 'chevron-up' : 'chevron-down'} size={15} color={textSecondary} />
     </Pressable>
-  );
-  const regionList = regionOpen && (
-    // Nổi lên trên danh sách (không đẩy danh sách xuống): mọc ra từ góc của ô chọn, tấm kính có bóng đổ
-    <Animated.View entering={popIn} exiting={FadeOut.duration(120)} style={[styles.regionList, { backgroundColor: theme.colors.surface, borderColor: border, borderWidth: StyleSheet.hairlineWidth }, solidShadow(1, theme.colors.glassTint !== 'dark'), popEdge()]}>
-      {/* nền đặc (không trong suốt): bảng chọn nằm đè lên danh sách, trong suốt thì chữ hai lớp chồng lên nhau */}
-      {(['ZZ', 'VN', 'KR', 'US'] as TrendingRegion[]).map((k) => (
-        <Pressable
-          key={k}
-          onPress={() => {
-            setHome({ trendingRegion: k });
-            setRegionOpen(false);
-          }}
-          style={({ pressed }) => [styles.regionRow, pressed && { backgroundColor: border }]}
-        >
-          <Text style={{ flex: 1, color: k === region ? accentText : text, fontSize: 15, fontWeight: k === region ? '800' : '600' }}>{regionName(k)}</Text>
-          {k === region && <Ionicons name="checkmark" size={18} color={accentText} />}
-        </Pressable>
-      ))}
-    </Animated.View>
   );
 
   const chips = (
@@ -560,11 +655,20 @@ function Trending() {
   const ctx = data ? { kind: 'chart' as const, id: data.playlistId ?? 'chart', title: chartTitle } : null;
   return (
     <View>
-      <SectionTitle title={t('home.section.trending')} right={chips} />
-      <View style={{ alignItems: 'flex-start', marginBottom: 8, zIndex: 20, elevation: 20 }}>
-        {regionBox}
-        {regionList}
+      <View style={styles.trendHead}>
+        {trendingBlock}
+        {chips}
       </View>
+      <RegionPicker
+        open={pickerOpen}
+        anchor={anchor}
+        region={region}
+        onPick={(k) => {
+          setHome({ trendingRegion: k });
+          setPickerOpen(false);
+        }}
+        onClose={() => setPickerOpen(false)}
+      />
       {r.status === 'loading' &&
         // Khung chờ đúng hình dạng danh sách, đỡ trống trơn
         [0, 1, 2, 3, 4].map((i) => (
@@ -961,7 +1065,11 @@ const styles = StyleSheet.create({
   staleDot: { position: 'absolute', top: 6, right: 6, width: 7, height: 7, borderRadius: 4 },
   regionBox: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
   regionList: { position: 'absolute', top: '100%', left: 0, marginTop: 6, minWidth: 190, borderRadius: 14, borderCurve: 'continuous', paddingVertical: 4, transformOrigin: 'left top' },
-  regionRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, height: 42 },
+  regionRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, height: 44, borderRadius: 11, marginTop: 4 },
+  regionPop: { position: 'absolute', padding: 8, borderRadius: 16, borderCurve: 'continuous' },
+  regionSearch: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 11, paddingHorizontal: 10 },
+  trendHead: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', rowGap: 10, columnGap: 8, marginBottom: 12 },
+  trendBlock: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 14, paddingRight: 10, paddingVertical: 8, borderRadius: 16 },
   rankRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   rankThumb: { width: 46, height: 46, borderRadius: 4 },
   popBox: { borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
