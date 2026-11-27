@@ -10,6 +10,7 @@ import { useNav } from '../nav/Nav';
 import { Group, GROUP_COLORS, PageHeader, Row } from '../components/SettingsUI';
 import { popEdge, popMode } from '../theme/pop';
 import { useSession } from '../data/auth';
+import { previewWelcome } from './AuthGate';
 
 const sb = () => (require('../backend/supabase') as typeof import('../backend/supabase')).supabase;
 
@@ -146,6 +147,10 @@ export function AdminScreen() {
           <Chip key={f} label={f === 'all' ? 'All' : `${f[0].toUpperCase()}${f.slice(1)} · ${counts[f]}`} on={filter === f} onPress={() => setFilter(f)} />
         ))}
       </View>
+
+      <Group label="Tools" color={GROUP_COLORS.lilac}>
+        <Row first title="Preview welcome screens" hint="Sign-in poster, genres, what's inside, look, drop the needle. Nothing is saved." onPress={previewWelcome} right={<Ionicons name="chevron-forward" size={18} color={textSecondary} />} />
+      </Group>
 
       {err && <Text style={{ color: '#E5484D', marginTop: 16 }}>{err}</Text>}
       {!devices && !err && <ActivityIndicator style={{ marginTop: 30 }} color={theme.colors.accentText} />}

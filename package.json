@@ -27,6 +27,7 @@
     "expo-updates": "~58.0.19",
     "expo-video": "~58.0.13",
     "expo-web-browser": "~58.0.7",
+    "matter-js": "0.20.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
@@ -41,6 +42,7 @@
     "youtubei.js": "^18.3.0"
   },
   "devDependencies": {
+    "@types/matter-js": "0.20.2",
     "@types/react": "~19.3.0",
     "patch-package": "8.0.1",
     "typescript": "~6.0.3"

@@ -1,40 +1,30 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, LayoutChangeEvent, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import RNMaskedView from '@react-native-masked-view/masked-view';
-import { StatusBar } from 'expo-status-bar';
-import Animated, { Easing, FadeIn, FadeInDown, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { useT } from '../i18n';
-import { useScreenSize } from '../components/ScreenSize';
+import { DISPLAY_FONT } from '../theme/fonts';
+import { Hard, Headline, OB, PopButton, Vinyl } from './onboarding/kit';
+import { useWelcomeScale, WelcomeFrame } from './onboarding/Onboarding';
 import { chooseUsername, cleanUsername, continueAsGuest, EMAIL_RE, PASSWORD_MIN, resendCode, signIn, signInWithGoogle, signUp, USERNAME_RE, usernameExists, verifyCode } from '../data/auth';
 
-// Màn đăng nhập (hiện lần đầu mở app, hoặc sau khi Đăng xuất). Luôn nền đen, không theo theme.
-//  - chữ ZYX lớn, màu xanh lá gradient chạy chậm liên tục
-//  - gạch ngang, giữa có hình người + "Login / Sign up"
-//  - 3 lựa chọn: Khách (vào thẳng), Tài khoản ZYX, Google (sắp có)
-// Tài khoản ZYX: nhập username → đã có thì nhập mật khẩu; chưa có thì hỏi "tạo tài khoản mới?" → Gmail + mật khẩu + nhập lại
+// Sign-in screen (first launch, or after Sign out). 27/11: redesigned as the first welcome screen — Pop Lilac poster
+// "PLAY WHAT [YOU] LOVE" with the ZYX sticker and a big record on the right; always this look, whatever the theme.
+//  - 3 choices: Google, a ZYX account, guest
+// ZYX account: username → existing: password; new: "create a new account?" → Gmail + password twice → 6-digit code
+// preview: opened from the admin screen; the buttons only move on, nothing signs in or out.
 
-// (ép kiểu như NowPlayingScreen: kiểu của thư viện không khớp bản React đang dùng)
-const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
-
-const BG = '#000000';
-const CARD = '#0E0E0E';
-const LINE = '#262626';
-const TEXT = '#FFFFFF';
-const SUB = '#8A8A8A';
-const GREEN = '#1DB954';
-const RED = '#FF5A5F';
-const GRADIENT = ['#00512E', '#0FA958', '#5CFFA1', '#1DB954', '#0B7A45', '#7DFFB8', '#00512E'] as const;
+const TEXT = OB.ink;
+const SUB = 'rgba(17,17,17,0.65)';
+const RED = '#B3261E';
 
 // verify: nhập mã 6 số gửi về Gmail. pick: đăng nhập Google lần đầu, chọn username
 type Step = 'choose' | 'username' | 'login' | 'signup' | 'verify' | 'pick';
 
-export function AuthScreen({ onDone }: { onDone: () => void }) {
+export function AuthScreen({ onDone, preview }: { onDone: () => void; preview?: boolean }) {
   const t = useT();
-  const insets = useSafeAreaInsets();
-  const { height } = useScreenSize();
+  const scale = useWelcomeScale();
+  const [block, setBlock] = useState<{ top: number; h: number } | null>(null); // logo + headline, for the record's size
 
   const [step, setStep] = useState<Step>('choose');
   const [username, setUsername] = useState('');
@@ -131,6 +121,7 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
 
   // Google
   const google = async () => {
+    if (preview) return onDone();
     if (busy) return;
     setNote(null);
     setBusy(true);
@@ -153,24 +144,9 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
   };
 
   const guest = () => {
-    continueAsGuest();
+    if (!preview) continueAsGuest();
     onDone();
   };
-
-  const option = (icon: React.ComponentProps<typeof Ionicons>['name'], title: string, sub: string, onPress: () => void, delay: number) => (
-    <Animated.View entering={FadeInDown.delay(delay).duration(420)}>
-      <Pressable onPress={onPress} style={({ pressed }) => [styles.option, pressed && { opacity: 0.7, transform: [{ scale: 0.98 }] }]}>
-        <View style={styles.optionIcon}>
-          <Ionicons name={icon} size={22} color={TEXT} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.optionTitle}>{title}</Text>
-          <Text style={styles.optionSub}>{sub}</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={SUB} />
-      </Pressable>
-    </Animated.View>
-  );
 
   const field = (
     value: string,
@@ -188,7 +164,7 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
           setError(null);
         }}
         placeholder={placeholder}
-        placeholderTextColor="#5A5A5A"
+        placeholderTextColor="rgba(17,17,17,0.4)"
         secureTextEntry={opts.secure}
         keyboardType={opts.email ? 'email-address' : 'default'}
         autoCapitalize="none"
@@ -202,46 +178,64 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
     </View>
   );
 
-  const mainButton = (label: string, onPress: () => void) => (
-    <Pressable onPress={onPress} disabled={busy} style={({ pressed }) => [styles.mainBtn, (pressed || busy) && { opacity: 0.75 }]}>
-      {busy ? <ActivityIndicator color="#000" /> : <Text style={styles.mainBtnText}>{label}</Text>}
-    </Pressable>
-  );
+  const mainButton = (label: string, onPress: () => void) =>
+    busy ? <ActivityIndicator color={OB.ink} style={{ height: 58 }} /> : <PopButton kind="ink" label={label} onPress={onPress} style={{ marginTop: 6 }} />;
+
+  // The record spans the ZYX sticker and the 4 headline lines; only its rim shows at the right edge
+  const recSize = block ? block.h + 12 : 0;
 
   return (
-    <View style={{ flex: 1, backgroundColor: BG }}>
-      <StatusBar style="light" />
+    <WelcomeFrame>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top, paddingBottom: insets.bottom + 24, paddingHorizontal: 24 }}
-        >
-          {/* Phần đăng nhập ở trên (bàn phím mở ra không che ô nhập), chữ ZYX nằm dưới */}
-          <View style={{ height: 36 }} />
+        {step === 'choose' ? (
+          <View style={{ flex: 1 }}>
+            {block && (
+              <Animated.View entering={FadeIn.duration(500)} pointerEvents="none" style={{ position: 'absolute', top: block.top - 6, right: -22 - recSize + 84 * scale, zIndex: 0 }}>
+                <Vinyl size={recSize} spin={9000} border={3} label="" />
+              </Animated.View>
+            )}
+            <View onLayout={(e: LayoutChangeEvent) => setBlock({ top: e.nativeEvent.layout.y, h: e.nativeEvent.layout.height })} style={{ alignSelf: 'flex-start', marginTop: 8 }}>
+              <Hard radius={18} offset={5} style={{ backgroundColor: OB.acc, borderRadius: 18, borderWidth: 3, paddingHorizontal: 16, paddingTop: 2, paddingBottom: 4, transform: [{ rotate: '-3deg' }] }}>
+                <Text allowFontScaling={false} style={{ fontFamily: DISPLAY_FONT, fontWeight: 'normal', fontSize: 56 * scale, color: OB.ink, includeFontPadding: false }}>
+                  ZYX
+                </Text>
+              </Hard>
+              <Headline size={84 * scale} style={{ marginTop: 18 }}>
+                {'Play\nwhat'}
+              </Headline>
+              <Animated.View entering={ZoomIn.delay(300).duration(450)} style={{ alignSelf: 'flex-start', marginVertical: 6, marginLeft: -4, transform: [{ rotate: '-2deg' }] }}>
+                <Hard radius={14} offset={5} style={{ backgroundColor: OB.acc, borderRadius: 14, borderWidth: 3, paddingHorizontal: 10, paddingTop: 6 * scale }}>
+                  <Headline size={84 * scale}>You</Headline>
+                </Hard>
+              </Animated.View>
+              <Headline size={84 * scale}>love</Headline>
+            </View>
 
-          {/* Gạch ngang, giữa là hình người + Login / Sign up */}
-          <View style={styles.divider}>
-            <View style={styles.line} />
-            <Ionicons name="person-circle-outline" size={20} color={SUB} />
-            <Text style={styles.dividerText}>Login / Sign up</Text>
-            <View style={styles.line} />
-          </View>
-
-          {step === 'choose' ? (
-            <View style={{ gap: 12, marginTop: 28 }}>
-              {option('person-outline', t('auth.guest'), t('auth.guestSub'), guest, 0)}
-              {option('sparkles-outline', t('auth.zyx'), t('auth.zyxSub'), () => reset('username'), 80)}
-              {option('logo-google', 'Google', t('auth.googleSub'), google, 160)}
-              {busy && <ActivityIndicator color={GREEN} style={{ marginTop: 4 }} />}
+            <View style={{ flex: 1 }} />
+            <View style={{ gap: 12 }}>
+              <Animated.View entering={FadeInDown.delay(150).duration(420)}>
+                <PopButton label="Continue with Google" onPress={google} icon={<Ionicons name="logo-google" size={20} color={OB.ink} />} disabled={busy} />
+              </Animated.View>
+              <Animated.View entering={FadeInDown.delay(230).duration(420)}>
+                <PopButton kind="ink" label="Sign in with a ZYX account" onPress={() => (preview ? onDone() : reset('username'))} disabled={busy} />
+              </Animated.View>
+              <Animated.View entering={FadeInDown.delay(310).duration(420)}>
+                <Pressable onPress={guest} hitSlop={8} style={{ alignSelf: 'center', paddingVertical: 8 }} accessibilityRole="button">
+                  <Text style={styles.guest}>Continue as guest</Text>
+                </Pressable>
+              </Animated.View>
+              {busy && <ActivityIndicator color={OB.ink} />}
               {note && <Text style={[styles.error, { color: SUB, textAlign: 'center' }]}>{note}</Text>}
             </View>
-          ) : (
-            <Animated.View entering={FadeIn.duration(250)} style={{ gap: 12, marginTop: 28 }}>
+          </View>
+        ) : (
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexGrow: 1 }}>
+            <Animated.View entering={FadeIn.duration(250)} style={{ gap: 12 }}>
               <Pressable onPress={() => reset('choose')} hitSlop={10} style={styles.back}>
-                <Ionicons name="chevron-back" size={18} color={SUB} />
-                <Text style={{ color: SUB, fontWeight: '600' }}>{t('auth.otherWays')}</Text>
+                <Ionicons name="chevron-back" size={18} color={TEXT} />
+                <Text style={{ color: TEXT, fontWeight: '700' }}>{t('auth.otherWays')}</Text>
               </Pressable>
-              <Text style={styles.formTitle}>
+              <Headline size={44 * scale} style={{ marginTop: 8, marginBottom: 6 }}>
                 {step === 'signup'
                   ? t('auth.createTitle')
                   : step === 'login'
@@ -251,9 +245,9 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
                       : step === 'pick'
                         ? t('auth.pickTitle')
                         : t('auth.zyx')}
-              </Text>
+              </Headline>
 
-              {/* Nhập mã 6 số gửi về Gmail */}
+              {/* 6-digit code sent to Gmail */}
               {step === 'verify' && (
                 <>
                   <Text style={styles.hint}>{t('auth.verifyBody', { email: pendingEmail })}</Text>
@@ -266,7 +260,7 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
                         setError(null);
                       }}
                       placeholder="00000000"
-                      placeholderTextColor="#5A5A5A"
+                      placeholderTextColor="rgba(17,17,17,0.4)"
                       keyboardType="number-pad"
                       textContentType="oneTimeCode"
                       autoComplete="one-time-code"
@@ -279,22 +273,22 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
                 </>
               )}
 
-              {/* Đăng nhập Google lần đầu: chọn username */}
+              {/* First Google sign-in: choose a username */}
               {step === 'pick' && <Text style={styles.hint}>{t('auth.pickBody')}</Text>}
-              {step === 'pick' &&
-                field(username, (v) => setUsername(cleanUsername(v)), t('auth.username'), 'at', { onSubmit: pick, autoFocus: true })}
+              {step === 'pick' && field(username, (v) => setUsername(cleanUsername(v)), t('auth.username'), 'at', { onSubmit: pick, autoFocus: true })}
 
-              {/* Username (bước tài khoản ZYX). Sửa username thì quay lại bước kiểm tra */}
-              {(step === 'username' || step === 'login' || step === 'signup') && field(
-                username,
-                (v) => {
-                  setUsername(cleanUsername(v));
-                  if (step !== 'username') reset('username');
-                },
-                t('auth.username'),
-                'at',
-                { onSubmit: step === 'username' ? checkUsername : undefined, autoFocus: step === 'username' }
-              )}
+              {/* Username (ZYX account). Editing it goes back to the check step */}
+              {(step === 'username' || step === 'login' || step === 'signup') &&
+                field(
+                  username,
+                  (v) => {
+                    setUsername(cleanUsername(v));
+                    if (step !== 'username') reset('username');
+                  },
+                  t('auth.username'),
+                  'at',
+                  { onSubmit: step === 'username' ? checkUsername : undefined, autoFocus: step === 'username' }
+                )}
 
               {step === 'login' && field(pass, setPass, t('auth.password'), 'lock-closed-outline', { secure: true, onSubmit: login, autoFocus: true })}
 
@@ -314,7 +308,7 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
               {step === 'verify' && mainButton(t('auth.verify'), verify)}
               {step === 'verify' && (
                 <Pressable onPress={resend} disabled={cooldown > 0} hitSlop={8} style={{ alignSelf: 'center', marginTop: 4 }}>
-                  <Text style={{ color: cooldown > 0 ? SUB : GREEN, fontWeight: '700' }}>
+                  <Text style={{ color: cooldown > 0 ? SUB : TEXT, fontWeight: '800', textDecorationLine: cooldown > 0 ? 'none' : 'underline' }}>
                     {cooldown > 0 ? t('auth.resendIn', { n: cooldown }) : t('auth.resend')}
                   </Text>
                 </Pressable>
@@ -323,94 +317,46 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
               {step === 'pick' && mainButton(t('auth.finish'), pick)}
               <Text style={styles.localNote}>{t('auth.localNote')}</Text>
             </Animated.View>
-          )}
-
-          {/* Chữ ZYX: phần trống còn lại phía dưới */}
-          <View style={{ flex: 1, minHeight: Math.max(200, height * 0.3), alignItems: 'center', justifyContent: 'center' }}>
-            <GradientLogo />
-          </View>
-        </ScrollView>
+          </ScrollView>
+        )}
       </KeyboardAvoidingView>
 
-      {/* Popup: username chưa tồn tại → tạo tài khoản mới? */}
+      {/* Popup: username does not exist yet → create a new account? */}
       <Modal visible={askCreate} transparent animationType="fade" onRequestClose={() => setAskCreate(false)}>
         <View style={styles.backdrop}>
-          <View style={styles.dialog}>
-            <Ionicons name="alert-circle-outline" size={34} color={GREEN} />
+          <Hard radius={22} offset={6} style={styles.dialog}>
+            <Ionicons name="alert-circle-outline" size={34} color={OB.ink} />
             <Text style={styles.dialogTitle}>{t('auth.notExistTitle')}</Text>
             <Text style={styles.dialogText}>{t('auth.notExistBody', { name: username })}</Text>
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
-              <Pressable onPress={() => setAskCreate(false)} style={[styles.dialogBtn, { backgroundColor: '#1F1F1F' }]}>
-                <Text style={{ color: TEXT, fontWeight: '700' }}>{t('auth.cancel')}</Text>
-              </Pressable>
-              <Pressable
+              <PopButton label={t('auth.cancel')} onPress={() => setAskCreate(false)} style={{ flex: 1 }} />
+              <PopButton
+                kind="ink"
+                label={t('auth.agree')}
                 onPress={() => {
                   setAskCreate(false);
                   reset('signup');
                 }}
-                style={[styles.dialogBtn, { backgroundColor: GREEN }]}
-              >
-                <Text style={{ color: '#000', fontWeight: '800' }}>{t('auth.agree')}</Text>
-              </Pressable>
+                style={{ flex: 1 }}
+              />
             </View>
-          </View>
+          </Hard>
         </View>
       </Modal>
-    </View>
-  );
-}
-
-// Chữ ZYX to, phía trong là dải gradient xanh lá trượt qua lại chậm rãi (chạy trên UI thread)
-function GradientLogo() {
-  const W = 260;
-  const H = 120;
-  const x = useSharedValue(0);
-  useEffect(() => {
-    x.value = withRepeat(withTiming(1, { duration: 7000, easing: Easing.inOut(Easing.sin) }), -1, true);
-  }, [x]);
-  const move = useAnimatedStyle(() => ({ transform: [{ translateX: -x.value * W * 2 }] }));
-  return (
-    <View style={{ width: W, height: H, alignItems: 'center', justifyContent: 'center' }}>
-      {/* Quầng sáng xanh mờ phía sau chữ */}
-      <Text style={[styles.logo, styles.glow]}>ZYX</Text>
-      <MaskedView
-        style={{ width: W, height: H }}
-        maskElement={
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={styles.logo}>ZYX</Text>
-          </View>
-        }
-      >
-        <Animated.View style={[{ width: W * 3, height: H }, move]}>
-          <LinearGradient colors={GRADIENT} start={{ x: 0, y: 0.3 }} end={{ x: 1, y: 0.7 }} style={{ flex: 1 }} />
-        </Animated.View>
-      </MaskedView>
-    </View>
+    </WelcomeFrame>
   );
 }
 
 const styles = StyleSheet.create({
-  glow: { position: 'absolute', color: 'rgba(29,185,84,0.12)', textShadowColor: 'rgba(29,185,84,0.6)', textShadowRadius: 30, textShadowOffset: { width: 0, height: 0 } },
-  logo: { fontSize: 96, fontWeight: '900', letterSpacing: 10, color: '#000', textAlign: 'center' },
-  divider: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  line: { flex: 1, height: StyleSheet.hairlineWidth * 2, backgroundColor: LINE },
-  dividerText: { color: SUB, fontWeight: '700', fontSize: 13, letterSpacing: 0.5 },
-  option: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: CARD, borderRadius: 18, borderWidth: 1, borderColor: LINE, padding: 16 },
-  optionIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#1A1A1A', alignItems: 'center', justifyContent: 'center' },
-  optionTitle: { color: TEXT, fontSize: 16, fontWeight: '800' },
-  optionSub: { color: SUB, fontSize: 13, marginTop: 2 },
+  guest: { color: OB.ink, fontSize: 16, fontWeight: '800', textDecorationLine: 'underline' },
   back: { flexDirection: 'row', alignItems: 'center', gap: 2, alignSelf: 'flex-start' },
-  hint: { color: '#BDBDBD', fontSize: 14, lineHeight: 20 },
-  formTitle: { color: TEXT, fontSize: 22, fontWeight: '800', marginBottom: 4 },
-  field: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: CARD, borderRadius: 14, borderWidth: 1, borderColor: LINE, paddingHorizontal: 14, height: 52 },
+  hint: { color: TEXT, fontSize: 15, lineHeight: 21, fontWeight: '600' },
+  field: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: OB.paper, borderRadius: 14, borderWidth: 2.5, borderColor: OB.ink, paddingHorizontal: 14, height: 54 },
   input: { flex: 1, color: TEXT, fontSize: 16, paddingVertical: 0 },
-  error: { color: RED, fontSize: 13, marginTop: 2 },
-  mainBtn: { height: 52, borderRadius: 26, backgroundColor: GREEN, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
-  mainBtnText: { color: '#000', fontSize: 16, fontWeight: '800' },
-  localNote: { color: '#555', fontSize: 11, textAlign: 'center', marginTop: 8, lineHeight: 15 },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: 32 },
-  dialog: { width: '100%', maxWidth: 360, backgroundColor: '#121212', borderRadius: 22, borderWidth: 1, borderColor: LINE, padding: 22, alignItems: 'center' },
-  dialogTitle: { color: TEXT, fontSize: 18, fontWeight: '800', marginTop: 10, textAlign: 'center' },
-  dialogText: { color: '#BDBDBD', fontSize: 15, marginTop: 8, textAlign: 'center', lineHeight: 21 },
-  dialogBtn: { flex: 1, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+  error: { color: RED, fontSize: 14, fontWeight: '700', marginTop: 2 },
+  localNote: { color: SUB, fontSize: 12, textAlign: 'center', marginTop: 8, lineHeight: 16 },
+  backdrop: { flex: 1, backgroundColor: 'rgba(17,17,17,0.55)', alignItems: 'center', justifyContent: 'center', padding: 28 },
+  dialog: { width: '100%', maxWidth: 360, backgroundColor: OB.paper, borderRadius: 22, padding: 22, alignItems: 'center' },
+  dialogTitle: { color: TEXT, fontSize: 19, fontWeight: '900', marginTop: 10, textAlign: 'center' },
+  dialogText: { color: TEXT, fontSize: 15, marginTop: 8, textAlign: 'center', lineHeight: 21 },
 });
