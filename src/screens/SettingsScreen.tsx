@@ -107,8 +107,8 @@ export function SettingsScreen() {
       onPress={signOut}
       style={({ pressed }) => [
         styles.signOut,
-        pop ? { backgroundColor: GROUP_COLORS.coral } : null,
         pop ? glassShadow(1) : glassShadow(0.6, theme.colors.glassTint !== 'dark'),
+        pop ? { backgroundColor: GROUP_COLORS.coral } : null,
         pressed && { opacity: 0.7 },
       ]}
     >

@@ -74,8 +74,10 @@ export function glassShadow(lift = 1, light = false) {
     if (!popMode.offset) return { boxShadow: undefined } as const;
     // Circular corners: iOS "continuous" corners go wrong when the radius is half the height or more (pills), and the
     // shadow and the outlined fill then don't line up — a double edge (Library "Artists" chip, 27/11)
+    // The view casting the shadow also gets the card colour: a shadow cast by a see-through view leaves a thin light
+    // seam between the outline and the shadow on curved edges (pills, 27/11). GlassFill draws on top of it anyway
     const o = Math.max(3, Math.round(popMode.offset * Math.min(lift, 1.5)));
-    return { boxShadow: `${o}px ${o}px 0px ${popMode.shadow}`, borderCurve: 'circular' } as const;
+    return { boxShadow: `${o}px ${o}px 0px ${popMode.shadow}`, borderCurve: 'circular', backgroundColor: popMode.fill } as const;
   }
   const k = light ? 0.55 : 1;
   const e = 7 * lift;

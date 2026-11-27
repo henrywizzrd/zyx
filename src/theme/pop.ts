@@ -91,10 +91,11 @@ export const popSystemTheme = (scheme: string | null | undefined): PopThemeId =>
 
 // glassShadow() is a plain function called from many places, so the current Pop look is kept here for it.
 // ThemeProvider updates it while building the theme value (before any child renders).
-export const popMode = { on: false, ink: '#111111', line: 2.5, offset: 4, shadow: '#111111' };
+export const popMode = { on: false, ink: '#111111', line: 2.5, offset: 4, shadow: '#111111', fill: '#FFFFFF' };
 export function setPopMode(on: boolean, colors: Palette, pop: PopSettings) {
   popMode.on = on;
   popMode.ink = colors.border;
+  popMode.fill = colors.surface;
   popMode.line = POP_LINE_WIDTH[pop.line];
   popMode.offset = POP_SHADOW_OFFSET[pop.shadow];
   popMode.shadow = pop.shadowColor === 'accent' ? colors.accent : colors.border;
