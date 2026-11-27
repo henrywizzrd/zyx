@@ -11,6 +11,7 @@ import { smokePalette, SMOKE_TONES, type SmokeTone } from './smokeTones';
 import { POP_LINES, POP_PATTERNS, POP_SHADOW_COLORS, POP_SHADOWS, POP_THEME_ORDER, POP_THEMES, popSystemTheme, setPopMode, type PopSettings } from './pop';
 import { log as appLog } from '../data/applog';
 import { Edge, HomeSection, LibraryLayout, MiniAnchor, Position, TabId, Theme, TrendingRange } from './types';
+import { deviceCountry, deviceTrendingRegion } from './deviceRegion';
 
 const STORAGE_KEY = 'zyx:theme';
 
@@ -220,7 +221,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const landscape = screen.width > screen.height;
   noteOrientation(landscape); // ghi lúc vừa xoay → các màn trượt vào chỗ (rotateEnter.ts)
   // Người dùng mới (theo hệ thống): mở app lên đã đúng sáng/tối của điện thoại
-  const [theme, setThemeState] = useState<Theme>(() => derive({ ...defaultTheme, preset: systemPreset(Appearance.getColorScheme()) }));
+  // New users: Trending starts on the phone's country (if it has a chart), otherwise Global
+  const [theme, setThemeState] = useState<Theme>(() =>
+    derive({ ...defaultTheme, preset: systemPreset(Appearance.getColorScheme()), home: { ...defaultTheme.home, trendingRegion: deviceTrendingRegion() } })
+  );
   const [ready, setReady] = useState(false);
 
   // Đọc theme đã lưu khi mở app
@@ -228,7 +232,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     let alive = true;
     AsyncStorage.getItem(STORAGE_KEY)
       .then((raw) => {
-        if (raw && alive) setThemeState(sanitize(merge(defaultTheme, migrate(JSON.parse(raw)))));
+        if (!raw || !alive) return;
+        const saved = JSON.parse(raw);
+        const t = sanitize(merge(defaultTheme, migrate(saved)));
+        // Never picked a Trending region (saved before this setting existed): use the phone's country
+        if (!saved?.home?.trendingRegion) t.home = { ...t.home, trendingRegion: deviceTrendingRegion() };
+        appLog('ui', `device country: ${deviceCountry() ?? '?'} → trending ${t.home.trendingRegion}`);
+        setThemeState(t);
       })
       .catch(() => {})
       .finally(() => {
