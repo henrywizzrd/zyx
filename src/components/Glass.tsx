@@ -72,8 +72,10 @@ export function glassShadow(lift = 1, light = false) {
   if (popMode.on) {
     // Theme Studio → Pop → Shadow (none / short / long) and Shadow colour (ink / accent); smaller things get a shorter shadow
     if (!popMode.offset) return { boxShadow: undefined } as const;
-    const o = Math.max(2, Math.round(popMode.offset * Math.min(lift, 1.5)));
-    return { boxShadow: `${o}px ${o}px 0px ${popMode.shadow}` } as const;
+    // Circular corners: iOS "continuous" corners go wrong when the radius is half the height or more (pills), and the
+    // shadow and the outlined fill then don't line up — a double edge (Library "Artists" chip, 27/11)
+    const o = Math.max(3, Math.round(popMode.offset * Math.min(lift, 1.5)));
+    return { boxShadow: `${o}px ${o}px 0px ${popMode.shadow}`, borderCurve: 'circular' } as const;
   }
   const k = light ? 0.55 : 1;
   const e = 7 * lift;
@@ -124,7 +126,7 @@ export function GlassFill({
     return (
       <View
         pointerEvents="none"
-        style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, backgroundColor: fill, borderWidth: popMode.line, borderColor: ink }]}
+        style={[StyleSheet.absoluteFill, { borderRadius: radius, borderCurve: 'circular', backgroundColor: fill, borderWidth: popMode.line, borderColor: ink }]}
       />
     );
   }

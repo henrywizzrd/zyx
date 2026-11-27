@@ -79,6 +79,15 @@ const popPlay = (k: number) => ({
   backgroundColor: POP_DARK ? '#F4F4F0' : '#111111',
   boxShadow: `5px 5px 0px ${POP_DARK ? '#000000' : 'rgba(0,0,0,0.3)'}`,
 });
+// Pop: shuffle / repeat when on — a lime tile with an outline, so on vs off is obvious (27/11: the colour change alone
+// was too subtle on pastel backgrounds)
+const popOn = {
+  backgroundColor: '#D4F25A',
+  borderRadius: 12,
+  borderWidth: 2.5,
+  borderColor: '#111111',
+  boxShadow: '3px 3px 0px #111111',
+};
 const popPlayInk = () => (POP_DARK ? '#111111' : '#D4F25A');
 
 // Nút lặp: hai mũi tên chạy vòng quanh thành hình vuông bo góc (vẽ bằng Skia, khung 24×24).
@@ -677,8 +686,8 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
   // Nút đang bật chỉ sáng lên màu nhấn của theme (không còn chấm bên dưới); lặp 1 bài có số 1. Bấm nút nào cũng nảy nhẹ
   const controlRow = (k: number) => (
     <>
-      <CtlBtn onPress={toggleShuffle} style={styles.sideBtn}>
-        <Ionicons name="shuffle" size={Math.round(26 * k)} color={shuffle ? ON : FG} />
+      <CtlBtn onPress={toggleShuffle} style={[styles.sideBtn, POP && shuffle && popOn]}>
+        <Ionicons name="shuffle" size={Math.round((POP ? 22 : 26) * k)} color={POP ? (shuffle ? '#111111' : FG) : shuffle ? ON : FG} />
       </CtlBtn>
       <CtlBtn
         onPress={() => {
@@ -702,8 +711,8 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
       <CtlBtn onPress={next} style={[styles.skipSlot, { width: 52 * k }, POP && popSkip(k)]}>
         <SkipGlyph dir="forward" size={Math.round((POP ? 24 : 31) * k)} color={POP ? '#111111' : '#FFFFFF'} />
       </CtlBtn>
-      <CtlBtn onPress={cycleRepeat} style={styles.sideBtn}>
-        <RepeatIcon mode={repeat} color={repeat !== 'off' ? ON : FG} />
+      <CtlBtn onPress={cycleRepeat} style={[styles.sideBtn, POP && repeat !== 'off' && popOn]}>
+        <RepeatIcon mode={repeat} color={POP ? (repeat !== 'off' ? '#111111' : FG) : repeat !== 'off' ? ON : FG} />
       </CtlBtn>
     </>
   );

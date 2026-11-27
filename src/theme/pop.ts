@@ -105,5 +105,5 @@ export function setPopMode(on: boolean, colors: Palette, pop: PopSettings) {
 export function popEdge(raised = false) {
   if (!popMode.on) return null;
   const o = raised && popMode.offset ? Math.max(2, Math.round(popMode.offset * 0.6)) : 0;
-  return { borderWidth: Math.min(popMode.line, 2.5), borderColor: popMode.ink, ...(o ? { boxShadow: `${o}px ${o}px 0px ${popMode.shadow}` } : null) };
+  return { borderWidth: Math.min(popMode.line, 2.5), borderColor: popMode.ink, borderCurve: 'circular' as const, ...(o ? { boxShadow: `${o}px ${o}px 0px ${popMode.shadow}` } : null) };
 }
