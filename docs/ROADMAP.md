@@ -71,3 +71,11 @@ Friday plan:
 - Import from YouTube Music, Spotify, SoundCloud, Apple Music (announced for early December)
 - Local music files (FLAC/ALAC; EAC3-JOC to be tested)
 - Staged rollouts and an automated test on a low-end Android emulator
+
+### User feedback (27/11)
+- "Play sometimes doesn't start" (Xian): waiting for a log before guessing the cause
+- Silent stream for "Nơi Tình Yêu Kết Thúc" (s1-qCmM9Z-w): parked; the `link …` log line in resolveUrl shows client + mime when it happens again
+- Sign in to YouTube and sync playlists, like Metrolist (7cipher): fits the import work; storing Google cookies is a security risk, discuss first
+- Word-by-word lyrics and custom lyric animations (7cipher): need a word-timed lyrics source; check what's free before promising
+- Lossless / Dolby Atmos (beeeeem, Javier): not possible for YouTube streams; only for Local Music
+- Artist uploads with applications, approval and reviews (Kushi Waves): storage cost + copyright moderation; much later, Local Music first
