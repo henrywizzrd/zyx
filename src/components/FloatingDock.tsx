@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { TabIcon } from './TabIcon';
 import { amEndPadding } from './AppleDock';
 import { zxEndPadding } from './ZyxDock';
@@ -48,9 +48,17 @@ export const LABELS = { home: 'tab.home', search: 'tab.search', library: 'tab.li
 
 // Dock và mini player nổi trên nội dung, nên chỉ trả về safe area.
 // endPadding dùng để màn hình cuộn kéo được mục cuối lên khỏi các khối nổi ở đáy.
+// Same object while nothing changes (log 27/11: the Player re-rendered ~50 times a session listing "pad" as changed,
+// because a new object was returned on every render)
 export function useContentInsets() {
   const insets = useSafeAreaInsets();
   const { theme, landscape } = useTheme();
+  const mode = theme.dock.mode;
+  const margin = theme.dock.style.margin;
+  return useMemo(() => contentInsets(insets, landscape, mode, margin), [insets, landscape, mode, margin]);
+}
+
+function contentInsets(insets: { top: number; bottom: number; left: number; right: number }, landscape: boolean, mode: string, margin: number) {
   // Màn hình ngang (dock dạng thanh): dock đứng dọc ở cạnh phải → chừa bên phải đúng bề dày dock, cuối danh sách chỉ cần chừa ít
   if (landscape) {
     return {
@@ -62,14 +70,14 @@ export function useContentInsets() {
       endPadding: MP_THICKNESS + 16,
     };
   }
-  if (theme.dock.mode === 'apple') return { top: insets.top, bottom: insets.bottom, left: insets.left, right: insets.right, endPadding: amEndPadding(insets.bottom) };
-  if (theme.dock.mode === 'zyx') return { top: insets.top, bottom: insets.bottom, left: insets.left, right: insets.right, endPadding: zxEndPadding(insets.bottom) };
+  if (mode === 'apple') return { top: insets.top, bottom: insets.bottom, left: insets.left, right: insets.right, endPadding: amEndPadding(insets.bottom) };
+  if (mode === 'zyx') return { top: insets.top, bottom: insets.bottom, left: insets.left, right: insets.right, endPadding: zxEndPadding(insets.bottom) };
   return {
     top: insets.top,
     bottom: insets.bottom,
     left: insets.left,
     right: insets.right,
-    endPadding: DOCK_THICKNESS + MP_THICKNESS + STACK_GAP + theme.dock.style.margin * 2,
+    endPadding: DOCK_THICKNESS + MP_THICKNESS + STACK_GAP + margin * 2,
   };
 }
 

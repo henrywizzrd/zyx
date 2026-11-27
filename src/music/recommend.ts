@@ -31,6 +31,10 @@ export interface Suggestion {
 const VERSION = /\b(live|remix|remixed|sped ?up|slowed|nightcore|karaoke|instrumental|acoustic|cover|8d|lofi|lo-fi|1 hour|reverb)\b/i;
 const artistKey = (a: string) => (a || '').split(',')[0].trim().toLowerCase();
 
+// Radios already fetched (seed id → songs), kept 30 minutes
+const RADIO_TTL = 30 * 60 * 1000;
+const radioCache = new Map<string, { at: number; songs: Song[] }>();
+
 // Session memory (cleared when the app restarts)
 const sessionPlayed = new Set<string>();
 const sessionArtistSkips = new Map<string, number>();
@@ -62,7 +66,24 @@ export async function suggestNext({
   const withLiked = likedPick.length ? [...seeds, likedPick[Math.floor(Math.random() * likedPick.length)]] : seeds;
   const uniq = withLiked.filter((s, i, a) => s && s.id !== 'none' && a.findIndex((x) => x?.id === s.id) === i).slice(0, 3);
   if (!uniq.length) return [];
-  const radios = await Promise.allSettled(uniq.map((s) => fetchRadio(s.id)));
+  // One radio at a time, reusing radios fetched in the last 30 minutes: three parsed at once blocked the JS thread
+  // for about a second, and a new batch a few seconds later fetched the same seeds again (log 27/11 13:59–14:00)
+  const radios: PromiseSettledResult<Song[]>[] = [];
+  for (const sd of uniq) {
+    const hit = radioCache.get(sd.id);
+    if (hit && Date.now() - hit.at < RADIO_TTL) {
+      radios.push({ status: 'fulfilled', value: hit.songs });
+      continue;
+    }
+    try {
+      const songs = await fetchRadio(sd.id);
+      radioCache.set(sd.id, { at: Date.now(), songs });
+      radios.push({ status: 'fulfilled', value: songs });
+    } catch (e) {
+      radios.push({ status: 'rejected', reason: e });
+    }
+    await new Promise((r) => setTimeout(r, 0)); // let the UI breathe between two parses
+  }
 
   // The most-listened artist sets the scale for the artist bonus
   const maxArtist = Math.max(1, ...taste.artists.values());

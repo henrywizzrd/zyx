@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { ActionSheetIOS, Alert, Keyboard, Platform } from 'react-native';
 import type { Track } from '../data/mock';
 import { Translate } from '../i18n';
@@ -29,10 +30,14 @@ export function sheet(t: Translate, title: string, message: string | undefined, 
 
 // Menu của một bài hát (nút ... hoặc nhấn giữ): mở bảng thao tác của app (ActionSheet).
 // extra: thêm lựa chọn riêng của từng màn hình (ví dụ "Xoá khỏi playlist").
+// Stable function (log 27/11: a new one on every render made the Player look like it changed each time)
 export function useSongMenu() {
   const { openSong } = useActionSheet();
-  return (track: Track, extra: ExtraAction[] = []) => {
-    Keyboard.dismiss();
-    openSong(track, extra);
-  };
+  return useCallback(
+    (track: Track, extra: ExtraAction[] = []) => {
+      Keyboard.dismiss();
+      openSong(track, extra);
+    },
+    [openSong]
+  );
 }
