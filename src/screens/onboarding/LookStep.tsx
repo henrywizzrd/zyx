@@ -67,7 +67,7 @@ export function LookStep({ look, setLook, onBack, onNext, scale }: { look: LookC
         hapticTick();
         setLook(kind === 'pop' ? { kind: 'pop', theme: 'lilac' } : { kind: 'glass', preset: 'dark' });
       }}
-      style={[styles.seg, look.kind === kind && { backgroundColor: OB.ink }]}
+      style={[styles.seg, kind === 'glass' ? styles.segL : styles.segR, look.kind === kind && { backgroundColor: OB.ink }]}
       accessibilityRole="button"
       accessibilityState={{ selected: look.kind === kind }}
     >
@@ -80,8 +80,9 @@ export function LookStep({ look, setLook, onBack, onNext, scale }: { look: LookC
       <Headline size={44 * scale} style={{ marginTop: 14 }}>
         Pick your look
       </Headline>
-      {/* ink behind the halves: where a half meets the rounded border, any sub-pixel gap shows ink, not a white hairline */}
-      <Hard outer={{ marginTop: 14 }} style={{ flexDirection: 'row', overflow: 'hidden', backgroundColor: OB.ink }}>
+      {/* No border + clipping here: iOS left a white hairline where the dark half met the clipped rounded border.
+          Instead the frame is a solid ink pill and each half is a white shape with its own rounded outer corners. */}
+      <Hard outer={{ marginTop: 14 }} style={{ flexDirection: 'row', backgroundColor: OB.ink, borderWidth: 0, padding: 2.5 }}>
         {seg('glass', 'Default')}
         {seg('pop', 'Pop')}
       </Hard>
@@ -125,6 +126,8 @@ export function LookStep({ look, setLook, onBack, onNext, scale }: { look: LookC
 
 const styles = StyleSheet.create({
   seg: { flex: 1, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: OB.paper },
+  segL: { borderTopLeftRadius: 22, borderBottomLeftRadius: 22 },
+  segR: { borderTopRightRadius: 22, borderBottomRightRadius: 22 },
   segText: { fontSize: 15, fontWeight: '900', color: OB.ink },
   swatches: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 14 },
   swRing: { padding: 2, borderRadius: 22, borderWidth: 2.5, borderColor: 'transparent' },
