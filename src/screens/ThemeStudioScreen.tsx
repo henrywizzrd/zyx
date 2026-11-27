@@ -371,7 +371,7 @@ export function ThemeStudioScreen() {
         {/* Loại kính: Trong / Mờ / Khói / Mờ tối (dock, mini player, bảng bật lên, thẻ...) */}
         <Text style={[styles.label, { color: text, marginTop: 18 }]}>{t('studio.material')}</Text>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-          {(['clear', 'frost', 'smoke', 'neon'] as const).map((m) => {
+          {(['clear', 'frost', 'neon'] as const).map((m) => {
             const on = (theme.glass.material ?? 'clear') === m;
             return (
               <Pressable
