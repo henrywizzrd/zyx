@@ -135,19 +135,24 @@ export function NeedleStep({ onDone, scale }: { onDone: () => void; scale: numbe
 
         {box && (
           <>
-            {/* turntable: a solid base under the tilted deck gives it thickness */}
-            <View pointerEvents="none" style={{ position: 'absolute', left: deckCx - dw / 2, top: deckCy - dh / 2 + 14 * k, width: dw, height: dh, borderRadius: 26 * k, backgroundColor: OB.ink, transform: deckTransform }} />
-            <View pointerEvents="none" style={[styles.deck, { left: deckCx - dw / 2, top: deckCy - dh / 2, width: dw, height: dh, borderRadius: 26 * k, transform: deckTransform }]}>
-              <View style={{ position: 'absolute', left: PLAT.x * k, top: PLAT.y * k, width: PLAT.d * k, height: PLAT.d * k, borderRadius: PLAT.d, backgroundColor: '#2A2A2E', borderWidth: 3, borderColor: OB.ink, alignItems: 'center', justifyContent: 'center' }}>
-                {landed ? <Vinyl size={PLAT.d * k - 10} spin={1600} border={2} /> : <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#CCCCCC', borderWidth: 2, borderColor: OB.ink }} />}
+            {/* turntable: a solid base under the tilted deck gives it thickness.
+                Both sit in their own flat box: iOS sorts sibling layers in 3D, so the tilted deck's near half used to
+                cover the record (in the sleeve and while flying in). Inside a 2D box the record simply draws on top. */}
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+              <View style={{ position: 'absolute', left: deckCx - dw / 2, top: deckCy - dh / 2 + 14 * k, width: dw, height: dh, borderRadius: 26 * k, backgroundColor: OB.ink, transform: deckTransform }} />
+              <View style={[styles.deck, { left: deckCx - dw / 2, top: deckCy - dh / 2, width: dw, height: dh, borderRadius: 26 * k, transform: deckTransform }]}>
+                <View style={{ position: 'absolute', left: PLAT.x * k, top: PLAT.y * k, width: PLAT.d * k, height: PLAT.d * k, borderRadius: PLAT.d, backgroundColor: '#2A2A2E', borderWidth: 3, borderColor: OB.ink, alignItems: 'center', justifyContent: 'center' }}>
+                  {landed ? <Vinyl size={PLAT.d * k - 10} spin={1600} border={2} /> : <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#CCCCCC', borderWidth: 2, borderColor: OB.ink }} />}
+                </View>
+                {/* tone arm, same geometry as the approved HTML: pivot at the top right, a thin rod, then a thicker
+                    lower rod that runs past the deck's front edge; it turns around the pivot centre (8, 8) */}
+                <Animated.View style={[{ position: 'absolute', right: 20 * k, top: 24 * k, width: 16 * k, height: 250 * k, transformOrigin: `${8 * k}px ${8 * k}px` }, armStyle]}>
+                  <View style={{ position: 'absolute', left: 5 * k, top: 8 * k, width: 6 * k, height: 118 * k, borderRadius: 4 * k, backgroundColor: OB.ink }} />
+                  <View style={{ position: 'absolute', left: -2 * k, top: 120 * k, width: 10 * k, height: 122 * k, borderRadius: 6 * k, backgroundColor: OB.ink }} />
+                  <View style={{ position: 'absolute', left: 0, top: 0, width: 16 * k, height: 16 * k, borderRadius: 8 * k, backgroundColor: OB.ink }} />
+                </Animated.View>
+                <View style={{ position: 'absolute', right: 22 * k, bottom: 18 * k, width: 34 * k, height: 34 * k, borderRadius: 17 * k, backgroundColor: OB.acc, borderWidth: 3, borderColor: OB.ink }} />
               </View>
-              {/* tone arm, pivoting at its top */}
-              <Animated.View style={[{ position: 'absolute', right: 20 * k, top: 24 * k, width: 16 * k, height: 150 * k, alignItems: 'center', transformOrigin: 'top' }, armStyle]}>
-                <View style={{ width: 16 * k, height: 16 * k, borderRadius: 8 * k, backgroundColor: OB.ink }} />
-                <View style={{ width: 6 * k, height: 112 * k, backgroundColor: OB.ink, borderRadius: 3 }} />
-                <View style={{ width: 12 * k, height: 18 * k, backgroundColor: OB.ink, borderRadius: 3, marginLeft: -6 * k }} />
-              </Animated.View>
-              <View style={{ position: 'absolute', right: 22 * k, bottom: 18 * k, width: 34 * k, height: 34 * k, borderRadius: 17 * k, backgroundColor: OB.acc, borderWidth: 3, borderColor: OB.ink }} />
             </View>
 
             {/* the record (behind the sleeve until it rises out of it) */}
@@ -188,7 +193,7 @@ export function NeedleStep({ onDone, scale }: { onDone: () => void; scale: numbe
 
 const styles = StyleSheet.create({
   sub: { fontWeight: '700', fontSize: 15, color: OB.ink, marginTop: 10 },
-  deck: { position: 'absolute', backgroundColor: OB.paper, borderWidth: 3, borderColor: OB.ink, overflow: 'hidden' },
+  deck: { position: 'absolute', backgroundColor: OB.paper, borderWidth: 3, borderColor: OB.ink },
   sleeve: { position: 'absolute', bottom: 0, width: SLEEVE, height: SLEEVE },
   sleeveFace: { flex: 1, borderRadius: 14, backgroundColor: OB.acc, borderWidth: 3, borderColor: OB.ink, justifyContent: 'flex-end', padding: 12 },
   sleeveText: { fontFamily: CONDENSED_FONT, fontWeight: 'normal', fontSize: 26, lineHeight: 25, color: OB.ink, textTransform: 'uppercase', includeFontPadding: false },
