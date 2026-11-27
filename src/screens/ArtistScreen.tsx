@@ -112,7 +112,7 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <Animated.ScrollView onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}>
+      <Animated.ScrollView showsVerticalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}>
         {/* Ảnh lớn của nghệ sĩ, tên đè lên phần dưới ảnh */}
         <View style={{ height: HERO_H }}>
           {/* Ảnh + lớp mờ: giãn ra khi kéo quá đầu trang */}

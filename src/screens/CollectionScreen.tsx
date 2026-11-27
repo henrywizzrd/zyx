@@ -557,7 +557,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <Animated.FlatList
+      <Animated.FlatList showsVerticalScrollIndicator={false}
         data={entered ? rows : rows.slice(0, 6)}
         onScroll={onScroll}
         scrollEventThrottle={16}

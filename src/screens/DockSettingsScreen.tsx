@@ -13,7 +13,7 @@ export function DockSettingsScreen() {
   const pad = useContentInsets();
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView
+      <ScrollView showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingTop: pad.top + 8, paddingBottom: pad.bottom + pad.endPadding, paddingHorizontal: 16, width: '100%', maxWidth: 560, alignSelf: 'center' }}
       >
         <PageHeader title={t('settings.dock')} />

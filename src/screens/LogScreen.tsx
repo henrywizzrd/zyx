@@ -263,7 +263,7 @@ export function LogScreen({ day = null }: { day?: string | null }) {
   if (!day) {
     return (
       <View style={StyleSheet.absoluteFill}>
-        <ScrollView contentContainerStyle={contentStyle}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={contentStyle}>
           {header}
           <View style={{ height: 14 }} />
           {view === 'list' ? (
@@ -279,7 +279,7 @@ export function LogScreen({ day = null }: { day?: string | null }) {
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <FlatList
+      <FlatList showsVerticalScrollIndicator={false}
         data={entered ? rows : EMPTY}
         keyExtractor={(l, i) => `${l.t}-${i}`}
         renderItem={renderItem}

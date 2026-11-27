@@ -242,7 +242,7 @@ export function ThemeStudioScreen() {
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <ScrollView
+      <ScrollView showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingTop: pad.top + 8,
           paddingBottom: pad.bottom + pad.endPadding,

@@ -265,6 +265,8 @@ export function ReorderableScrollView({ children, contentContainerStyle, style, 
     <ReorderContext.Provider value={ctx}>
       <GestureDetector gesture={nativeGesture ? combined : manual}>
         <Animated.ScrollView
+          // no scroll bar anywhere in the app (Library, Queue, playlists — agreed earlier; it showed again in Library 27/11)
+          showsVerticalScrollIndicator={false}
           ref={scrollRef}
           style={style}
           scrollEnabled={scrollEnabled && allowScroll}

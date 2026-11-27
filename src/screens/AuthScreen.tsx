@@ -212,7 +212,7 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
     <View style={{ flex: 1, backgroundColor: BG }}>
       <StatusBar style="light" />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView
+        <ScrollView showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top, paddingBottom: insets.bottom + 24, paddingHorizontal: 24 }}
         >

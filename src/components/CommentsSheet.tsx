@@ -99,7 +99,7 @@ export function CommentsSheet({ postId, postMine, visible, onClose, onOpenUser }
                 <Text style={{ color: textSecondary }}>{t('community.loadFailed')}</Text>
               </Pressable>
             ) : (
-              <FlatList
+              <FlatList showsVerticalScrollIndicator={false}
                 data={list ?? []}
                 keyExtractor={(c) => c.id}
                 style={{ flexGrow: 0 }}

@@ -90,7 +90,7 @@ export function GenreScreen({ page }: { page: GenrePage }) {
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <Animated.ScrollView onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}>
+      <Animated.ScrollView showsVerticalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: pad.bottom + pad.endPadding }}>
         {/* Màu của ô thể loại tan dần vào nền, tên thể loại đè lên */}
         <View style={{ height: HERO_H + pad.top }}>
           <StretchyBg scrollY={scrollY} height={HERO_H + pad.top}>

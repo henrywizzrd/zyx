@@ -108,7 +108,7 @@ export function PostComposer({ visible, onClose, initial }: { visible: boolean; 
             }}
           />
         ) : (
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16 }}>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16 }}>
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <View style={[styles.avatar, { backgroundColor: profile.avatarColor }]}>
                 {profile.avatar ? (
@@ -275,7 +275,7 @@ function AttachPicker({ onPick }: { onPick: (a: Attachment) => void }) {
         />
         {searching && !isLib && <ActivityIndicator size="small" color={textSecondary} />}
       </View>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}>
+      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}>
         {isLib ? (
           <>
             {libItems.length > 0 && section(t('social.fromLibrary'))}
