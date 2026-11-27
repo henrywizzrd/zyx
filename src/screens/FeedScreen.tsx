@@ -17,7 +17,7 @@ export function FeedScreen() {
   const { pop } = useNav();
   const goBack = useAnimatedBack() ?? pop;
   const pad = useContentInsets();
-  const { text, textSecondary, accent, surface } = theme.colors;
+  const { text, textSecondary, accent, accentText, surface } = theme.colors;
   const { posts, error, refreshing, more, refresh, loadMore } = useFeed(20);
 
   return (
@@ -40,7 +40,7 @@ export function FeedScreen() {
         }
         ListEmptyComponent={
           posts === null && !error ? (
-            <ActivityIndicator color={accent} style={{ marginTop: 30 }} />
+            <ActivityIndicator color={accentText} style={{ marginTop: 30 }} />
           ) : error ? (
             <Pressable onPress={() => refresh()}>
               <Text style={{ color: textSecondary, marginTop: 20 }}>{t('community.loadFailed')}</Text>
@@ -49,7 +49,7 @@ export function FeedScreen() {
             <Text style={{ color: textSecondary, marginTop: 20 }}>{t('community.feedEmpty')}</Text>
           )
         }
-        ListFooterComponent={posts?.length && more ? <ActivityIndicator color={accent} style={{ marginVertical: 16 }} /> : undefined}
+        ListFooterComponent={posts?.length && more ? <ActivityIndicator color={accentText} style={{ marginVertical: 16 }} /> : undefined}
         renderItem={({ item, index }) => <PostCard post={item} showDivider={index < (posts?.length ?? 0) - 1} />}
       />
     </View>

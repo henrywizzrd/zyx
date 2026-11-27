@@ -16,6 +16,9 @@ import { useRenderProbe } from '../components/JankMonitor';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { SMOKE_COLORS, SMOKE_TONES, type SmokeTone } from '../theme/smokeTones';
+import { Group, GROUP_COLORS, PageHeader, Row, Seg, Toggle } from '../components/SettingsUI';
+import { GlassFill, glassShadow } from '../components/Glass';
+import { POP_LINES, POP_PATTERNS, POP_SHADOW_COLORS, POP_SHADOWS, POP_THEME_NAMES, POP_THEME_ORDER, POP_THEMES, popSystemTheme, type PopThemeId } from '../theme/pop';
 
 const PAD = 16;
 const GAP = 12;
@@ -249,14 +252,15 @@ export function ThemeStudioScreen() {
           alignSelf: 'center',
         }}
       >
-        <View style={styles.topBar}>
-          <Pressable onPress={goBack} hitSlop={10} style={[styles.circle, { backgroundColor: surface }]}>
-            <Ionicons name="chevron-back" size={24} color={text} />
-          </Pressable>
-          <Text style={[styles.title, { color: text }]}>{t('studio.title')}</Text>
-          <View style={{ width: 38 }} />
-        </View>
+        <PageHeader title={t('studio.title')} />
 
+        {/* Default (glass) or Pop: each side has its own themes and options, and remembers them */}
+        <KindSwitch />
+
+        {theme.style === 'pop' ? (
+          <PopPane />
+        ) : (
+        <>
         {/* Bộ màu */}
         <Text style={[styles.section, { color: text }]}>{t('studio.presets')}</Text>
         <Text style={{ color: textSecondary, fontSize: 13, marginBottom: 12 }}>{t('studio.presetsHint')}</Text>
@@ -421,6 +425,8 @@ export function ThemeStudioScreen() {
         </View>
         <Slider value={theme.glass.blur / 100} thickness={6} fill={accent} track={border} onChange={blurS.change} onCommit={blurS.commit} />
         <Text style={{ color: textSecondary, fontSize: 12, marginTop: 4 }}>{t('studio.blurHint')}</Text>
+        </>
+        )}
       </ScrollView>
     </View>
   );
@@ -466,5 +472,103 @@ function ToneChip({ tone, label, on, ring, text, dim, onPress }: { tone: SmokeTo
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+// Default / Pop switch at the top of Theme Studio
+function KindSwitch() {
+  const { theme, setStyle } = useTheme();
+  const t = useT();
+  const pop = theme.style === 'pop';
+  const { accent, onAccent, text, textSecondary, border } = theme.colors;
+  const item = (kind: 'glass' | 'pop', label: string) => {
+    const on = theme.style === kind;
+    return (
+      <Pressable
+        key={kind}
+        onPress={() => setStyle(kind)}
+        style={[
+          { flex: 1, alignItems: 'center', paddingVertical: 11, borderRadius: 12, borderCurve: 'continuous' },
+          on && { backgroundColor: accent },
+          on && pop && { borderWidth: 2, borderColor: border },
+        ]}
+      >
+        <Text style={{ color: on ? onAccent : text, fontWeight: '900', fontSize: 15 }}>{label}</Text>
+      </Pressable>
+    );
+  };
+  return (
+    <>
+      <View style={[{ flexDirection: 'row', gap: 5, padding: 5, marginTop: 18, borderRadius: 16, borderCurve: 'continuous' }, glassShadow(0.8, theme.colors.glassTint !== 'dark')]}>
+        <GlassFill radius={16} solid={0.5} slab />
+        {item('glass', t('studio.kind.default'))}
+        {item('pop', t('studio.kind.pop'))}
+      </View>
+      <Text style={{ color: textSecondary, fontSize: 13, marginTop: 8, marginHorizontal: 2, lineHeight: 18 }}>
+        {t(pop ? 'studio.kindHint.pop' : 'studio.kindHint.default')}
+      </Text>
+    </>
+  );
+}
+
+// Pop side of Theme Studio: 8 Pop themes + look options (outline, shadow, shadow colour, background pattern, follow phone)
+function PopPane() {
+  const { theme, setPop } = useTheme();
+  const t = useT();
+  const scheme = useColorScheme();
+  const { width } = useScreenSize();
+  const p = theme.pop;
+  const cols = 4;
+  const tile = Math.floor((Math.min(width, 520) - PAD * 2 - 10 * (cols - 1)) / cols);
+  const pick = (id: PopThemeId) => setPop({ theme: id, followSystem: false });
+  return (
+    <>
+      <Text style={[styles.section, { color: theme.colors.text }]}>{t('studio.popThemes')}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
+        {POP_THEME_ORDER.map((id) => {
+          const c = POP_THEMES[id];
+          const on = p.theme === id;
+          return (
+            <Pressable key={id} onPress={() => pick(id)} style={{ width: tile, alignItems: 'center' }}>
+              <View
+                style={[
+                  { width: tile, height: tile, borderRadius: 14, borderCurve: 'continuous', backgroundColor: c.bg, borderWidth: 2.5, borderColor: '#111111', overflow: 'hidden' },
+                  on && { outlineWidth: 3, outlineColor: theme.colors.text, outlineOffset: 2 },
+                ]}
+              >
+                <View style={{ position: 'absolute', right: '12%', top: '12%', width: '26%', aspectRatio: 1, borderRadius: 99, backgroundColor: c.accent, borderWidth: 2, borderColor: '#111111' }} />
+                <View style={{ position: 'absolute', left: '18%', right: '18%', bottom: '16%', height: '28%', borderRadius: 6, backgroundColor: c.surface, borderWidth: 2, borderColor: '#111111' }} />
+              </View>
+              <Text numberOfLines={1} style={{ color: theme.colors.text, fontSize: 12, fontWeight: '800', marginTop: 6 }}>{POP_THEME_NAMES[id]}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <Group label={t('studio.popLook')} color={GROUP_COLORS.yellow} style={{ marginTop: 34 }}>
+        <Row
+          first
+          title={t('studio.pop.line')}
+          right={<Seg options={POP_LINES} value={p.line} onSelect={(line) => setPop({ line })} labels={{ thin: t('studio.pop.line.thin'), bold: t('studio.pop.line.bold'), chunky: t('studio.pop.line.chunky') }} />}
+        />
+        <Row
+          title={t('studio.pop.shadow')}
+          right={<Seg options={POP_SHADOWS} value={p.shadow} onSelect={(shadow) => setPop({ shadow })} labels={{ none: t('studio.pop.shadow.none'), short: t('studio.pop.shadow.short'), long: t('studio.pop.shadow.long') }} />}
+        />
+        <Row
+          title={t('studio.pop.shadowColor')}
+          right={<Seg options={POP_SHADOW_COLORS} value={p.shadowColor} onSelect={(shadowColor) => setPop({ shadowColor })} labels={{ ink: t('studio.pop.shadowColor.ink'), accent: t('studio.pop.shadowColor.accent') }} />}
+        />
+        <Row
+          title={t('studio.pop.pattern')}
+          right={<Seg options={POP_PATTERNS} value={p.pattern} onSelect={(pattern) => setPop({ pattern })} labels={{ plain: t('studio.pop.pattern.plain'), dots: t('studio.pop.pattern.dots'), grid: t('studio.pop.pattern.grid') }} />}
+        />
+        <Row
+          title={t('studio.pop.follow')}
+          hint={t('studio.pop.followHint')}
+          right={<Toggle value={p.followSystem} onChange={(v) => setPop(v ? { followSystem: true, theme: popSystemTheme(scheme) } : { followSystem: false })} />}
+        />
+      </Group>
+    </>
   );
 }

@@ -64,7 +64,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
   const songMenu = useSongMenu();
   const sheet = useActionSheet();
   const dbv = useDbVersion();
-  const { text, textSecondary, accent, surface, border, bg } = theme.colors;
+  const { text, textSecondary, accent, accentText, surface, border, bg } = theme.colors;
   // Nút tròn (trộn bài, lưu, đổi tên, back) là tấm kính giống dock
   const gs = glassShadow(0.6, theme.colors.glassTint !== 'dark');
   const roundGlass = <GlassFill radius={24} solid={0.45} slab />;
@@ -332,7 +332,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
       <View style={[styles.actions, landscape && { gap: 12 }]}>
         <Pressable onPress={() => playAll(true)} disabled={!rows.length} style={[styles.roundBtn, gs]}>
           {roundGlass}
-          <Ionicons name="shuffle" size={24} color={shuffle ? accent : text} />
+          <Ionicons name="shuffle" size={24} color={shuffle ? accentText : text} />
         </Pressable>
         <Pressable onPress={() => playAll(false)} disabled={!rows.length} style={[styles.playBtn, landscape && { width: undefined, flex: 1, maxWidth: 160 }, { backgroundColor: text, opacity: rows.length ? 1 : 0.4 }]}>
           <Ionicons name="play" size={22} color={bg} />
@@ -348,7 +348,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
           {roundGlass}
           {batch ? (
             <>
-              <ActivityIndicator size="small" color={accent} style={StyleSheet.absoluteFill} />
+              <ActivityIndicator size="small" color={accentText} style={StyleSheet.absoluteFill} />
               <Text style={{ color: text, fontSize: 11, fontWeight: '800' }}>{`${batch.done + batch.failed}/${batch.total}`}</Text>
             </>
           ) : (
@@ -358,7 +358,7 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
         {yt ? (
           <Pressable onPress={toggleSaved} style={[styles.roundBtn, gs]}>
           {roundGlass}
-            <Ionicons name={saved ? 'checkmark' : 'add'} size={28} color={saved ? accent : text} />
+            <Ionicons name={saved ? 'checkmark' : 'add'} size={28} color={saved ? accentText : text} />
           </Pressable>
         ) : local ? (
           <Pressable onPress={rename} style={[styles.roundBtn, gs]}>
@@ -374,14 +374,14 @@ export function CollectionScreen({ page }: { page: CollectionPage }) {
     <>
       {onlyDl && allRows.length > 0 && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, alignSelf: 'center' }}>
-          <Ionicons name="arrow-down-circle" size={18} color={accent} />
+          <Ionicons name="arrow-down-circle" size={18} color={accentText} />
           <Text style={{ color: textSecondary, fontSize: 13 }}>{t('col.onlyDownloaded')}</Text>
           <Pressable onPress={() => setOnlyDownloaded(false)} hitSlop={8}>
-            <Text style={{ color: accent, fontSize: 13, fontWeight: '700' }}>{t('col.showAll')}</Text>
+            <Text style={{ color: accentText, fontSize: 13, fontWeight: '700' }}>{t('col.showAll')}</Text>
           </Pressable>
         </View>
       )}
-      {status === 'loading' && <ActivityIndicator color={accent} style={{ marginTop: 24 }} />}
+      {status === 'loading' && <ActivityIndicator color={accentText} style={{ marginTop: 24 }} />}
       {status === 'error' && (
         <Pressable onPress={() => setRetry((r) => r + 1)} style={{ marginTop: 24, alignItems: 'center' }}>
           <Text style={{ color: textSecondary }}>{t('common.loadFailed')}</Text>
@@ -599,7 +599,7 @@ const SongRow = React.memo(function SongRow({
   item, playing, isLiked, showHeart = true, dl = 'none', dlProgress = 0, showThumb, handlers, colors, longPressMenu = true,
 }: {
   item: Row; playing: boolean; isLiked: boolean; showHeart?: boolean; dl?: DownloadState; dlProgress?: number; showThumb: boolean; handlers: Handlers;
-  colors: { text: string; textSecondary: string; accent: string; surface: string; border?: string }; longPressMenu?: boolean;
+  colors: { text: string; textSecondary: string; accent: string; accentText: string; surface: string; border?: string }; longPressMenu?: boolean;
 }) {
   // In a user playlist, holding a row lifts it for drag-to-reorder, so the menu is only on the "…" button there
   return (
@@ -612,7 +612,7 @@ const SongRow = React.memo(function SongRow({
           <View style={[styles.thumb, { backgroundColor: colors.surface }]} />
         ))}
       <View style={{ flex: 1 }}>
-        <Text numberOfLines={1} style={{ color: playing ? colors.accent : colors.text, fontSize: 17, fontWeight: '600' }}>{item.title}</Text>
+        <Text numberOfLines={1} style={{ color: playing ? colors.accentText : colors.text, fontSize: 17, fontWeight: '600' }}>{item.title}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
           <DownloadMark state={dl} progress={dlProgress} track={colors.border ?? 'rgba(255,255,255,0.2)'} />
           <Text numberOfLines={1} style={{ flex: 1, color: colors.textSecondary, fontSize: 14 }}>{item.artist}</Text>
@@ -620,7 +620,7 @@ const SongRow = React.memo(function SongRow({
       </View>
       {showHeart && (
         <Pressable onPress={() => handlers.current.like(item)} hitSlop={10} style={styles.heart} accessibilityRole="button" accessibilityLabel={isLiked ? 'Unlike' : 'Like'} accessibilityState={{ selected: isLiked }}>
-          <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={22} color={isLiked ? colors.accent : colors.textSecondary} />
+          <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={22} color={isLiked ? colors.accentText : colors.textSecondary} />
         </Pressable>
       )}
       <Pressable onPress={() => handlers.current.menu(item)} hitSlop={12} style={styles.more}>

@@ -81,7 +81,7 @@ export function AttachmentCard({ a, onPress, onRemove }: { a: Attachment; onPres
           <Ionicons name="close-circle" size={22} color={textSecondary} />
         </Pressable>
       ) : (
-        <Ionicons name={a.kind === 'song' ? 'play-circle' : 'chevron-forward'} size={a.kind === 'song' ? 30 : 18} color={a.kind === 'song' ? theme.colors.accent : textSecondary} />
+        <Ionicons name={a.kind === 'song' ? 'play-circle' : 'chevron-forward'} size={a.kind === 'song' ? 30 : 18} color={a.kind === 'song' ? theme.colors.accentText : textSecondary} />
       )}
     </Pressable>
   );
@@ -94,7 +94,7 @@ export function PostCard({ post, showDivider = true }: { post: Post; showDivider
   const profile = useProfile();
   const sheet = useActionSheet();
   const openAttach = useOpenAttachment();
-  const { text, textSecondary, border, accent } = theme.colors;
+  const { text, textSecondary, border, accent, accentText } = theme.colors;
   const { push } = useNav();
   const myId = currentAccount()?.id;
   const mine = !post.author;
@@ -193,8 +193,8 @@ export function PostCard({ post, showDivider = true }: { post: Post; showDivider
             {!!post.comments && <Text style={{ color: textSecondary, fontSize: 13 }}>{post.comments}</Text>}
           </Pressable>
           <Pressable onPress={repost} disabled={mine && !!post.remote} hitSlop={8} style={[styles.action, mine && !!post.remote && { opacity: 0.35 }]}>
-            <Ionicons name="repeat" size={21} color={post.reposted ? accent : textSecondary} />
-            {!!post.reposts && <Text style={{ color: post.reposted ? accent : textSecondary, fontSize: 13 }}>{post.reposts}</Text>}
+            <Ionicons name="repeat" size={21} color={post.reposted ? accentText : textSecondary} />
+            {!!post.reposts && <Text style={{ color: post.reposted ? accentText : textSecondary, fontSize: 13 }}>{post.reposts}</Text>}
           </Pressable>
         </View>
       </View>

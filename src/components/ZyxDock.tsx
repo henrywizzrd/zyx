@@ -46,7 +46,7 @@ export function ZyxDock({ active, onChange, onOpenPlayer, hidden }: { active: Ta
   const { M, H, R, B, GAP, SH, SGAP } = ZX;
   const bottom = zxBottom(insets.bottom);
   const labels = theme.dock.labels;
-  const { text, accent } = theme.colors;
+  const { text, accent, accentText } = theme.colors;
 
   const tabs = theme.dock.items.filter((i): i is Tab => i !== 'player' && i !== 'search');
   const n = Math.max(1, tabs.length);
@@ -156,7 +156,7 @@ export function ZyxDock({ active, onChange, onOpenPlayer, hidden }: { active: Ta
           <View style={[styles.row, { left: PAD, right: PAD }]}>
             {tabs.map((id) => {
               const on = id === active;
-              const color = on ? accent : text;
+              const color = on ? accentText : text;
               return (
                 <Pressable key={id} testID={`zyx-tab-${id}`} onPress={() => onChange(id)} style={[styles.cell, { width: tw }]}>
                   <DockGlyph id={id} size={labels ? 26 : 28} color={color} />

@@ -27,7 +27,7 @@ export function UserScreen({ page }: { page: UserPage }) {
   const goBack = useAnimatedBack() ?? pop;
   const pad = useContentInsets();
   const sheet = useActionSheet();
-  const { text, textSecondary, accent, onAccent, surface, border } = theme.colors;
+  const { text, textSecondary, accent, accentText, onAccent, surface, border } = theme.colors;
   const me = currentAccount()?.id;
   const isMe = me === page.id;
   // Màu nền để cuối ảnh bìa hoà vào (nền ảnh / video thì dùng màu nền chính, vẫn hoà đẹp)
@@ -153,7 +153,7 @@ export function UserScreen({ page }: { page: UserPage }) {
   );
   const repostList =
     reposts === null ? (
-      <ActivityIndicator color={accent} style={{ marginTop: 30 }} />
+      <ActivityIndicator color={accentText} style={{ marginTop: 30 }} />
     ) : reposts.length === 0 ? (
       <Text style={{ color: textSecondary, marginTop: 24 }}>{t('community.noReposts')}</Text>
     ) : (
@@ -161,7 +161,7 @@ export function UserScreen({ page }: { page: UserPage }) {
     );
   const playlistList =
     lists === null ? (
-      <ActivityIndicator color={accent} style={{ marginTop: 30 }} />
+      <ActivityIndicator color={accentText} style={{ marginTop: 30 }} />
     ) : lists.length === 0 ? (
       <Text style={{ color: textSecondary, marginTop: 24 }}>{t('community.noShared')}</Text>
     ) : (
@@ -178,7 +178,7 @@ export function UserScreen({ page }: { page: UserPage }) {
 
   const postsOnly =
     posts === null ? (
-      failed ? null : <ActivityIndicator color={accent} style={{ marginTop: 30 }} />
+      failed ? null : <ActivityIndicator color={accentText} style={{ marginTop: 30 }} />
     ) : posts.length === 0 ? (
       <Text style={{ color: textSecondary, marginTop: 24 }}>{t('community.noUserPosts')}</Text>
     ) : (
@@ -199,7 +199,7 @@ export function UserScreen({ page }: { page: UserPage }) {
         <Text style={{ color: textSecondary }}>{t('community.loadFailed')}</Text>
       </Pressable>
     ) : !c ? (
-      <ActivityIndicator color={accent} style={{ marginTop: 40 }} />
+      <ActivityIndicator color={accentText} style={{ marginTop: 40 }} />
     ) : null;
 
   // Màn hình ngang: trái là thẻ hồ sơ (cố định), phải là các bài đăng (cuộn riêng)

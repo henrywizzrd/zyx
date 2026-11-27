@@ -90,11 +90,11 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
   const colors = useMemo(
     () =>
       dark
-        ? { ...theme.colors, text: '#FFFFFF', textSecondary: 'rgba(255,255,255,0.62)', border: 'rgba(255,255,255,0.14)', surface: 'rgba(255,255,255,0.1)' }
+        ? { ...theme.colors, text: '#FFFFFF', textSecondary: 'rgba(255,255,255,0.62)', border: 'rgba(255,255,255,0.14)', surface: 'rgba(255,255,255,0.1)', accentText: theme.colors.accent }
         : theme.colors,
     [dark, theme.colors]
   );
-  const { text, textSecondary, accent, border } = colors;
+  const { text, textSecondary, accent, accentText, border } = colors;
 
   const [content, setContent] = useState<Content | null>(null);
   const [shown, setShown] = useState(false); // đang mở (khác với content: content còn giữ trong lúc trượt xuống)
@@ -349,7 +349,7 @@ export function ActionSheetProvider({ children, closePlayer }: { children: React
                     <Text numberOfLines={1} style={{ color: text, fontSize: 16, fontWeight: '600' }}>{p.title}</Text>
                     <Text style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>{t('sheet.songsCount', { n: p.count })}</Text>
                   </View>
-                  {has && <Ionicons name="checkmark-circle" size={24} color={accent} />}
+                  {has && <Ionicons name="checkmark-circle" size={24} color={accentText} />}
                 </Pressable>
               );
             })}
@@ -482,7 +482,7 @@ function ChipsRow({ a, colors }: { a: SheetAction; colors: Colors }) {
   return (
     <View style={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 8 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <Ionicons name={a.icon} size={18} color={a.on ? colors.accent : colors.textSecondary} />
+        <Ionicons name={a.icon} size={18} color={a.on ? colors.accentText : colors.textSecondary} />
         <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '700' }}>{a.label}</Text>
       </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -522,7 +522,7 @@ function ActionRow({ a, colors, onClose }: { a: SheetAction; colors: Colors; onC
         {a.busy ? (
           <ActivityIndicator color={colors.textSecondary} />
         ) : (
-          <Ionicons name={a.icon} size={26} color={a.on ? colors.accent : a.destructive ? DANGER : colors.textSecondary} />
+          <Ionicons name={a.icon} size={26} color={a.on ? colors.accentText : a.destructive ? DANGER : colors.textSecondary} />
         )}
       </View>
       <Text numberOfLines={1} style={[styles.rowLabel, { color }]}>{a.label}</Text>

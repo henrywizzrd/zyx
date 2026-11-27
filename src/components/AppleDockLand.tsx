@@ -175,7 +175,7 @@ export function AppleDockLand({ active, onChange, onOpenPlayer, hidden, square }
               {...squish(searchPress, 1.12)}
               style={[StyleSheet.absoluteFill, styles.center]}
             >
-              <DockGlyph id="search" size={32} color={active === 'search' ? theme.colors.accent : theme.colors.text} />
+              <DockGlyph id="search" size={32} color={active === 'search' ? theme.colors.accentText : theme.colors.text} />
             </Pressable>
           </Animated.View>
         </Animated.View>

@@ -11,6 +11,7 @@ export const defaultTheme: Theme = {
   colors: PRESETS.dark,
   // Mọi trường tuỳ chọn (?:) trong Theme đều phải có giá trị ở đây: merge() khi mở app chỉ giữ các trường có trong bản mặc định
   style: 'glass',
+  pop: { theme: 'paper', followSystem: false, line: 'bold', shadow: 'short', shadowColor: 'ink', pattern: 'plain' },
   glass: { blur: 15, material: 'frost', neon: '' }, // default: Frosted, thin (27/11)
   effects: { ambient: { snow: true, green: true, ocean: true, latte: true, sakura: true, meteor: true, starry: true, aurora: true, rain: true, neon: true, smoke: true }, meteorLevel: 1, smokeTone: 'coffee', smokeSpeed: 1 },
   dock: {
@@ -31,7 +32,7 @@ export const defaultTheme: Theme = {
   player: { lyricLook: 'glow', look: 'classic' },
   library: { layout: 'list', order: [] },
   home: {
-    sections: ['myPlaylists', 'recent', 'feed', 'trending', 'recommended', 'playlistPicks'],
+    sections: ['myPlaylists', 'recent', 'trending', 'recommended', 'playlistPicks'],
     hidden: [],
     trendingRange: 'week',
     trendingRegion: 'ZZ',

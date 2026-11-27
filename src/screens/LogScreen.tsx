@@ -34,7 +34,7 @@ const TAG_COLOR: Record<LogTag, string> = {
 // Nhật ký dò lỗi (Cài đặt → Nhật ký): dòng mới nhất ở trên, lọc theo loại, chép / gửi, xoá
 export function LogScreen({ day = null }: { day?: string | null }) {
   const { theme } = useTheme();
-  const { text, textSecondary, surface, accent, onAccent, border } = theme.colors;
+  const { text, textSecondary, surface, accent, accentText, onAccent, border } = theme.colors;
   const t = useT();
   const pad = useContentInsets();
   const { pop, push } = useNav();
@@ -160,7 +160,7 @@ export function LogScreen({ day = null }: { day?: string | null }) {
               </Pressable>
             ))}
             <Pressable onPress={resetVinylFlags} style={{ alignSelf: 'flex-start', marginTop: 6 }}>
-              <Text style={{ color: accent, fontWeight: '700' }}>Bật lại tất cả</Text>
+              <Text style={{ color: accentText, fontWeight: '700' }}>Bật lại tất cả</Text>
             </Pressable>
           </View>
         )}

@@ -12,7 +12,7 @@ import { useTheme } from '../theme/ThemeProvider';
 export function AppBackground() {
   const { theme } = useTheme();
   const { type, uri, dim } = theme.background;
-  if (theme.style === 'pop') return null; // Pop: plain background colour only
+  if (theme.style === 'pop') return <PopPattern />; // Pop: plain colour, or the dots / grid pattern
   if (type === 'preset' || !uri) return theme.preset === 'cover' ? <CoverBackdrop /> : null;
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -60,7 +60,7 @@ export function PageBackdrop({ live = false }: { live?: boolean }) {
   const { theme } = useTheme();
   const { type, uri, dim } = theme.background;
   const media = type !== 'preset' && !!uri;
-  if (theme.style === 'pop') return <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.background.color }]} />;
+  if (theme.style === 'pop') return <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.background.color }]}><PopPattern /></View>;
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.background.color }]}>
       {media && type === 'image' && <AppBackground />}
@@ -98,5 +98,30 @@ function CoverBackdrop() {
       <Animated.View style={[StyleSheet.absoluteFill, st]} />
       <LinearGradient colors={[accent + '30', accent + '00']} style={{ position: 'absolute', left: 0, right: 0, top: 0, height: '45%' }} />
     </View>
+  );
+}
+
+// Pop background pattern (Theme Studio → Pop → Background): dots or a grid in a faint ink colour.
+// A static SVG pattern, drawn once — nothing moves, so it costs nothing while scrolling
+function PopPattern() {
+  const { theme } = useTheme();
+  const kind = theme.pop.pattern;
+  if (kind === 'plain') return null;
+  const Svg = require('react-native-svg') as typeof import('react-native-svg');
+  const ink = theme.colors.text;
+  const size = kind === 'dots' ? 18 : 22;
+  return (
+    <Svg.default pointerEvents="none" style={StyleSheet.absoluteFill} width="100%" height="100%">
+      <Svg.Defs>
+        <Svg.Pattern id="pop-bg" width={size} height={size} patternUnits="userSpaceOnUse">
+          {kind === 'dots' ? (
+            <Svg.Circle cx={size / 2} cy={size / 2} r={1.3} fill={ink} fillOpacity={0.18} />
+          ) : (
+            <Svg.Path d={`M ${size} 0 L 0 0 0 ${size}`} stroke={ink} strokeOpacity={0.09} strokeWidth={1} fill="none" />
+          )}
+        </Svg.Pattern>
+      </Svg.Defs>
+      <Svg.Rect width="100%" height="100%" fill="url(#pop-bg)" />
+    </Svg.default>
   );
 }

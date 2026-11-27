@@ -51,7 +51,7 @@ function BaseCell({ i, tw, lensX, lensOn, children }: { i: number; tw: number; l
 export function Cell({ id, on, labels, width, height = AM.H, icon }: { id: Tab; on: boolean; labels: boolean; width: number; height?: number; icon?: number }) {
   const { theme } = useTheme();
   const t = useT();
-  const color = on ? theme.colors.accent : theme.colors.text;
+  const color = on ? theme.colors.accentText : theme.colors.text;
   return (
     <View style={{ width, height, alignItems: 'center', justifyContent: 'center' }}>
       <DockGlyph id={id} size={icon ?? (labels ? 26 : 28)} color={color} />
@@ -339,7 +339,7 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
             <Animated.View testID="dock-bar" style={[styles.abs, { left: 0, top: 0, height: H, borderRadius: H / 2, borderCurve: 'continuous' }, glassShadow(1, light), glassW]}>
               <GlassFill radius={H / 2} solid={0.5} slab noRim={noRim} />
               <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center, iconFade]}>
-                {shown >= 0 && <DockGlyph id={tabs[shown]} size={28} color={theme.colors.accent} />}
+                {shown >= 0 && <DockGlyph id={tabs[shown]} size={28} color={theme.colors.accentText} />}
               </Animated.View>
             </Animated.View>
           </GestureDetector>
@@ -382,7 +382,7 @@ export function AppleDock({ active, onChange, onOpenPlayer, hidden }: { active: 
                 onChange('search');
                 requestSearchFocus();
               }} {...squish(searchPress, 1.12)} style={[StyleSheet.absoluteFill, styles.center]}>
-              <DockGlyph id="search" size={27} color={active === 'search' ? theme.colors.accent : theme.colors.text} />
+              <DockGlyph id="search" size={27} color={active === 'search' ? theme.colors.accentText : theme.colors.text} />
             </Pressable>
           </Animated.View>
           </Animated.View>

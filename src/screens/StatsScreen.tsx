@@ -30,7 +30,7 @@ const fmtNum = (n: number, lang: string) => Math.round(n).toLocaleString(lang ==
 
 export function StatsScreen() {
   const { theme } = useTheme();
-  const { text, textSecondary, accent, onAccent } = theme.colors;
+  const { text, textSecondary, accent, accentText, onAccent } = theme.colors;
   const light = theme.colors.glassTint !== 'dark';
   const t = useT();
   const pad = useContentInsets();
@@ -180,7 +180,7 @@ export function StatsScreen() {
                     onPress={() => playTrack(s.track, stats.topSongs.map((x) => x.track), { kind: 'mix', id: `stats-${range}`, title: t('stats.topSongs') })}
                     style={styles.songRow}
                   >
-                    <Text style={[styles.rank, { color: i === 0 ? accent : textSecondary }]}>{i + 1}</Text>
+                    <Text style={[styles.rank, { color: i === 0 ? accentText : textSecondary }]}>{i + 1}</Text>
                     <View style={styles.thumb}>{s.track.thumb ? <SmartImage url={s.track.thumb} size={96} style={StyleSheet.absoluteFill} /> : null}</View>
                     <View style={{ flex: 1 }}>
                       <Text numberOfLines={1} style={{ color: text, fontSize: 15, fontWeight: '700' }}>

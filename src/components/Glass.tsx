@@ -6,7 +6,7 @@ import RNMaskedView from '@react-native-masked-view/masked-view';
 
 const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
 import { useTheme } from '../theme/ThemeProvider';
-import { POP_DARK, POP_LINE, popMode } from '../theme/pop';
+import { POP_DARK, popMode } from '../theme/pop';
 import { Ionicons } from '@expo/vector-icons';
 import { SmartImage } from './Cover';
 import type { Track } from '../data/mock';
@@ -70,8 +70,10 @@ export type GlassMaterial = 'clear' | 'frost' | 'neon';
 export function glassShadow(lift = 1, light = false) {
   // Pop style: one hard offset shadow in the ink colour, no blur
   if (popMode.on) {
-    const o = Math.max(2, Math.round(4 * Math.min(lift, 1.5)));
-    return { boxShadow: `${o}px ${o}px 0px ${popMode.ink}` } as const;
+    // Theme Studio → Pop → Shadow (none / short / long) and Shadow colour (ink / accent); smaller things get a shorter shadow
+    if (!popMode.offset) return { boxShadow: undefined } as const;
+    const o = Math.max(2, Math.round(popMode.offset * Math.min(lift, 1.5)));
+    return { boxShadow: `${o}px ${o}px 0px ${popMode.shadow}` } as const;
   }
   const k = light ? 0.55 : 1;
   const e = 7 * lift;
@@ -122,7 +124,7 @@ export function GlassFill({
     return (
       <View
         pointerEvents="none"
-        style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, backgroundColor: fill, borderWidth: POP_LINE, borderColor: ink }]}
+        style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, backgroundColor: fill, borderWidth: popMode.line, borderColor: ink }]}
       />
     );
   }

@@ -122,7 +122,7 @@ export function ProfileFeed() {
         (!accId
           ? empty('repeat', t('community.repostsNeedAccount'))
           : reposts === null
-            ? <ActivityIndicator color={theme.colors.accent} style={{ marginTop: 24 }} />
+            ? <ActivityIndicator color={theme.colors.accentText} style={{ marginTop: 24 }} />
             : reposts.length === 0
               ? empty('repeat', t('community.noReposts'))
               : reposts.map((p, i) => <PostCard key={p.id} post={{ ...p, repostedBy: undefined }} showDivider={i < reposts.length - 1} />))}

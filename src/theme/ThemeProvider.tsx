@@ -8,7 +8,7 @@ import { defaultTheme } from './defaultTheme';
 import { AmbientPresetId, PRESETS, ThemePresetId } from './presets';
 import { CoverTint, useCoverTint } from './coverTint';
 import { smokePalette, SMOKE_TONES, type SmokeTone } from './smokeTones';
-import { popPalette, setPopMode } from './pop';
+import { POP_LINES, POP_PATTERNS, POP_SHADOW_COLORS, POP_SHADOWS, POP_THEME_ORDER, POP_THEMES, popSystemTheme, setPopMode, type PopSettings } from './pop';
 import { log as appLog } from '../data/applog';
 import { Edge, HomeSection, LibraryLayout, MiniAnchor, Position, TabId, Theme, TrendingRange } from './types';
 
@@ -20,7 +20,7 @@ const POSITIONS: Position[] = [
 ];
 const EDGES: Edge[] = ['top', 'bottom', 'left', 'right'];
 const TABS: TabId[] = ['home', 'search', 'library', 'settings'];
-const SECTIONS: HomeSection[] = ['myPlaylists', 'recent', 'feed', 'trending', 'recommended', 'playlistPicks'];
+const SECTIONS: HomeSection[] = ['myPlaylists', 'recent', 'trending', 'recommended', 'playlistPicks']; // saved 'feed' is dropped: it is Home's Community tab now
 const RANGES: TrendingRange[] = ['week', 'month', 'year'];
 const LANGS = ['vi', 'en'] as const;
 const BG_TYPES = ['preset', 'image', 'video'] as const;
@@ -37,11 +37,11 @@ function derive(t: Theme): Theme {
   // Nền là ảnh/video: thẻ dùng màu trong suốt một phần để lộ nền phía sau (trông như kính, cuộn vẫn mượt)
   // Pop: its own flat palette (light or dark like the chosen preset); background media and effects are not drawn
   if (t.style === 'pop') {
-    const pop = popPalette(palette.glassTint === 'dark');
+    const pop = POP_THEMES[t.pop.theme] ?? POP_THEMES.paper;
     return { ...t, preset, colors: pop, background: { ...t.background, color: pop.bg } };
   }
   const media = t.background.type !== 'preset' && !!t.background.uri;
-  const colors = media ? { ...palette, surface: palette.card } : palette;
+  const colors = { ...(media ? { ...palette, surface: palette.card } : palette), accentText: palette.accent };
   return { ...t, preset, colors, background: { ...t.background, color: palette.bg } };
 }
 // Bộ "Theo ảnh bìa": phủ màu lấy từ ảnh bìa bài đang phát lên bảng màu gốc
@@ -49,7 +49,7 @@ function withCover(t: Theme, tint: CoverTint | null): Theme {
   const smokeCover = t.preset === 'smoke' && t.effects.smokeTone === 'cover';
   if ((t.preset !== 'cover' && !smokeCover) || !tint || t.style === 'pop') return t;
   const media = t.background.type !== 'preset' && !!t.background.uri;
-  const colors = { ...t.colors, ...tint, surface: media ? tint.card : tint.surface };
+  const colors = { ...t.colors, ...tint, accentText: tint.accent ?? t.colors.accent, surface: media ? tint.card : tint.surface };
   return { ...t, colors, background: { ...t.background, color: tint.bg } };
 }
 
@@ -94,19 +94,26 @@ function merge<T>(base: T, saved: unknown): T {
   return (typeof saved === typeof base ? saved : base) as T;
 }
 
+function sanitizePop(p: PopSettings): PopSettings {
+  const d = defaultTheme.pop;
+  const pick = <T,>(v: T, list: T[], dv: T) => (list.includes(v) ? v : dv);
+  return {
+    theme: pick(p.theme, POP_THEME_ORDER, d.theme),
+    followSystem: !!p.followSystem,
+    line: pick(p.line, POP_LINES, d.line),
+    shadow: pick(p.shadow, POP_SHADOWS, d.shadow),
+    shadowColor: pick(p.shadowColor, POP_SHADOW_COLORS, d.shadowColor),
+    pattern: pick(p.pattern, POP_PATTERNS, d.pattern),
+  };
+}
+
 // Chặn giá trị không hợp lệ (ví dụ file lưu bị sửa tay hoặc từ phiên bản cũ)
 function sanitize(t: Theme): Theme {
   const d = defaultTheme;
   const items = t.dock.items.filter((i) => TABS.includes(i));
   // Giữ thứ tự đã lưu, bỏ khối lạ (bản cũ), thêm khối mới chưa có vào cuối
   const kept = t.home.sections.filter((s, i, a) => SECTIONS.includes(s) && a.indexOf(s) === i);
-  let sections = kept.length ? [...kept, ...SECTIONS.filter((s) => !kept.includes(s))] : d.home.sections;
-  // Bản cũ chưa có Bảng tin: đặt ngay sau "Nghe gần đây" thay vì cuối trang
-  if (kept.length && !kept.includes('feed')) {
-    const rest = sections.filter((s) => s !== 'feed');
-    const at = rest.indexOf('recent') + 1;
-    sections = [...rest.slice(0, at), 'feed', ...rest.slice(at)];
-  }
+  const sections = kept.length ? [...kept, ...SECTIONS.filter((s) => !kept.includes(s))] : d.home.sections;
   return derive({
     ...t,
     background: {
@@ -116,6 +123,7 @@ function sanitize(t: Theme): Theme {
       dim: clampN(t.background.dim, 0, 0.8, d.background.dim),
     },
     style: t.style === 'pop' ? 'pop' : 'glass',
+    pop: sanitizePop(t.pop),
     glass: {
       blur: clampN(t.glass.blur, 0, 100, d.glass.blur),
       // 27/11: 'matte' was renamed to 'frost', and 'smoke' was removed (moved to 'frost')
@@ -186,6 +194,7 @@ interface ThemeContextValue {
   setGlassMaterial: (m: 'clear' | 'frost' | 'neon') => void;
   setGlassNeon: (c: string) => void; // màu đèn neon ('' = màu nhấn theme)
   setStyle: (s: Theme['style']) => void; // Glass or Pop
+  setPop: (patch: Partial<PopSettings>) => void; // Pop theme / look options
   setAmbient: (preset: AmbientPresetId, on: boolean) => void;
   setMeteorLevel: (level: number) => void;
   setSmokeTone: (tone: SmokeTone) => void;
@@ -237,10 +246,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const want = systemPreset(scheme);
     if (theme.preset !== want) setThemeState((t) => derive({ ...t, preset: want }));
   }, [scheme, theme.followSystem, theme.preset]);
+  // Pop "Light / dark: follow the phone": Paper when the phone is light, Night when it is dark
+  useEffect(() => {
+    if (!theme.pop.followSystem) return;
+    const want = popSystemTheme(scheme);
+    if (theme.pop.theme !== want) setThemeState((t) => derive({ ...t, pop: { ...t.pop, theme: want } }));
+  }, [scheme, theme.pop.followSystem, theme.pop.theme]);
 
   // Nhật ký: theme đang dùng lúc mở app (để biết theme nào khi dò giật lag)
   useEffect(() => {
-    if (ready) appLog('ui', `theme: ${theme.preset}${theme.background.type !== 'preset' ? ` + nền ${theme.background.type}` : ''}`);
+    if (ready) appLog('ui', `theme: ${theme.style === 'pop' ? `pop ${theme.pop.theme} · ` : ''}${theme.preset}${theme.background.type !== 'preset' ? ` + nền ${theme.background.type}` : ''}`);
   }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lưu lại mỗi khi theme đổi (chờ 300ms để không ghi liên tục)
@@ -272,7 +287,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const patchMini = (patch: Partial<Theme['miniPlayer']>) =>
       setThemeState((t) => ({ ...t, miniPlayer: { ...t.miniPlayer, ...patch } }));
 
-    setPopMode(theme.style === 'pop', theme.colors.border);
+    setPopMode(theme.style === 'pop', theme.colors, theme.pop);
     return {
       theme: orient(withCover(theme, coverTint), landscape),
       landscape,
@@ -304,6 +319,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setGlassBlur: (blur) => setThemeState((t) => ({ ...t, glass: { ...t.glass, blur: Math.max(0, Math.min(100, blur)) } })),
       setGlassMaterial: (material) => setThemeState((t) => ({ ...t, glass: { ...t.glass, material } })),
       setGlassNeon: (neon) => setThemeState((t) => ({ ...t, glass: { ...t.glass, neon } })),
+      setPop: (patch) => {
+        appLog('ui', `pop → ${JSON.stringify(patch)}`);
+        setThemeState((t) => derive({ ...t, pop: { ...t.pop, ...patch } }));
+      },
       setStyle: (style) => {
         appLog('ui', `style → ${style}`);
         setThemeState((t) => derive({ ...t, style }));

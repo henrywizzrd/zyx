@@ -25,7 +25,7 @@ export function CommentsSheet({ postId, postMine, visible, onClose, onOpenUser }
   const { width, height } = useScreenSize();
   const me = currentAccount();
   const profile = useProfile();
-  const { text, textSecondary, border, accent, surface, onAccent } = theme.colors;
+  const { text, textSecondary, border, accent, accentText, surface, onAccent } = theme.colors;
   const [list, setList] = useState<Comment[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [draft, setDraft] = useState('');
@@ -93,7 +93,7 @@ export function CommentsSheet({ postId, postMine, visible, onClose, onOpenUser }
               </Pressable>
             </View>
             {list === null && !failed ? (
-              <ActivityIndicator color={accent} style={{ marginVertical: 30 }} />
+              <ActivityIndicator color={accentText} style={{ marginVertical: 30 }} />
             ) : failed && !list ? (
               <Pressable onPress={load} style={{ padding: 30, alignItems: 'center' }}>
                 <Text style={{ color: textSecondary }}>{t('community.loadFailed')}</Text>

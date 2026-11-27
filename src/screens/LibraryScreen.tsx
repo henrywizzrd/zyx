@@ -127,7 +127,7 @@ export function LibraryScreen() {
 
   const layout = theme.library.layout;
   const innerW = (landscape ? width * 0.6 : width) - H_PAD * 2; // ngang: danh sách nằm ở cột phải 
-  const { text, textSecondary, accent, surface } = theme.colors;
+  const { text, textSecondary, accent, accentText, surface } = theme.colors;
 
   // Màu chữ trên ảnh bìa: tự đổi theo độ sáng của ảnh (ảnh tối → chữ trắng, ảnh sáng → chữ đậm).
   // Chưa có ảnh bìa thì dùng màu chữ của theme như mọi chỗ khác.
@@ -358,7 +358,7 @@ export function LibraryScreen() {
           </Pressable>
           {/* Chỉ hiện bài đã tải */}
           <Pressable onPress={() => setOnlyDownloaded(!onlyDl)} hitSlop={8} accessibilityLabel={t('lib.onlyDownloaded')}>
-            <Ionicons name={onlyDl ? 'arrow-down-circle' : 'arrow-down-circle-outline'} size={23} color={onlyDl ? accent : text} />
+            <Ionicons name={onlyDl ? 'arrow-down-circle' : 'arrow-down-circle-outline'} size={23} color={onlyDl ? accentText : text} />
           </Pressable>
           <Pressable onPress={cycleLayout} hitSlop={8}>
             <Ionicons name={LAYOUT_ICON[layout]} size={20} color={text} />

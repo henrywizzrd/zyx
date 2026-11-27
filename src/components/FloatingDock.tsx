@@ -252,7 +252,7 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
                   />
                 );
               }
-              const color = isActive ? theme.colors.accent : theme.colors.text;
+              const color = isActive ? theme.colors.accentText : theme.colors.text;
               return (
                 <Pressable
                   key={id}

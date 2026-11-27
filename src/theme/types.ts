@@ -9,7 +9,8 @@ export interface MiniAnchor { edge: Edge; t: number }
 
 export type TabId = 'home' | 'search' | 'library' | 'settings' | 'player';
 // Các khối của Home (thứ tự trong home.sections = thứ tự hiển thị)
-export type HomeSection = 'myPlaylists' | 'recent' | 'feed' | 'trending' | 'recommended' | 'playlistPicks';
+// 'feed' left Home's sections on 27/11: it is now Home's Community tab
+export type HomeSection = 'myPlaylists' | 'recent' | 'trending' | 'recommended' | 'playlistPicks';
 export type TrendingRange = 'week' | 'month' | 'year';
 export type TrendingRegion = 'ZZ' | 'VN' | 'KR' | 'US'; // ZZ = toàn cầu (mã YouTube Music)
 export type LibraryLayout = 'list' | 'columns' | 'covers2' | 'covers3';
@@ -27,6 +28,7 @@ export type UiStyle = 'glass' | 'pop';
 import type { Language } from '../i18n/strings';
 import type { AmbientPresetId, Palette, ThemePresetId } from './presets';
 import type { SmokeTone } from './smokeTones';
+import type { PopSettings } from './pop';
 
 // Nền của app: theo bộ màu, ảnh (cả GIF) hoặc video người dùng chọn
 export type BackgroundType = 'preset' | 'image' | 'video';
@@ -40,7 +42,8 @@ export interface Theme {
   // color: màu nền của bộ màu (tính tự động). uri: file ảnh/video ('' = chưa có). dim: độ tối phủ lên ảnh/video cho dễ đọc chữ (0..0.8)
   background: { type: BackgroundType; color: string; uri: string; dim: number };
   colors: Palette; // tính tự động từ preset, không tự sửa
-  style: UiStyle; // Settings → Style
+  style: UiStyle; // Theme Studio → Default (glass) / Pop
+  pop: PopSettings; // Pop's own theme + look options (glass keeps preset / glass / effects)
   glass: { blur: number; material?: 'clear' | 'frost' | 'neon'; neon?: string }; // độ mờ kính (0..100) + loại kính: Trong / Mờ / Khói / Mờ tối / Neon; neon: màu đèn ('' = màu nhấn theme)
   // Hiệu ứng nền của từng bộ: tuyết rơi (Snow), lá rơi (Green), bong bóng + cá (Ocean), hạt cà phê (Latte)
   // meteorLevel: mật độ sao băng của bộ Mưa sao băng (0 = ít, 1 = vừa, 2 = nhiều, 3 = bão sao băng)

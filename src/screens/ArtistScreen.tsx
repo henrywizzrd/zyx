@@ -57,7 +57,7 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
   const { track, playTrack, shuffle, toggleShuffle } = usePlayerPick('track', 'playTrack', 'shuffle', 'toggleShuffle');
   const songMenu = useSongMenu();
   const dbv = useDbVersion();
-  const { text, textSecondary, accent, onAccent, surface, border } = theme.colors;
+  const { text, textSecondary, accent, accentText, onAccent, surface, border } = theme.colors;
   const { scrollY, onScroll } = useStretchScroll();
 
   const [data, setData] = useState<ArtistPage | null>(pageCache.get(page.id) ?? null);
@@ -142,18 +142,18 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
           {/* Theo dõi, trộn bài, phát */}
           <View style={styles.actions}>
             <Pressable onPress={toggleFollow} style={[styles.follow, { borderColor: following ? accent : border, backgroundColor: following ? accent + '22' : 'transparent' }]}>
-              <Text style={{ color: following ? accent : text, fontWeight: '700', fontSize: 13 }}>{t(following ? 'artist.following' : 'artist.follow')}</Text>
+              <Text style={{ color: following ? accentText : text, fontWeight: '700', fontSize: 13 }}>{t(following ? 'artist.following' : 'artist.follow')}</Text>
             </Pressable>
             <View style={{ flex: 1 }} />
             <Pressable onPress={() => playAll(true)} hitSlop={8} disabled={!songs.length}>
-              <Ionicons name="shuffle" size={28} color={shuffle ? accent : textSecondary} />
+              <Ionicons name="shuffle" size={28} color={shuffle ? accentText : textSecondary} />
             </Pressable>
             <Pressable onPress={() => playAll(false)} disabled={!songs.length} style={[styles.play, { backgroundColor: accent, opacity: songs.length ? 1 : 0.4 }]}>
               <Ionicons name="play" size={28} color={onAccent} style={{ marginLeft: 3 }} />
             </Pressable>
           </View>
 
-          {status === 'loading' && <ActivityIndicator color={accent} style={{ marginTop: 24 }} />}
+          {status === 'loading' && <ActivityIndicator color={accentText} style={{ marginTop: 24 }} />}
           {status === 'error' && (
             <Pressable onPress={() => setRetry((r) => r + 1)} style={{ marginTop: 24, alignItems: 'center' }}>
               <Text style={{ color: textSecondary }}>{t('common.loadFailed')}</Text>
@@ -171,7 +171,7 @@ export function ArtistScreen({ page }: { page: ArtistNavPage }) {
                 <View style={[styles.thumb, { backgroundColor: surface }]} />
               )}
               <View style={{ flex: 1 }}>
-                <Text numberOfLines={1} style={{ color: s.id === track.id ? accent : text, fontSize: 16, fontWeight: '600' }}>{s.title}</Text>
+                <Text numberOfLines={1} style={{ color: s.id === track.id ? accentText : text, fontSize: 16, fontWeight: '600' }}>{s.title}</Text>
                 <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>{s.album || s.artist}</Text>
               </View>
               <Pressable onPress={() => songMenu(s)} hitSlop={10}>

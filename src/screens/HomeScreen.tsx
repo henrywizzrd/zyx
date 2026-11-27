@@ -6,10 +6,6 @@ import { Stagger } from '../components/Stagger';
 import { loadTrendingSummed, trendingId } from '../data/trending';
 import { PostCard } from '../components/PostCard';
 import { feedKey, useFeed } from '../components/FeedList';
-import RNMaskedView from '@react-native-masked-view/masked-view';
-import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, PixelRatio, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import Animated, { Easing, FadeOut, useAnimatedScrollHandler, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
@@ -136,57 +132,72 @@ async function loadTrending(range: TrendingRange, region: TrendingRegion): Promi
 // ---------------------------------------------------------------------------
 // Bảng tin: bài đăng mới nhất của mọi người (cả người mình theo dõi lẫn chưa theo dõi), mới nhất trước.
 // Thích / bình luận ngay trong bảng tin, bấm tên / avatar để mở hồ sơ người đó
-// Bảng tin trên Home: một khung cao vừa phải chứa khoảng 5 bài mới nhất, cuộn bên trong khung.
-// Mép trên / dưới của khung mờ dần (nội dung tan dần chứ không cắt thành đường), không có thanh cuộn.
-// Muốn xem bài mới: kéo xuống ở đầu khung để làm mới, hoặc bấm >> để mở bảng tin đầy đủ
-const FEED_BOX_H = 460;
-function Feed() {
+// Home → Community (27/11, replaces the Feed box): what other people share, newest first (people you follow and
+// people you don't). Like / comment right here, tap a name or avatar to open that profile.
+// Portrait: a full list under the Home header, pull down to refresh, more posts load near the end.
+type HomeTab = 'forYou' | 'community';
+let lastHomeTab: HomeTab = 'forYou'; // remembered while the app is open
+
+function HomeTabs({ value, onChange }: { value: HomeTab; onChange: (v: HomeTab) => void }) {
   const { theme } = useTheme();
   const t = useT();
-  const { push } = useNav();
-  const { posts, error, refreshing, refresh } = useFeed(5);
-  const { textSecondary, accent } = theme.colors;
-  const fade = (
-    <LinearGradient
-      colors={['transparent', '#000', '#000', 'transparent']}
-      locations={[0, 0.07, 0.9, 1]}
-      style={{ flex: 1 }}
-    />
+  const pop = theme.style === 'pop';
+  const { accent, onAccent, text, border } = theme.colors;
+  const item = (id: HomeTab, label: string) => {
+    const on = value === id;
+    return (
+      <Pressable
+        key={id}
+        onPress={() => onChange(id)}
+        style={[
+          { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 12, borderCurve: 'continuous' },
+          on && { backgroundColor: accent },
+          on && pop && { borderWidth: 2, borderColor: border },
+        ]}
+      >
+        <Text style={{ color: on ? onAccent : text, fontWeight: '900', fontSize: 15 }}>{label}</Text>
+      </Pressable>
+    );
+  };
+  return (
+    <View style={[{ flexDirection: 'row', gap: 5, padding: 5, marginBottom: 22, borderRadius: 16, borderCurve: 'continuous' }, glassShadow(0.7, theme.colors.glassTint !== 'dark')]}>
+      <GlassFill radius={16} solid={0.45} slab />
+      {item('forYou', t('home.tab.forYou'))}
+      {item('community', t('home.tab.community'))}
+    </View>
   );
+}
+
+function CommunityEmpty({ posts, error, refresh }: { posts: unknown[] | null; error: string | null; refresh: () => void }) {
+  const { theme } = useTheme();
+  const t = useT();
+  const { textSecondary, accentText } = theme.colors;
+  if (posts === null && !error) return <ActivityIndicator color={accentText} style={{ marginTop: 30 }} />;
+  if (error)
+    return (
+      <Pressable onPress={() => refresh()}>
+        <Text style={{ color: textSecondary, marginTop: 20 }}>{t('community.loadFailed')}</Text>
+        <Text style={{ color: textSecondary, fontSize: 12, marginTop: 4, opacity: 0.7 }}>{error}</Text>
+      </Pressable>
+    );
+  return <Text style={{ color: textSecondary, marginTop: 20 }}>{t('community.feedEmpty')}</Text>;
+}
+
+// Landscape: the right column shows the posts; the column scrolls on its own, a "more" button loads older posts
+function CommunityInline() {
+  const { theme } = useTheme();
+  const t = useT();
+  const { posts, error, more, refresh, loadMore } = useFeed(20);
+  if (!posts?.length) return <CommunityEmpty posts={posts} error={error} refresh={() => refresh()} />;
   return (
     <>
-      <SectionTitle
-        title={t('home.section.feed')}
-        right={
-          <Pressable onPress={() => push({ type: 'feed' })} hitSlop={10}>
-            <MaterialCommunityIcons name="chevron-double-right" size={28} color={textSecondary} />
-          </Pressable>
-        }
-      />
-      {posts === null ? (
-        error ? (
-          <Pressable onPress={() => refresh()}>
-            <Text style={{ color: textSecondary }}>{t('community.loadFailed')}</Text>
-            <Text style={{ color: textSecondary, fontSize: 12, marginTop: 4, opacity: 0.7 }}>{error}</Text>
-          </Pressable>
-        ) : (
-          <ActivityIndicator color={accent} style={{ marginVertical: 16 }} />
-        )
-      ) : posts.length === 0 ? (
-        <Text style={{ color: textSecondary }}>{t('community.feedEmpty')}</Text>
-      ) : (
-        <MaskedView style={{ maxHeight: FEED_BOX_H }} maskElement={fade}>
-          <ScrollView
-            nestedScrollEnabled
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingVertical: 14 }}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => refresh(true)} tintColor={accent} colors={[accent]} />}
-          >
-            {posts.map((p, i) => (
-              <PostCard key={feedKey(p)} post={p} showDivider={i < posts.length - 1} />
-            ))}
-          </ScrollView>
-        </MaskedView>
+      {posts.map((p, i) => (
+        <PostCard key={feedKey(p)} post={p} showDivider={i < posts.length - 1} />
+      ))}
+      {more && (
+        <Pressable onPress={loadMore} style={{ alignSelf: 'center', paddingVertical: 16 }}>
+          <Text style={{ color: theme.colors.accentText, fontWeight: '800' }}>{t('col.showAll')}</Text>
+        </Pressable>
       )}
     </>
   );
@@ -296,7 +307,7 @@ function Downloaded() {
               <Text numberOfLines={1} style={{ color: text, fontSize: 15, fontWeight: '600' }}>{s.title}</Text>
               <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>{s.artist}</Text>
             </View>
-            <Ionicons name="arrow-down-circle" size={18} color={theme.colors.accent} />
+            <Ionicons name="arrow-down-circle" size={18} color={theme.colors.accentText} />
           </Pressable>
         ))
       )}
@@ -493,7 +504,7 @@ function Trending() {
   const region = theme.home.trendingRegion;
   const key = `trending:${region}:${range}`;
   const r = useRemote(key, () => once(key, () => loadTrending(range, region)), true, 6 * 60 * 60 * 1000);
-  const { text, textSecondary, accent, surface, border } = theme.colors;
+  const { text, textSecondary, accent, accentText, surface, border } = theme.colors;
   const regionName = (k: TrendingRegion) => t(`home.region.${k}`);
   // Ô chọn khu vực: bấm vào thì trải xuống danh sách (Toàn cầu / Việt Nam / Hàn Quốc / Mỹ)
   const [regionOpen, setRegionOpen] = useState(false);
@@ -517,8 +528,8 @@ function Trending() {
           }}
           style={({ pressed }) => [styles.regionRow, pressed && { backgroundColor: border }]}
         >
-          <Text style={{ flex: 1, color: k === region ? accent : text, fontSize: 15, fontWeight: k === region ? '800' : '600' }}>{regionName(k)}</Text>
-          {k === region && <Ionicons name="checkmark" size={18} color={accent} />}
+          <Text style={{ flex: 1, color: k === region ? accentText : text, fontSize: 15, fontWeight: k === region ? '800' : '600' }}>{regionName(k)}</Text>
+          {k === region && <Ionicons name="checkmark" size={18} color={accentText} />}
         </Pressable>
       ))}
     </Animated.View>
@@ -578,10 +589,10 @@ function Trending() {
               onLongPress={() => songMenu(s)}
               style={styles.rankRow}
             >
-              <Text style={{ width: 26, color: i < 3 ? accent : textSecondary, fontSize: 16, fontWeight: '800', textAlign: 'center' }}>{i + 1}</Text>
+              <Text style={{ width: 26, color: i < 3 ? accentText : textSecondary, fontSize: 16, fontWeight: '800', textAlign: 'center' }}>{i + 1}</Text>
               {s.thumb ? <Image source={{ uri: s.thumb }} style={styles.rankThumb} /> : <View style={[styles.rankThumb, { backgroundColor: surface }]} />}
               <View style={{ flex: 1 }}>
-                <Text numberOfLines={1} style={{ color: s.id === track.id ? accent : text, fontSize: 15, fontWeight: '600' }}>{s.title}</Text>
+                <Text numberOfLines={1} style={{ color: s.id === track.id ? accentText : text, fontSize: 15, fontWeight: '600' }}>{s.title}</Text>
                 <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13 }}>{s.artist}</Text>
               </View>
               <Pressable onPress={() => songMenu(s)} hitSlop={12} style={{ paddingLeft: 6 }}>
@@ -686,7 +697,7 @@ function EditHome({ onClose }: { onClose: () => void }) {
   const { theme, setHome } = useTheme();
   const t = useT();
   const { sections, hidden } = theme.home;
-  const { text, textSecondary, accent, surface } = theme.colors;
+  const { text, textSecondary, accent, accentText, surface } = theme.colors;
   const move = (i: number, d: -1 | 1) => {
     const j = i + d;
     if (j < 0 || j >= sections.length) return;
@@ -700,7 +711,7 @@ function EditHome({ onClose }: { onClose: () => void }) {
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
         <Text style={{ flex: 1, color: text, fontSize: 17, fontWeight: '800' }}>{t('home.edit.title')}</Text>
         <Pressable onPress={onClose} hitSlop={10}>
-          <Text style={{ color: accent, fontSize: 15, fontWeight: '700' }}>{t('common.done')}</Text>
+          <Text style={{ color: accentText, fontSize: 15, fontWeight: '700' }}>{t('common.done')}</Text>
         </Pressable>
       </View>
       <Text style={{ color: textSecondary, fontSize: 13, marginBottom: 8 }}>{t('home.edit.hint')}</Text>
@@ -735,6 +746,12 @@ export function HomeScreen() {
   const pad = useContentInsets();
   const { push } = useNav();
   const [editing, setEditing] = useState(false);
+  const [tab, setTabState] = useState<HomeTab>(lastHomeTab);
+  const setTab = (v: HomeTab) => {
+    lastHomeTab = v;
+    setEditing(false);
+    setTabState(v);
+  };
   // dock Apple Music: cuộn xuống thì thu dock, cuộn lên thì mở lại
   const homeY = useSharedValue(0);
   const dockScroll = useAnimatedScrollHandler((e) => {
@@ -779,8 +796,6 @@ export function HomeScreen() {
         return <MyPlaylists />;
       case 'recent':
         return <Recent list={landscape} />;
-      case 'feed':
-        return <Feed />;
       case 'trending':
         return <Trending />;
       case 'recommended':
@@ -814,9 +829,12 @@ export function HomeScreen() {
           <Ionicons name="options-outline" size={20} color={theme.colors.text} />
         </Pressable>
       </Animated.View>
+      {/* For You (music) / Community (what other people share). Offline: no Community */}
+      {!offline && <HomeTabs value={tab} onChange={setTab} />}
       {editing && <EditHome onClose={() => setEditing(false)} />}
     </>
   );
+  const community = tab === 'community' && !offline;
   const blocks = (list: HomeSection[], from: 'up' | 'left' | 'right', first = 1) =>
     list.map((s, i) => (
       <Animated.View key={s} entering={enter(i + first, from)} style={{ marginTop: i === 0 ? 0 : 30 }}>
@@ -837,14 +855,16 @@ export function HomeScreen() {
           <>
             {header('left')}
             {offline && <Downloaded />}
-            {blocks(leftList, 'left')}
+            {!community && blocks(leftList, 'left')}
             {visible.length === 0 && <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>{t('home.allHidden')}</Text>}
           </>
         }
-        right={<View style={{ paddingTop: 4 }}>{blocks(rightList, 'right', 0)}</View>}
+        right={<View style={{ paddingTop: 4 }}>{community ? <CommunityInline /> : blocks(rightList, 'right', 0)}</View>}
       />
     );
   }
+
+  if (community) return <CommunityList header={header('up')} onScroll={dockScroll} />;
 
   return (
     <Animated.ScrollView
@@ -911,3 +931,28 @@ const styles = StyleSheet.create({
   rankRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   rankThumb: { width: 46, height: 46, borderRadius: 4 },
 });
+
+// Portrait Community tab: Home's header + tabs on top, then every post. Pull to refresh, older posts load near the end
+function CommunityList({ header, onScroll }: { header: React.ReactNode; onScroll: ReturnType<typeof useAnimatedScrollHandler> }) {
+  const { theme } = useTheme();
+  const pad = useContentInsets();
+  const { posts, error, refreshing, more, refresh, loadMore } = useFeed(20);
+  const { accent, accentText } = theme.colors;
+  return (
+    <Animated.FlatList
+      data={posts ?? []}
+      keyExtractor={feedKey}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
+      showsVerticalScrollIndicator={false}
+      onEndReached={loadMore}
+      onEndReachedThreshold={0.6}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => refresh(true)} tintColor={accent} colors={[accent]} />}
+      contentContainerStyle={{ paddingTop: pad.top + 16, paddingBottom: pad.bottom + pad.endPadding, paddingLeft: pad.left + PAD, paddingRight: pad.right + PAD }}
+      ListHeaderComponent={<>{header}</>}
+      ListEmptyComponent={<CommunityEmpty posts={posts} error={error} refresh={() => refresh()} />}
+      ListFooterComponent={posts?.length && more ? <ActivityIndicator color={accentText} style={{ marginVertical: 16 }} /> : undefined}
+      renderItem={({ item, index }) => <PostCard post={item} showDivider={index < (posts?.length ?? 0) - 1} />}
+    />
+  );
+}

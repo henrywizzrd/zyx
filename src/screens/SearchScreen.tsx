@@ -300,7 +300,7 @@ export function SearchScreen() {
     runSearch(it.title);
   };
 
-  const { text, textSecondary, accent } = theme.colors;
+  const { text, textSecondary, accent, accentText } = theme.colors;
   const glass = useGlass();
   // Màn hình ngang: thể loại nằm ở cột phải (khoảng 58% bề rộng)
   // Màn hình ngang: thể loại nằm ở cột phải của SplitPane (58% phần còn lại sau khe 8px), trừ lề 2 bên.
@@ -356,7 +356,7 @@ export function SearchScreen() {
                         <View style={{ width: 84, height: 84, borderRadius: 6, backgroundColor: theme.colors.skeleton }} />
                       )}
                       <View style={{ flex: 1 }}>
-                        <Text numberOfLines={2} style={{ color: top.song?.id === track.id ? accent : text, fontSize: 20, fontWeight: '800' }}>{top.title}</Text>
+                        <Text numberOfLines={2} style={{ color: top.song?.id === track.id ? accentText : text, fontSize: 20, fontWeight: '800' }}>{top.title}</Text>
                         <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 4 }}>{top.subtitle}</Text>
                       </View>
                       {top.song && (
@@ -474,7 +474,7 @@ export function SearchScreen() {
                   </View>
                 )}
                 <View style={{ flex: 1 }}>
-                  <Text numberOfLines={1} style={{ color: it.id === track.id ? accent : text, fontSize: 16, fontWeight: '600' }}>
+                  <Text numberOfLines={1} style={{ color: it.id === track.id ? accentText : text, fontSize: 16, fontWeight: '600' }}>
                     {it.title}
                   </Text>
                   <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>
@@ -524,7 +524,7 @@ export function SearchScreen() {
           <Text style={{ color: textSecondary }}>{tr('community.loadFailed')}</Text>
         </Pressable>
       ) : usersFor !== query.trim() || !users ? (
-        <ActivityIndicator color={accent} style={{ marginTop: 20 }} />
+        <ActivityIndicator color={accentText} style={{ marginTop: 20 }} />
       ) : users.length === 0 ? (
         <Text style={{ color: textSecondary, marginTop: 10 }}>{tr('community.noUsers')}</Text>
       ) : (
@@ -554,7 +554,7 @@ export function SearchScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
         <Text style={{ flex: 1, color: text, fontSize: 18, fontWeight: '700' }}>{tr('search.recent')}</Text>
         <Pressable onPress={() => kvSet(HISTORY, [])} hitSlop={8}>
-          <Text style={{ color: accent, fontWeight: '700', fontSize: 14 }}>{tr('search.clearHistory')}</Text>
+          <Text style={{ color: accentText, fontWeight: '700', fontSize: 14 }}>{tr('search.clearHistory')}</Text>
         </Pressable>
       </View>
       {history.map((h, i) => (
@@ -605,7 +605,7 @@ export function SearchScreen() {
                   <Pressable onPress={() => playTrack(t, vids)} onLongPress={() => songMenu(t)} style={styles.row}>
                     <Image source={{ uri: t.thumb }} style={[styles.ytThumb, { backgroundColor: theme.colors.surface }]} />
                     <View style={{ flex: 1 }}>
-                      <Text numberOfLines={2} style={{ color: t.id === track.id ? accent : text, fontSize: 15, fontWeight: '600' }}>{t.title}</Text>
+                      <Text numberOfLines={2} style={{ color: t.id === track.id ? accentText : text, fontSize: 15, fontWeight: '600' }}>{t.title}</Text>
                       <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>
                         {t.duration ? `${fmtLong(t.duration)} • ` : ''}
                         {t.artist}
@@ -642,7 +642,7 @@ export function SearchScreen() {
                 <Pressable key={`yt-${t.id}`} onPress={() => playTrack(t, playable)} onLongPress={() => songMenu(t)} style={styles.row}>
                   <Image source={{ uri: t.thumb }} style={[styles.cover, { backgroundColor: theme.colors.surface, borderRadius: 4 }]} />
                   <View style={{ flex: 1 }}>
-                    <Text numberOfLines={1} style={{ color: t.id === track.id ? accent : text, fontSize: 16, fontWeight: '600' }}>
+                    <Text numberOfLines={1} style={{ color: t.id === track.id ? accentText : text, fontSize: 16, fontWeight: '600' }}>
                       {t.title}
                     </Text>
                     <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13, marginTop: 2 }}>

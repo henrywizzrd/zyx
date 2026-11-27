@@ -33,7 +33,7 @@ export function GenreScreen({ page }: { page: GenrePage }) {
   const entered = useEntered();
   const { playTrack, shuffle, toggleShuffle } = usePlayerPick('playTrack', 'shuffle', 'toggleShuffle');
   const sheet = useActionSheet();
-  const { text, textSecondary, accent, surface, bg } = theme.colors;
+  const { text, textSecondary, accent, accentText, surface, bg } = theme.colors;
   const { scrollY, onScroll } = useStretchScroll();
 
   // Có sẵn trên máy (đã mở hoặc đã tải trước): hiện ngay, cũ quá thì làm mới ngầm
@@ -115,7 +115,7 @@ export function GenreScreen({ page }: { page: GenrePage }) {
           </View>
         </View>
 
-        {status === 'loading' && <ActivityIndicator color={accent} style={{ marginTop: 24 }} />}
+        {status === 'loading' && <ActivityIndicator color={accentText} style={{ marginTop: 24 }} />}
         {status === 'error' && (
           <Pressable onPress={() => setRetry((r) => r + 1)} style={{ marginTop: 24, alignItems: 'center' }}>
             <Text style={{ color: textSecondary }}>{t('common.loadFailed')}</Text>

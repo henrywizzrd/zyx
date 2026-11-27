@@ -54,6 +54,7 @@ import { ThemeStudioScreen } from './src/screens/ThemeStudioScreen';
 import { AppUpdater } from './src/components/AppUpdater';
 import { UpdateNotice } from './src/components/UpdateNotice';
 import { AuthGate } from './src/screens/AuthGate';
+import { DockSettingsScreen } from './src/screens/DockSettingsScreen';
 import { loadFonts } from './src/theme/fonts';
 
 // Pop title font: start loading as soon as the bundle runs (does not block the first screen)
@@ -365,6 +366,8 @@ function Root() {
                   <LogScreen day={pg.day} />
                 ) : pg.type === 'stats' ? (
                   <StatsScreen />
+                ) : pg.type === 'dock' ? (
+                  <DockSettingsScreen />
                 ) : (
                   <ThemeStudioScreen />
                 )}

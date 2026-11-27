@@ -154,7 +154,7 @@ export function CoverCropper({
           </Pressable>
           <Text style={styles.barTitle}>{t('crop.title')}</Text>
           <Pressable onPress={done} hitSlop={10} disabled={busy}>
-            {busy ? <ActivityIndicator color={theme.colors.accent} /> : <Text style={[styles.barBtn, { color: theme.colors.accent }]}>{t('common.done')}</Text>}
+            {busy ? <ActivityIndicator color={theme.colors.accentText} /> : <Text style={[styles.barBtn, { color: theme.colors.accentText }]}>{t('common.done')}</Text>}
           </Pressable>
         </View>
         <Text pointerEvents="none" style={[styles.hint, { bottom: insets.bottom + 28 }]}>{t('crop.hint')}</Text>

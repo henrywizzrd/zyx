@@ -59,7 +59,7 @@ export function PostComposer({ visible, onClose, initial }: { visible: boolean; 
   const t = useT();
   const insets = useSafeAreaInsets();
   const profile = useProfile();
-  const { text, textSecondary, accent, onAccent, border, surface, bg } = theme.colors;
+  const { text, textSecondary, accent, accentText, onAccent, border, surface, bg } = theme.colors;
 
   const [body, setBody] = useState('');
   const [attach, setAttach] = useState<Attachment | undefined>();
@@ -163,7 +163,7 @@ export function PostComposer({ visible, onClose, initial }: { visible: boolean; 
 function AttachPicker({ onPick }: { onPick: (a: Attachment) => void }) {
   const { theme } = useTheme();
   const t = useT();
-  const { text, textSecondary, surface, accent } = theme.colors;
+  const { text, textSecondary, surface, accent, accentText } = theme.colors;
   const library = useLibrary();
   const mine = useMemo(() => myTracks(), []);
   const [tab, setTab] = useState<'library' | 'search'>('library');
@@ -231,7 +231,7 @@ function AttachPicker({ onPick }: { onPick: (a: Attachment) => void }) {
           {a.subtitle ? ` • ${a.subtitle}` : ''}
         </Text>
       </View>
-      <Ionicons name="add-circle-outline" size={22} color={accent} />
+      <Ionicons name="add-circle-outline" size={22} color={accentText} />
     </Pressable>
   );
   const section = (title: string) => <Text style={[styles.section, { color: text }]}>{title}</Text>;
