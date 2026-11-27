@@ -55,7 +55,9 @@ import { AppUpdater } from './src/components/AppUpdater';
 import { UpdateNotice } from './src/components/UpdateNotice';
 import { AuthGate } from './src/screens/AuthGate';
 import { DockSettingsScreen } from './src/screens/DockSettingsScreen';
+import { AdminDeviceScreen, AdminScreen } from './src/screens/AdminScreen';
 import { loadFonts } from './src/theme/fonts';
+import { installDeviceReport } from './src/data/deviceReport';
 
 // Pop title font: start loading as soon as the bundle runs (does not block the first screen)
 loadFonts();
@@ -369,6 +371,10 @@ function Root() {
                   <StatsScreen />
                 ) : pg.type === 'dock' ? (
                   <DockSettingsScreen />
+                ) : pg.type === 'admin' ? (
+                  <AdminScreen />
+                ) : pg.type === 'adminDevice' ? (
+                  <AdminDeviceScreen id={pg.id} />
                 ) : (
                   <ThemeStudioScreen />
                 )}
@@ -520,6 +526,8 @@ function Boot({ children }: { children: React.ReactNode }) {
 
 // Nhật ký dò lỗi: bật sớm nhất có thể để bắt cả lỗi lúc khởi động
 installAppLog();
+// Daily device health for the admin dashboard (only with "Send diagnostics" on)
+installDeviceReport();
 // Black box: if the previous run crashed or was killed in the foreground, send its log (after startup settles)
 setTimeout(() => void reportPreviousRun(previousSession), 4000);
 

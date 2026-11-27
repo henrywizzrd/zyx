@@ -16,6 +16,7 @@ import { useRenderProbe } from '../components/JankMonitor';
 import { useDisplayFont } from '../theme/fonts';
 import { Chevron, Group, GROUP_COLORS, Row, Seg, Toggle } from '../components/SettingsUI';
 import { POP_THEME_NAMES } from '../theme/pop';
+import { useIsAdmin } from './AdminScreen';
 
 // Settings, grouped like the approved 27/11 mockup: Appearance / Playback / Account / Help.
 // Dock options moved to their own page (DockSettingsScreen); Glass vs Pop is chosen in Theme Studio.
@@ -30,6 +31,7 @@ export function SettingsScreen() {
   const syncErr = useProfileSyncError();
   const crashReports = useCrashReports();
   const crossfade = useCrossfade();
+  const isAdmin = useIsAdmin();
   const enter = useRotateEnter();
   useRenderProbe('Cài đặt', { theme, landscape, t, push, pad, session, profile, syncErr, crossfade });
   const pop = theme.style === 'pop';
@@ -99,6 +101,8 @@ export function SettingsScreen() {
       <Row first title={t('settings.log')} hint={t('settings.logHint')} onPress={() => push({ type: 'log' })} right={<Chevron />} />
       {/* Crash reports (on by default): crash + black-box log go to the developer automatically */}
       <Row title={t('settings.crashReports')} hint={t('settings.crashReportsHint')} right={<Toggle value={crashReports} onChange={setCrashReports} />} />
+      {/* Only the admin account sees this (the server also refuses everyone else) */}
+      {isAdmin && <Row title="Admin" hint="Devices, health, logs" onPress={() => push({ type: 'admin' })} right={<Chevron />} />}
     </Group>
   );
 

@@ -22,7 +22,7 @@ export type GenrePage = { type: 'genre'; title: string; params: string; color: s
 // Hồ sơ của một người dùng khác (mở từ Tìm kiếm → Người dùng, hoặc bấm vào tên / avatar trong bài đăng)
 export type UserPage = { type: 'user'; id: string };
 // Bảng tin đầy đủ (bấm >> ở mục Bảng tin trên Home)
-export type Page = CollectionPage | ArtistPage | GenrePage | UserPage | { type: 'feed' } | { type: 'themeStudio' } | { type: 'log'; day?: string } /* day: one day's log (YYYY-MM-DD), opened from the Log overview */ | { type: 'stats' } | { type: 'dock' } /* Settings → Dock */;
+export type Page = CollectionPage | ArtistPage | GenrePage | UserPage | { type: 'feed' } | { type: 'themeStudio' } | { type: 'log'; day?: string } /* day: one day's log (YYYY-MM-DD), opened from the Log overview */ | { type: 'stats' } | { type: 'dock' } /* Settings → Dock */ | { type: 'admin' } | { type: 'adminDevice'; id: string } /* admin dashboard */;
 
 interface NavValue {
   push: (p: Page) => void;

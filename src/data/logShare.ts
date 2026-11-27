@@ -34,7 +34,7 @@ export function deviceInfo(): Promise<DeviceInfo> {
   return infoP;
 }
 
-function deviceId(): string {
+export function deviceId(): string {
   let id = kvGet<string>('zyx.deviceId');
   if (!id) {
     id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
