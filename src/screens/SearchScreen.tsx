@@ -39,6 +39,7 @@ import { useFrame } from '../components/layout';
 import { useSongMenu } from '../components/useSongMenu';
 import { useNav } from '../nav/Nav';
 import { useT } from '../i18n';
+import { useDisplayFont } from '../theme/fonts';
 
 const H_PAD = 16;
 const GAP = 12;
@@ -125,6 +126,7 @@ function warmUp() {
 }
 
 export function SearchScreen() {
+  const df = useDisplayFont();
   // dock ZYX: chạm thanh "Search" → sang đây và bật bàn phím
   const inputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   useEffect(() => onSearchFocusRequest(() => inputRef.current?.focus()), []);
@@ -726,7 +728,7 @@ export function SearchScreen() {
         topExtra={16}
         left={
           <>
-        <Text style={{ color: text, fontSize: 26, fontWeight: '700', marginTop: 0 }}>{tr('search.title')}</Text>
+        <Text style={[{ color: text, fontSize: 26, fontWeight: '700', marginTop: 0 }, df]}>{tr('search.title')}</Text>
             {searchBox}
             {showResults && <View style={{ marginTop: 14 }}>{chipRow}</View>}
             {topCard && <View style={{ marginTop: 6 }}>{topCard}</View>}
@@ -750,7 +752,7 @@ export function SearchScreen() {
     >
       {/* vừa xoay về dọc: trượt từ dưới lên vào chỗ (rotateEnter.ts) */}
       <RAnimated.View entering={rotEnter(0, 'up')} style={{ width: '100%', paddingHorizontal: H_PAD }}>
-        <Text style={{ color: text, fontSize: 26, fontWeight: '700', marginTop: pad.top + 16 }}>{tr('search.title')}</Text>
+        <Text style={[{ color: text, fontSize: 26, fontWeight: '700', marginTop: pad.top + 16 }, df]}>{tr('search.title')}</Text>
 
         {searchBox}
 

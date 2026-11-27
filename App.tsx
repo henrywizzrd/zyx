@@ -54,6 +54,10 @@ import { ThemeStudioScreen } from './src/screens/ThemeStudioScreen';
 import { AppUpdater } from './src/components/AppUpdater';
 import { UpdateNotice } from './src/components/UpdateNotice';
 import { AuthGate } from './src/screens/AuthGate';
+import { loadFonts } from './src/theme/fonts';
+
+// Pop title font: start loading as soon as the bundle runs (does not block the first screen)
+loadFonts();
 
 // Các màn hình tab không nhận props: bọc memo để App vẽ lại (đổi tab, mở trang...) thì chúng không phải vẽ lại theo.
 // Chúng vẫn tự cập nhật khi theme, dữ liệu, player... đổi (qua context)

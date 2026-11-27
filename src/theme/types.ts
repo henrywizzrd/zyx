@@ -21,6 +21,8 @@ export type Side = 'left' | 'right';
 export type LyricLook = 'glow' | 'karaoke' | 'bounce';
 // Kiểu màn player: classic = ảnh bìa lớn (kiểu Spotify / Apple Music) · vinyl = đĩa than một góc (VinylPlayer)
 export type PlayerLook = 'classic' | 'vinyl';
+// Look of the whole app: glass (blur, the original ZYX look) or pop (neo-brutalism: flat colours, thick outlines, no blur)
+export type UiStyle = 'glass' | 'pop';
 
 import type { Language } from '../i18n/strings';
 import type { AmbientPresetId, Palette, ThemePresetId } from './presets';
@@ -38,6 +40,7 @@ export interface Theme {
   // color: màu nền của bộ màu (tính tự động). uri: file ảnh/video ('' = chưa có). dim: độ tối phủ lên ảnh/video cho dễ đọc chữ (0..0.8)
   background: { type: BackgroundType; color: string; uri: string; dim: number };
   colors: Palette; // tính tự động từ preset, không tự sửa
+  style: UiStyle; // Settings → Style
   glass: { blur: number; material?: 'clear' | 'frost' | 'neon'; neon?: string }; // độ mờ kính (0..100) + loại kính: Trong / Mờ / Khói / Mờ tối / Neon; neon: màu đèn ('' = màu nhấn theme)
   // Hiệu ứng nền của từng bộ: tuyết rơi (Snow), lá rơi (Green), bong bóng + cá (Ocean), hạt cà phê (Latte)
   // meteorLevel: mật độ sao băng của bộ Mưa sao băng (0 = ít, 1 = vừa, 2 = nhiều, 3 = bão sao băng)

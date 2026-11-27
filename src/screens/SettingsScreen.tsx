@@ -14,6 +14,7 @@ import { setCrossfade, useCrossfade } from '../player/crossfade';
 import { setCrashReports, useCrashReports } from '../data/crashReports';
 import { GlassFill, glassShadow } from '../components/Glass';
 import { useRenderProbe } from '../components/JankMonitor';
+import { useDisplayFont } from '../theme/fonts';
 
 // labels: chữ hiển thị cho từng lựa chọn (bỏ trống thì hiện chính giá trị)
 function Chips<T extends string>({ options, value, onSelect, labels }: { options: readonly T[]; value: T; onSelect: (v: T) => void; labels?: Partial<Record<T, string>> }) {
@@ -38,7 +39,8 @@ function Chips<T extends string>({ options, value, onSelect, labels }: { options
 }
 
 export function SettingsScreen() {
-  const { theme, landscape, resetTheme, setMerged, setLanguage, setDockLabels, setDockRimLight, setDockMode, setPlayerLook } = useTheme();
+  const df = useDisplayFont();
+  const { theme, landscape, resetTheme, setMerged, setLanguage, setDockLabels, setDockRimLight, setDockMode, setPlayerLook, setStyle } = useTheme();
   const t = useT();
   const { push } = useNav();
   const pad = useContentInsets();
@@ -55,8 +57,18 @@ export function SettingsScreen() {
 
   const settingsPart = (
     <>
-      <Text style={[styles.title, { color: theme.colors.text }]}>{t('settings.title')}</Text>
+      <Text style={[styles.title, { color: theme.colors.text }, df]}>{t('settings.title')}</Text>
       <Text style={{ color: theme.colors.textSecondary, marginTop: 8 }}>{t('settings.hint')}</Text>
+
+      {/* Style: Glass (blur) or Pop (flat colours, thick outlines) for the whole app */}
+      <Text style={[label, { marginBottom: 4 }]}>{t('settings.style')}</Text>
+      <Text style={{ color: theme.colors.textSecondary, fontSize: 13, marginBottom: 12, opacity: 0.8 }}>{t('settings.styleHint')}</Text>
+      <Chips
+        options={['glass', 'pop'] as const}
+        value={theme.style}
+        onSelect={setStyle}
+        labels={{ glass: t('settings.styleGlass'), pop: t('settings.stylePop') }}
+      />
 
       {/* Giao diện: mở Theme Studio */}
       <Pressable onPress={() => push({ type: 'themeStudio' })} style={[styles.row, gs]}>
@@ -205,7 +217,7 @@ export function SettingsScreen() {
         left={settingsPart}
         right={
           <>
-            <Text style={[styles.title, { color: theme.colors.text }]}>{t('settings.account')}</Text>
+            <Text style={[styles.title, { color: theme.colors.text }, df]}>{t('settings.account')}</Text>
             <View style={[styles.profileCard, gs]}>
               <GlassFill radius={18} solid={0.5} slab />
               {profile.avatar ? (

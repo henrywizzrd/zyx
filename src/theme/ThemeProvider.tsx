@@ -8,6 +8,7 @@ import { defaultTheme } from './defaultTheme';
 import { AmbientPresetId, PRESETS, ThemePresetId } from './presets';
 import { CoverTint, useCoverTint } from './coverTint';
 import { smokePalette, SMOKE_TONES, type SmokeTone } from './smokeTones';
+import { popPalette, setPopMode } from './pop';
 import { log as appLog } from '../data/applog';
 import { Edge, HomeSection, LibraryLayout, MiniAnchor, Position, TabId, Theme, TrendingRange } from './types';
 
@@ -34,6 +35,11 @@ function derive(t: Theme): Theme {
   const tone = t.effects?.smokeTone;
   const palette = preset === 'smoke' && tone && tone !== 'cover' ? { ...PRESETS.smoke, ...smokePalette(tone) } : PRESETS[preset];
   // Nền là ảnh/video: thẻ dùng màu trong suốt một phần để lộ nền phía sau (trông như kính, cuộn vẫn mượt)
+  // Pop: its own flat palette (light or dark like the chosen preset); background media and effects are not drawn
+  if (t.style === 'pop') {
+    const pop = popPalette(palette.glassTint === 'dark');
+    return { ...t, preset, colors: pop, background: { ...t.background, color: pop.bg } };
+  }
   const media = t.background.type !== 'preset' && !!t.background.uri;
   const colors = media ? { ...palette, surface: palette.card } : palette;
   return { ...t, preset, colors, background: { ...t.background, color: palette.bg } };
@@ -41,7 +47,7 @@ function derive(t: Theme): Theme {
 // Bộ "Theo ảnh bìa": phủ màu lấy từ ảnh bìa bài đang phát lên bảng màu gốc
 function withCover(t: Theme, tint: CoverTint | null): Theme {
   const smokeCover = t.preset === 'smoke' && t.effects.smokeTone === 'cover';
-  if ((t.preset !== 'cover' && !smokeCover) || !tint) return t;
+  if ((t.preset !== 'cover' && !smokeCover) || !tint || t.style === 'pop') return t;
   const media = t.background.type !== 'preset' && !!t.background.uri;
   const colors = { ...t.colors, ...tint, surface: media ? tint.card : tint.surface };
   return { ...t, colors, background: { ...t.background, color: tint.bg } };
@@ -109,6 +115,7 @@ function sanitize(t: Theme): Theme {
       uri: typeof t.background.uri === 'string' ? t.background.uri : '',
       dim: clampN(t.background.dim, 0, 0.8, d.background.dim),
     },
+    style: t.style === 'pop' ? 'pop' : 'glass',
     glass: {
       blur: clampN(t.glass.blur, 0, 100, d.glass.blur),
       // 27/11: 'matte' was renamed to 'frost', and 'smoke' was removed (moved to 'frost')
@@ -178,6 +185,7 @@ interface ThemeContextValue {
   setGlassBlur: (blur: number) => void;
   setGlassMaterial: (m: 'clear' | 'frost' | 'neon') => void;
   setGlassNeon: (c: string) => void; // màu đèn neon ('' = màu nhấn theme)
+  setStyle: (s: Theme['style']) => void; // Glass or Pop
   setAmbient: (preset: AmbientPresetId, on: boolean) => void;
   setMeteorLevel: (level: number) => void;
   setSmokeTone: (tone: SmokeTone) => void;
@@ -264,6 +272,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const patchMini = (patch: Partial<Theme['miniPlayer']>) =>
       setThemeState((t) => ({ ...t, miniPlayer: { ...t.miniPlayer, ...patch } }));
 
+    setPopMode(theme.style === 'pop', theme.colors.border);
     return {
       theme: orient(withCover(theme, coverTint), landscape),
       landscape,
@@ -295,6 +304,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setGlassBlur: (blur) => setThemeState((t) => ({ ...t, glass: { ...t.glass, blur: Math.max(0, Math.min(100, blur)) } })),
       setGlassMaterial: (material) => setThemeState((t) => ({ ...t, glass: { ...t.glass, material } })),
       setGlassNeon: (neon) => setThemeState((t) => ({ ...t, glass: { ...t.glass, neon } })),
+      setStyle: (style) => {
+        appLog('ui', `style → ${style}`);
+        setThemeState((t) => derive({ ...t, style }));
+      },
       setAmbient: (preset, on) =>
         setThemeState((t) => ({ ...t, effects: { ...t.effects, ambient: { ...t.effects.ambient, [preset]: on } } })),
       setMeteorLevel: (level) => setThemeState((t) => ({ ...t, effects: { ...t.effects, meteorLevel: Math.max(0, Math.min(3, Math.round(level))) } })),

@@ -10,6 +10,7 @@ export const defaultTheme: Theme = {
   background: { type: 'preset', color: PRESETS.dark.bg, uri: '', dim: 0.25 },
   colors: PRESETS.dark,
   // Mọi trường tuỳ chọn (?:) trong Theme đều phải có giá trị ở đây: merge() khi mở app chỉ giữ các trường có trong bản mặc định
+  style: 'glass',
   glass: { blur: 15, material: 'frost', neon: '' }, // default: Frosted, thin (27/11)
   effects: { ambient: { snow: true, green: true, ocean: true, latte: true, sakura: true, meteor: true, starry: true, aurora: true, rain: true, neon: true, smoke: true }, meteorLevel: 1, smokeTone: 'coffee', smokeSpeed: 1 },
   dock: {

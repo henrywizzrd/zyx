@@ -31,6 +31,7 @@ import { useRotateEnter } from '../components/rotateEnter';
 import { useDockCollapse } from '../components/dockCollapse';
 import { useRenderProbe } from '../components/JankMonitor';
 import { GlassFill, glassShadow } from '../components/Glass';
+import { useDisplayFont } from '../theme/fonts';
 
 const H_PAD = 16;
 const COVER_H = 520; // chiều cao vùng ảnh bìa: phủ phần đầu trang rồi mờ dần xuống tận danh sách
@@ -79,6 +80,7 @@ function CoverBox({ item, size, radius }: { item: LibraryEntry; size: number; ra
 }
 
 export function LibraryScreen() {
+  const df = useDisplayFont();
   const { theme, landscape, setLibraryLayout, setLibraryOrder } = useTheme();
   const t = useT();
   const profile = useProfile();
@@ -549,7 +551,7 @@ export function LibraryScreen() {
             </View>
           </Pressable>
           <View style={{ flex: 1 }}>
-            <Text numberOfLines={1} style={[{ color: hero.text, fontSize: 30, fontWeight: '800', marginTop: 2 }, heroShadow]}>
+            <Text numberOfLines={1} style={[{ color: hero.text, fontSize: 30, fontWeight: '800', marginTop: 2 }, heroShadow, df]}>
               {profile.name}
               <Text style={{ color: hero.sub, fontWeight: '600' }}> #{profile.tag}</Text>
             </Text>

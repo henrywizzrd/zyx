@@ -18,6 +18,10 @@ export const vi = {
   // Chung
   'common.done': 'Xong',
   'common.cancel': 'Huỷ',
+  'settings.style': 'Phong cách',
+  'settings.styleHint': 'Kính: mờ và trong như hiện tại. Pop: màu phẳng, viền đậm, nhẹ máy hơn.',
+  'settings.styleGlass': 'Kính',
+  'settings.stylePop': 'Pop',
   'settings.crashReports': 'Gửi báo cáo lỗi',
   'settings.crashReportsHint': 'Khi app bị văng, ZYX tự gửi cho nhà phát triển thông tin lỗi và nhật ký ngay trước lúc văng (tên máy, phiên bản iOS/Android, đang ở màn nào). Không gửi tên hay email của bạn. Tắt thì không gửi gì cả.',
   'log.today': "Hôm nay",
@@ -533,6 +537,10 @@ export const en: Record<StringKey, string> = {
 
   'common.done': 'Done',
   'common.cancel': 'Cancel',
+  'settings.style': 'Style',
+  'settings.styleHint': 'Glass: blurred and see-through, like now. Pop: flat colours, thick outlines, lighter on older phones.',
+  'settings.styleGlass': 'Glass',
+  'settings.stylePop': 'Pop',
   'settings.crashReports': 'Send crash reports',
   'settings.crashReportsHint': 'When the app crashes, ZYX sends the developer the error and the log from just before it (device model, iOS/Android version, which screen you were on). Your name and email are not sent. Turn this off and nothing is sent.',
   'log.today': "Today",

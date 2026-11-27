@@ -6,6 +6,7 @@ import RNMaskedView from '@react-native-masked-view/masked-view';
 
 const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
 import { useTheme } from '../theme/ThemeProvider';
+import { POP_DARK, POP_LINE, popMode } from '../theme/pop';
 import { Ionicons } from '@expo/vector-icons';
 import { SmartImage } from './Cover';
 import type { Track } from '../data/mock';
@@ -67,6 +68,11 @@ export type GlassMaterial = 'clear' | 'frost' | 'neon';
 // Bóng hai lớp của tấm kính đặt nổi trên mặt bàn (công thức chốt từ trang thử kính):
 // một bóng đậm, gọn sát chân + một bóng mềm, rộng. lift: độ nổi (1 = bình thường, cầm lên thì lớn hơn)
 export function glassShadow(lift = 1, light = false) {
+  // Pop style: one hard offset shadow in the ink colour, no blur
+  if (popMode.on) {
+    const o = Math.max(2, Math.round(4 * Math.min(lift, 1.5)));
+    return { boxShadow: `${o}px ${o}px 0px ${popMode.ink}` } as const;
+  }
   const k = light ? 0.55 : 1;
   const e = 7 * lift;
   return {
@@ -108,6 +114,18 @@ export function GlassFill({
   const material: GlassMaterial = forceMaterial ?? theme.glass.material ?? 'clear';
   const dark = glassTint === 'dark';
   const real = Platform.OS !== 'web';
+  // ---- Pop: a flat card with a thick ink outline (the hard shadow comes from glassShadow on the outer view).
+  // Glass Lab passes an explicit material to compare glass types, so it keeps drawing glass
+  if (theme.style === 'pop' && !forceMaterial) {
+    const fill = forceDark ? POP_DARK.surface : theme.colors.surface;
+    const ink = forceDark ? POP_DARK.border : theme.colors.border;
+    return (
+      <View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, SQUIRCLE, { borderRadius: radius, backgroundColor: fill, borderWidth: POP_LINE, borderColor: ink }]}
+      />
+    );
+  }
   // ---- Neon: gần như trong suốt (nhoè rất nhẹ + lớp tối mỏng), chỉ có viền phát sáng màu đèn (chọn trong Theme Studio).
   // Quầng sáng toả RA NGOÀI nên lớp viền nằm ngoài khung cắt (không overflow: hidden), còn lớp nhoè nằm trong khung cắt
   if (material === 'neon') {

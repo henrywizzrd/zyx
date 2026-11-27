@@ -12,6 +12,7 @@ import { useTheme } from '../theme/ThemeProvider';
 export function AppBackground() {
   const { theme } = useTheme();
   const { type, uri, dim } = theme.background;
+  if (theme.style === 'pop') return null; // Pop: plain background colour only
   if (type === 'preset' || !uri) return theme.preset === 'cover' ? <CoverBackdrop /> : null;
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -59,6 +60,7 @@ export function PageBackdrop({ live = false }: { live?: boolean }) {
   const { theme } = useTheme();
   const { type, uri, dim } = theme.background;
   const media = type !== 'preset' && !!uri;
+  if (theme.style === 'pop') return <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.background.color }]} />;
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: theme.background.color }]}>
       {media && type === 'image' && <AppBackground />}

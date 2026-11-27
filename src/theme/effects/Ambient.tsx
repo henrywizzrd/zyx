@@ -79,6 +79,7 @@ export function AmbientEffect({ paused }: { paused?: boolean }) {
 }
 
 function pickEffect(theme: ReturnType<typeof useTheme>['theme']): React.ReactElement | null {
+  if (theme.style === 'pop') return null; // Pop: no background effects
   const onMedia = theme.background.type !== 'preset' && !!theme.background.uri;
   const on = theme.effects.ambient;
   if (theme.preset === 'snow' && on.snow) {
@@ -103,6 +104,7 @@ function pickEffect(theme: ReturnType<typeof useTheme>['theme']): React.ReactEle
 // Người dùng đặt ảnh / video làm nền thì không vẽ cảnh (để thấy ảnh của họ)
 export function ThemeScene() {
   const { theme } = useTheme();
+  if (theme.style === 'pop') return null; // Pop: plain background colour
   // Trời sao: bản đứng yên của cùng shader (sao không lấp lánh, không trôi). Bật hiệu ứng thì bản chạy được vẽ đè lên
   // Bật hiệu ứng: nền chỉ có lớp sao xa, hai lớp vừa / gần do StarryDrift vẽ và cho trôi
   if (theme.preset === 'starry' && theme.background.type === 'preset') return <StarrySky full={!theme.effects.ambient.starry} />;

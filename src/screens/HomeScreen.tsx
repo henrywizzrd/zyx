@@ -28,6 +28,7 @@ import { useT } from '../i18n';
 import { SmartImage } from '../components/Cover';
 import { checkNetwork, useOffline } from '../data/net';
 import { cacheGet, cacheSet, createPlaylist, getDownloadedTracks, getPlaylists, getRecent, getTopArtists, RecentItem, useDbVersion } from '../data/db';
+import { useDisplayFont } from '../theme/fonts';
 
 const PAD = 16;
 type ScrollViewRef = React.ComponentRef<typeof ScrollView>;
@@ -193,9 +194,10 @@ function Feed() {
 
 function SectionTitle({ title, right }: { title: string; right?: React.ReactNode }) {
   const { theme } = useTheme();
+  const df = useDisplayFont();
   return (
     <View style={styles.sectionHead}>
-      <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>{title}</Text>
+      <Text style={[styles.sectionTitle, { color: theme.colors.text }, df]}>{title}</Text>
       {right}
     </View>
   );
@@ -727,6 +729,7 @@ function greetingKey() {
 }
 
 export function HomeScreen() {
+  const df = useDisplayFont();
   const { theme, landscape } = useTheme();
   const t = useT();
   const pad = useContentInsets();
@@ -800,7 +803,7 @@ export function HomeScreen() {
   const header = (from: 'up' | 'left') => (
     <>
       <Animated.View entering={enter(0, from)} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-        <Text style={[styles.greeting, { color: theme.colors.text }]}>{t(greetingKey())}</Text>
+        <Text style={[styles.greeting, { color: theme.colors.text }, df]}>{t(greetingKey())}</Text>
         {/* Thống kê nghe nhạc */}
         <Pressable onPress={() => push({ type: 'stats' })} hitSlop={10} style={[styles.editBtn, { marginRight: 10 }]} accessibilityLabel={t('stats.title')}>
           <GlassFill radius={19} solid={0.35} slab />
