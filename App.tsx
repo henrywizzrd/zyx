@@ -191,7 +191,8 @@ function TabStage({ shown, render, pre }: { shown: PageTab; render: (id: PageTab
 function CoverTintSync() {
   const { theme } = useTheme();
   const { track } = usePlayerPick('track');
-  const on = theme.preset === 'cover';
+  // also for the Pop player, whose background is a pastel of the cover colour
+  const on = theme.preset === 'cover' || theme.style === 'pop';
   useEffect(() => {
     if (on && track.id !== 'none') updateCoverTint(track.thumb);
   }, [on, track.id, track.thumb]);

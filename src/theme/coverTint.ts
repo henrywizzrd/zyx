@@ -5,7 +5,11 @@ import { log } from '../data/applog';
 
 // Bộ màu "Theo ảnh bìa": lấy màu nổi bật của ảnh bìa bài đang phát → nền tối ngả theo màu đó + màu nhấn sáng.
 // Ảnh bìa thu nhỏ còn 24×24 điểm bằng Skia rồi đọc màu (nhẹ, vài mili giây)
-export type CoverTint = Pick<Palette, 'bg' | 'surface' | 'card' | 'accent' | 'onAccent' | 'textSecondary' | 'glass' | 'glassRgb' | 'border' | 'switchOff'>;
+// pop: the flat background of the Pop player — a soft pastel of the cover's main colour with dark text,
+// or a dark grey with light text when the cover has almost no colour
+export type CoverTint = Pick<Palette, 'bg' | 'surface' | 'card' | 'accent' | 'onAccent' | 'textSecondary' | 'glass' | 'glassRgb' | 'border' | 'switchOff'> & {
+  pop: { bg: string; dark: boolean };
+};
 
 let tint: CoverTint | null = null;
 let tintFor = '';
@@ -86,6 +90,7 @@ function build(h: number, s: number): CoverTint {
     glassRgb: glass.join(','),
     border: rgba(hsl(h, 0.5, 0.8), 0.13),
     switchOff: hex(hsl(h, Math.min(0.3, s * 0.5), 0.26)),
+    pop: s < 0.12 ? { bg: hex(hsl(h, s * 0.5, 0.2)), dark: true } : { bg: hex(hsl(h, Math.max(0.35, Math.min(0.7, s * 0.75)), 0.82)), dark: false },
   };
 }
 

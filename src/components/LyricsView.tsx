@@ -45,6 +45,15 @@ const stateFor = (d: number): LineState => (d <= 1 ? 'near' : 'far');
 const DIM: Record<LineState, number> = { active: 0, near: 1, far: 0.6, browse: 1, plain: 0 };
 // Lớp sáng (có quầng) chỉ được dựng cho các dòng quanh câu đang hát (near), dòng xa chỉ có lớp mờ → đổi bài không phải
 // dựng / vẽ cả trăm dòng chữ có quầng
+// Text colour for lyrics: white by default; the Pop player on a light cover colour passes a dark ink instead
+// (no glow then: a light glow around dark text looks dirty)
+const InkCtx = React.createContext<string | null>(null);
+const inkA = (ink: string, a: number) => {
+  const h = ink.replace('#', '');
+  return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`;
+};
+const useInk = () => React.useContext(InkCtx);
+
 const LyricLine = React.memo(function LyricLine({ text, state, near }: { text: string; state: LineState; near: boolean }) {
   const lit = state === 'active' || state === 'plain';
   const a = useRef(new Animated.Value(lit ? 1 : 0)).current;
@@ -58,10 +67,13 @@ const LyricLine = React.memo(function LyricLine({ text, state, near }: { text: s
     const cfg = { duration: 300, easing: Easing.out(Easing.quad), useNativeDriver: USE_NATIVE };
     Animated.parallel([Animated.timing(a, { toValue: lit ? 1 : 0, ...cfg }), Animated.timing(d, { toValue: DIM[state], ...cfg })]).start();
   }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ink = useInk();
+  const base = ink ? { color: inkA(ink, state === 'browse' ? 0.5 : 0.3) } : state === 'browse' ? styles.browse : styles.dim;
+  const on = ink ? { color: ink } : styles.active;
   return (
     <View>
-      <Animated.Text style={[styles.line, state === 'browse' ? styles.browse : styles.dim, { opacity: d }]}>{text}</Animated.Text>
-      {(near || lit) && <Animated.Text style={[styles.line, styles.active, { position: 'absolute', left: 0, right: 0, top: 0, opacity: a }]}>{text}</Animated.Text>}
+      <Animated.Text style={[styles.line, base, { opacity: d }]}>{text}</Animated.Text>
+      {(near || lit) && <Animated.Text style={[styles.line, on, { position: 'absolute', left: 0, right: 0, top: 0, opacity: a }]}>{text}</Animated.Text>}
     </View>
   );
 });
@@ -106,6 +118,7 @@ function currentIndex(rows: Row[], time: number) {
 
 // Ba nốt nhạc nhấp nháy lần lượt khi đang ở đoạn chỉ có nhạc
 function MusicNotes({ active }: { active: boolean }) {
+  const ink = useInk() ?? '#FFFFFF';
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!active) {
@@ -129,7 +142,7 @@ function MusicNotes({ active }: { active: boolean }) {
           ? v.interpolate({ inputRange: [0, a, a + 0.15, a + 0.33, 1], outputRange: [0, 0, -5, 0, 0], extrapolate: 'clamp' })
           : 0;
         return (
-          <Animated.Text key={i} style={{ color: '#FFFFFF', fontSize: 28, fontWeight: '800', opacity, transform: [{ translateY }] }}>
+          <Animated.Text key={i} style={{ color: ink, fontSize: 28, fontWeight: '800', opacity, transform: [{ translateY }] }}>
             ♪
           </Animated.Text>
         );
@@ -138,7 +151,15 @@ function MusicNotes({ active }: { active: boolean }) {
   );
 }
 
-export function LyricsView({
+export function LyricsView(props: React.ComponentProps<typeof LyricsViewInner> & { ink?: string }) {
+  return (
+    <InkCtx.Provider value={props.ink ?? null}>
+      <LyricsViewInner {...props} />
+    </InkCtx.Provider>
+  );
+}
+
+function LyricsViewInner({
   status,
   lyrics,
   progress = 0,
@@ -159,6 +180,7 @@ export function LyricsView({
   // trên, không thấy "cái hộp" (player Đĩa than dùng). Mặc định dải mờ ngắn 12%
   fadeStops?: [number, number];
 }) {
+  const ink = useInk();
   const { track, duration } = usePlayerPick('track', 'duration');
   const { moving, active } = usePlayerTransition();
   const activeRef = useRef(active);
@@ -294,14 +316,14 @@ export function LyricsView({
   if (status === 'loading' || status === 'idle') {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color="#FFFFFF" />
+        <ActivityIndicator color={ink ?? '#FFFFFF'} />
       </View>
     );
   }
   if (!lyrics) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 16 }}>{t('lyrics.notFound')}</Text>
+        <Text style={{ color: ink ? inkA(ink, 0.6) : 'rgba(255,255,255,0.6)', fontSize: 16 }}>{t('lyrics.notFound')}</Text>
       </View>
     );
   }
@@ -344,7 +366,7 @@ export function LyricsView({
         contentContainerStyle={{ paddingTop: focusAt, paddingBottom: h - focusAt, paddingHorizontal: GLOW }}
       >
         {!synced && (
-          <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13, marginBottom: 12 }}>
+          <Text style={{ color: ink ? inkA(ink, 0.55) : 'rgba(255,255,255,0.55)', fontSize: 13, marginBottom: 12 }}>
             {t('lyrics.plainOnly')}
           </Text>
         )}
@@ -408,7 +430,7 @@ export function LyricsView({
         </View>
         {/* Lời lấy từ đâu (YouTube Music / LyricFind, SimpMusic, LRCLIB) */}
         {!!lyrics.source && (
-          <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, marginTop: 24 }}>
+          <Text style={{ color: ink ? inkA(ink, 0.45) : 'rgba(255,255,255,0.45)', fontSize: 12, marginTop: 24 }}>
             {/^(source|nguồn)/i.test(lyrics.source) ? lyrics.source : t('lyrics.source', { src: lyrics.source })}
           </Text>
         )}

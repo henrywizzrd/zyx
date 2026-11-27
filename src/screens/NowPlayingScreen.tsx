@@ -4,6 +4,7 @@ import { ActivityIndicator, Animated, Easing, Platform, Pressable, Share, Status
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
+import { useCoverTint } from '../theme/coverTint';
 import { useT } from '../i18n';
 import { usePlayerPick, useProgress } from '../player/PlayerProvider';
 import { useContentInsets } from '../components/FloatingDock';
@@ -34,7 +35,12 @@ const MaskedView = RNMaskedView as unknown as React.ComponentType<any>;
 const USE_NATIVE = Platform.OS !== 'web';
 
 const fmt = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`;
-const SOFT = 'rgba(255,255,255,0.65)';
+// Text / icon colours of the player. White on the blurred cover normally; the Pop player (27/11) draws on a flat
+// pastel of the cover colour, so NowPlayingScreen switches these to dark ink there (or keeps light on dark covers)
+let FG = '#FFFFFF';
+let SOFT = 'rgba(255,255,255,0.65)';
+let POP = false; // Pop player: flat background, outlined art and buttons
+let POP_DARK = false; // Pop player on a dark cover colour
 // Màu nút đang bật (trộn, lặp, lời, chế độ âm thanh...): theo màu nhấn của theme, gán lại mỗi lần vẽ màn hình.
 // Màu nhấn tối quá (vd. nâu cà phê) thì pha trắng cho sáng lên, không thì chìm trên nền tối của player
 let ON = '#1ED760';
@@ -52,6 +58,28 @@ function onColor(hex: string) {
   }
   return `rgb(${r},${g},${b})`;
 }
+
+// Pop player controls (mockup 27/11): skip buttons are outlined white squares with a hard shadow, play is a big
+// solid square (ink on light covers, light on dark covers)
+const popSkip = (k: number) => ({
+  height: 54 * k,
+  width: 54 * k,
+  borderRadius: 16,
+  borderCurve: 'continuous' as const,
+  backgroundColor: '#FFFFFF',
+  borderWidth: 2.5,
+  borderColor: '#111111',
+  boxShadow: '4px 4px 0px #111111',
+});
+const popPlay = (k: number) => ({
+  width: 74 * k,
+  height: 74 * k,
+  borderRadius: 22,
+  borderCurve: 'continuous' as const,
+  backgroundColor: POP_DARK ? '#F4F4F0' : '#111111',
+  boxShadow: `5px 5px 0px ${POP_DARK ? '#000000' : 'rgba(0,0,0,0.3)'}`,
+});
+const popPlayInk = () => (POP_DARK ? '#111111' : '#D4F25A');
 
 // Nút lặp: hai mũi tên chạy vòng quanh thành hình vuông bo góc (vẽ bằng Skia, khung 24×24).
 //  - tắt: trắng mờ
@@ -200,6 +228,11 @@ export function NowPlayingScreen({ onClose }: { onClose: () => void }) {
   const { theme } = useTheme();
   const win = useScreenSize();
   // Đĩa than dùng cả khi xoay ngang (đĩa trái · lời phải, VinylPlayer tự đổi bố cục) → xoay máy không bị đổi sang player thường
+  const tint = useCoverTint();
+  POP = theme.style === 'pop' && theme.player.look !== 'vinyl';
+  POP_DARK = POP && (tint ? tint.pop.dark : theme.colors.glassTint === 'dark');
+  FG = POP && !POP_DARK ? '#111111' : '#FFFFFF';
+  SOFT = POP && !POP_DARK ? 'rgba(17,17,17,0.62)' : 'rgba(255,255,255,0.65)';
   if (theme.player.look === 'vinyl') return <VinylNowPlaying onClose={onClose} />;
   return <ClassicNowPlaying onClose={onClose} />;
 }
@@ -354,7 +387,8 @@ function VinylNowPlaying({ onClose }: { onClose: () => void }) {
 
 function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
   const { theme } = useTheme();
-  ON = onColor(theme.colors.accent);
+  ON = POP && !POP_DARK ? theme.colors.accentText : onColor(theme.colors.accent);
+  const popTint = useCoverTint();
   const sheet = useActionSheet();
   // Đang mở hàng chờ / bảng thao tác: duỗi phẳng hai trang sách. Trang nghiêng 3D chồm ra phía trước nên iPhone vẽ nó
   // đè lên mọi thứ ở trên (hàng chờ, bảng "Thêm vào playlist"), kể cả khi các bảng đó nằm ở lớp trên
@@ -553,13 +587,13 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
   const LikeButton = (
     <Pressable onPress={() => track.id !== 'none' && toggleLike(track.id)} hitSlop={10} style={styles.roundBtn}>
       <LikePop on={isLiked} color={ON}>
-        <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? ON : '#FFFFFF'} />
+        <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? ON : FG} />
       </LikePop>
     </Pressable>
   );
   const MoreButton = (
     <Pressable onPress={() => track.id !== 'none' && songMenu(track)} hitSlop={10} style={styles.roundBtn}>
-      <Ionicons name="ellipsis-horizontal" size={20} color="#FFFFFF" />
+      <Ionicons name="ellipsis-horizontal" size={20} color={FG} />
     </Pressable>
   );
 
@@ -567,13 +601,13 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
   const SaveButton = (
     <Pressable onPress={() => track.id !== 'none' && toggleLike(track.id)} hitSlop={10} style={styles.flatBtn}>
       <LikePop on={isLiked} color={ON}>
-        <Ionicons name={isLiked ? 'checkmark-circle' : 'add-circle-outline'} size={30} color={isLiked ? ON : '#FFFFFF'} />
+        <Ionicons name={isLiked ? 'checkmark-circle' : 'add-circle-outline'} size={30} color={isLiked ? ON : FG} />
       </LikePop>
     </Pressable>
   );
   const MoreButtonFlat = (
     <Pressable onPress={() => track.id !== 'none' && songMenu(track)} hitSlop={10} style={styles.flatBtn}>
-      <Ionicons name="ellipsis-horizontal" size={24} color="#FFFFFF" />
+      <Ionicons name="ellipsis-horizontal" size={24} color={FG} />
     </Pressable>
   );
 
@@ -606,7 +640,10 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
   const blobSize = Math.max(win.width, win.height) * 1.9;
   const blob = { position: 'absolute' as const, width: blobSize, height: blobSize, left: (win.width - blobSize) / 2, top: (win.height - blobSize) / 2 };
   const smallThumb = track.thumb?.replace(/=(w\d+-h\d+|s\d+)/, '=w120-h120');
-  const Background = (
+  const Background = POP ? (
+    // Pop: one flat colour — a pastel of the cover (dark grey for colourless covers). No blur, nothing moving
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: popTint?.pop.bg ?? theme.colors.bg }]} />
+  ) : (
     <View style={[StyleSheet.absoluteFill, { overflow: 'hidden', backgroundColor: track.color || '#222' }]}>
       {smallThumb && (
         <>
@@ -641,25 +678,32 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
   const controlRow = (k: number) => (
     <>
       <CtlBtn onPress={toggleShuffle} style={styles.sideBtn}>
-        <Ionicons name="shuffle" size={Math.round(26 * k)} color={shuffle ? ON : '#FFFFFF'} />
+        <Ionicons name="shuffle" size={Math.round(26 * k)} color={shuffle ? ON : FG} />
       </CtlBtn>
       <CtlBtn
         onPress={() => {
           swapDir = -1;
           prev();
         }}
-        style={[styles.skipSlot, { width: 52 * k }]}
+        style={[styles.skipSlot, { width: 52 * k }, POP && popSkip(k)]}
       >
-        <SkipGlyph dir="back" size={Math.round(31 * k)} />
+        <SkipGlyph dir="back" size={Math.round((POP ? 24 : 31) * k)} color={POP ? '#111111' : '#FFFFFF'} />
       </CtlBtn>
-      <CtlBtn onPress={togglePlay} style={{ width: PLAY * k, height: PLAY * k, alignItems: 'center', justifyContent: 'center' }}>
-        {loading ? <ActivityIndicator size="large" color="#FFFFFF" /> : <PlayPauseGlyph playing={isPlaying} size={Math.round(38 * k)} />}
+      <CtlBtn
+        onPress={togglePlay}
+        style={[{ width: PLAY * k, height: PLAY * k, alignItems: 'center', justifyContent: 'center' }, POP && popPlay(k)]}
+      >
+        {loading ? (
+          <ActivityIndicator size="large" color={POP ? popPlayInk() : '#FFFFFF'} />
+        ) : (
+          <PlayPauseGlyph playing={isPlaying} size={Math.round((POP ? 32 : 38) * k)} color={POP ? popPlayInk() : '#FFFFFF'} />
+        )}
       </CtlBtn>
-      <CtlBtn onPress={next} style={[styles.skipSlot, { width: 52 * k }]}>
-        <SkipGlyph dir="forward" size={Math.round(31 * k)} />
+      <CtlBtn onPress={next} style={[styles.skipSlot, { width: 52 * k }, POP && popSkip(k)]}>
+        <SkipGlyph dir="forward" size={Math.round((POP ? 24 : 31) * k)} color={POP ? '#111111' : '#FFFFFF'} />
       </CtlBtn>
       <CtlBtn onPress={cycleRepeat} style={styles.sideBtn}>
-        <RepeatIcon mode={repeat} color={repeat !== 'off' ? ON : '#FFFFFF'} />
+        <RepeatIcon mode={repeat} color={repeat !== 'off' ? ON : FG} />
       </CtlBtn>
     </>
   );
@@ -701,7 +745,7 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
     // và mọi chỗ trống không phải lời / thanh trượt (trang trái, cột nút bên phải)
     const GrabBar = (
       <CloseZone><View  style={{ position: 'absolute', top: 0, left: 0, right: 0, height: padT + 14, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 4 }}>
-        <View style={{ width: 44, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.45)' }} />
+        <View style={{ width: 44, height: 5, borderRadius: 3, backgroundColor: SOFT }} />
       </View></CloseZone>
     );
     const rowStyle = {
@@ -719,7 +763,7 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
       return (
         <View style={{ flex: 1 }}>
           {Background}
-          <StatusBar barStyle="light-content" />
+          <StatusBar barStyle={POP && !POP_DARK ? 'dark-content' : 'light-content'} />
           <View style={rowStyle}>
             <CloseZone><View style={{ justifyContent: 'center' }} >
               <TrackSwap id={track.id}>
@@ -734,8 +778,8 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
                 {LikeButton}
                 {MoreButton}
               </View>
-              <Text numberOfLines={1} style={[styles.title, { textAlign: 'center', fontSize: 26 }]}>{title}</Text>
-              <Text numberOfLines={1} style={[styles.artist, { textAlign: 'center' }]}>{artist}</Text>
+              <Text numberOfLines={1} style={[styles.title, { color: FG }, { textAlign: 'center', fontSize: 26 }]}>{title}</Text>
+              <Text numberOfLines={1} style={[styles.artist, { color: SOFT }, { textAlign: 'center' }]}>{artist}</Text>
               <View style={{ marginTop: 14 }}>
                 {controls(true)}
               </View>
@@ -767,7 +811,7 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
     return (
       <View style={{ flex: 1 }}>
         {Background}
-        <StatusBar barStyle="light-content" />
+        <StatusBar barStyle={POP && !POP_DARK ? 'dark-content' : 'light-content'} />
         <View style={rowStyle}>
           <CloseZone><View
             
@@ -783,8 +827,8 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
             {/* Tên bài + nút thích cùng một hàng (trước đây nút thích nằm riêng phía trên ảnh, bị đẩy ra khỏi màn hình) */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 }}>
               <View style={{ flex: 1 }}>
-                <Text numberOfLines={1} style={[styles.title, { fontSize: 19 }]}>{title}</Text>
-                <Text numberOfLines={1} style={[styles.artist, { fontSize: 14 }]}>{artist}</Text>
+                <Text numberOfLines={1} style={[styles.title, { color: FG }, { fontSize: 19 }]}>{title}</Text>
+                <Text numberOfLines={1} style={[styles.artist, { color: SOFT }, { fontSize: 14 }]}>{artist}</Text>
               </View>
               {LikeButton}
             </View>
@@ -794,7 +838,7 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
             </View>
           </View></CloseZone>
           <View style={{ flex: 1, transformOrigin: 'left center', transform: [{ perspective: 1400 }, { rotateY: flat ? '0deg' : '-10deg' }] }}>
-            <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} />
+            <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} ink={POP && !POP_DARK ? '#111111' : undefined} />
           </View>
           <CloseZone><View  style={sideZone}>{SideButtons}</View></CloseZone>
         </View>
@@ -855,8 +899,8 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
     <View style={{ flex: 1 }}>
       {Background}
       {/* Tối nhẹ cả màn hình khi xem lời để chữ trắng dễ đọc (phủ cả màn, không chỉ phần trên → không có đường kẻ ngang) */}
-      <RAnimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }, dimStyle]} />
-      <StatusBar barStyle="light-content" />
+      {!POP && <RAnimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }, dimStyle]} />}
+      <StatusBar barStyle={POP && !POP_DARK ? 'dark-content' : 'light-content'} />
       <View style={{ flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center' }}>
         {/* Sân khấu: ảnh bìa, phần đầu, lời, tên bài */}
         <View
@@ -867,6 +911,33 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
             setStageH((o) => (Math.abs(o - v) < 0.5 ? o : v));
           }}
         >
+          {POP ? (
+            // Pop: the cover sits in an outlined square card with a hard shadow, centred above the title
+            (() => {
+              const top = pad.top + 44;
+              const availH = Math.max(0, stageH - infoH - top - 14);
+              const size = Math.max(120, Math.min(Math.min(win.width, 560) - 48, availH));
+              return (
+                <RAnimated.View
+                  pointerEvents="none"
+                  style={[
+                    { position: 'absolute', top: top + Math.max(0, (availH - size) / 2), alignSelf: 'center', width: size, height: size },
+                    { borderRadius: 22, borderCurve: 'continuous', borderWidth: 3, borderColor: '#111111', boxShadow: '7px 7px 0px #111111', backgroundColor: track.color || '#222' },
+                    sharpArtStyle,
+                  ]}
+                >
+                  <View style={{ flex: 1, borderRadius: 19, overflow: 'hidden' }}>
+                    <TrackSwap id={track.id} dist={60} style={{ flex: 1 }}>
+                      <Cover track={track} size={900} style={{ flex: 1 }}>
+                        <Ionicons name="musical-notes" size={72} color="rgba(255,255,255,0.8)" />
+                      </Cover>
+                    </TrackSwap>
+                  </View>
+                </RAnimated.View>
+              );
+            })()
+          ) : (
+          <>
           {/* Ảnh bìa tràn ngang: bản rõ (mờ dần khi mở lời) và bản nhoè (hiện lên làm nền cho lời) */}
           <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: infoH, overflow: 'hidden' }}>
             <RAnimated.View style={[StyleSheet.absoluteFill, sharpArtStyle]}>
@@ -895,6 +966,8 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
               style={{ position: 'absolute', top: 0, left: 0, right: 0, height: pad.top + 60 }}
             />
           </View>
+          </>
+          )}
 
           {/* Lời: từ ngay dưới phần đầu tới hết sân khấu */}
           {lyricsMounted && stageH > 0 && (
@@ -914,7 +987,7 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
               >
                 <View style={{ flex: 1, marginHorizontal: 30 }}>
                   {/* Lời có ngay từ lần vẽ đầu (đã tải thì lấy từ bộ nhớ), không phải chờ */}
-                  <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} focus={lyricFocus} fade={false} />
+                  <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} focus={lyricFocus} fade={false} ink={POP && !POP_DARK ? '#111111' : undefined} />
                 </View>
               </MaskedView>
             </RAnimated.View>
@@ -931,7 +1004,7 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
             style={{ paddingTop: pad.top + 4, paddingLeft: side, paddingRight: pad.right + 24 }}
           >
             <Pressable testID="player-close" onPress={onClose} hitSlop={14} style={styles.grabberWrap}>
-              <View style={styles.grabber} />
+              <View style={[styles.grabber, { backgroundColor: SOFT }]} />
             </Pressable>
             <View
               style={styles.compact}
@@ -1005,8 +1078,8 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
             style={[{ position: 'absolute', left: 0, top: 0, width: slotW || undefined, transformOrigin: 'left top' }, floatStyle]}
           >
             <TrackSwap id={track.id}>
-              <Text numberOfLines={1} style={styles.title}>{title}</Text>
-              <Text numberOfLines={1} style={styles.artist}>{artist}</Text>
+              <Text numberOfLines={1} style={[styles.title, { color: FG }]}>{title}</Text>
+              <Text numberOfLines={1} style={[styles.artist, { color: SOFT }]}>{artist}</Text>
             </TrackSwap>
           </RAnimated.View>
         </View>
@@ -1031,7 +1104,7 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
             style={[{ position: 'absolute', right: pad.right + 18, bottom: bodyH + 4, flexDirection: 'row', gap: 18, alignItems: 'center' }, lyricBtnsStyle]}
           >
             <Pressable onPress={() => setFull((f) => !f)} hitSlop={10}>
-              <Ionicons name={full ? 'contract-outline' : 'expand-outline'} size={22} color="rgba(255,255,255,0.85)" />
+              <Ionicons name={full ? 'contract-outline' : 'expand-outline'} size={22} color={FG} />
             </Pressable>
           </RAnimated.View>
         )}
@@ -1055,9 +1128,9 @@ const ProgressBar = React.memo(function ProgressBar({
     <View>
       <Slider
         value={pct}
-        thickness={6}
-        fill="rgba(255,255,255,0.9)"
-        track="rgba(255,255,255,0.22)"
+        thickness={POP ? 10 : 6}
+        fill={POP ? FG : 'rgba(255,255,255,0.9)'}
+        track={POP ? (POP_DARK ? 'rgba(255,255,255,0.22)' : 'rgba(17,17,17,0.16)') : 'rgba(255,255,255,0.22)'}
         onChange={setScrub}
         onCommit={(v) => {
           seekTo(v * duration);
@@ -1065,8 +1138,8 @@ const ProgressBar = React.memo(function ProgressBar({
         }}
       />
       <View style={styles.times}>
-        <Text style={styles.time}>{fmt(elapsed)}</Text>
-        <Text style={[styles.time, failed && { color: '#FF8A80' }]}>
+        <Text style={[styles.time, POP && { color: SOFT, fontWeight: '800' }]}>{fmt(elapsed)}</Text>
+        <Text style={[styles.time, POP && { color: SOFT, fontWeight: '800' }, failed && { color: '#FF8A80' }]}>
           {loading ? t('common.loading') : failed ? t('np.failed') : `-${fmt(duration - elapsed)}`}
         </Text>
       </View>
@@ -1086,7 +1159,13 @@ const VolumeBar = React.memo(function VolumeBar({ vertical = false }: { vertical
     <View style={styles.volume}>
       <Ionicons name="volume-low" size={18} color={SOFT} />
       <View style={{ flex: 1 }}>
-        <Slider value={vol} thickness={6} onChange={onVolume} fill="rgba(255,255,255,0.9)" track="rgba(255,255,255,0.22)" />
+        <Slider
+          value={vol}
+          thickness={6}
+          onChange={onVolume}
+          fill={POP ? FG : 'rgba(255,255,255,0.9)'}
+          track={POP && !POP_DARK ? 'rgba(17,17,17,0.16)' : 'rgba(255,255,255,0.22)'}
+        />
       </View>
       <Ionicons name="volume-high" size={18} color={SOFT} />
     </View>
