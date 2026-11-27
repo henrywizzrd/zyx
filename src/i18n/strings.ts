@@ -520,7 +520,6 @@ export const vi = {
   'settings.playerLook': "Kiểu player",
   'settings.playerClassic': "Mặc định",
   'settings.playerVinyl': "Đĩa than",
-  'studio.material.matte': "Mờ tối",
   'studio.material.neon': "Neon",
   'studio.neon.auto': "Theo màu nhấn",
 };
@@ -1026,7 +1025,6 @@ export const en: Record<StringKey, string> = {
   'settings.playerLook': "Player style",
   'settings.playerClassic': "Classic",
   'settings.playerVinyl': "Vinyl",
-  'studio.material.matte': "Matte",
   'studio.material.neon': "Neon",
   'studio.neon.auto': "Accent color",
 };

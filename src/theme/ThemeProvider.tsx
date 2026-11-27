@@ -111,7 +111,8 @@ function sanitize(t: Theme): Theme {
     },
     glass: {
       blur: clampN(t.glass.blur, 0, 100, d.glass.blur),
-      material: ['clear', 'frost', 'smoke', 'matte', 'neon'].includes(t.glass.material as string) ? t.glass.material : 'clear',
+      // 'matte' was renamed to 'frost' on 27/11
+      material: (t.glass.material as string) === 'matte' ? 'frost' : ['clear', 'frost', 'smoke', 'neon'].includes(t.glass.material as string) ? t.glass.material : d.glass.material,
       neon: typeof t.glass.neon === 'string' && /^(#[0-9a-fA-F]{6})?$/.test(t.glass.neon) ? t.glass.neon : '',
     },
     effects: {
@@ -175,7 +176,7 @@ interface ThemeContextValue {
   setPreset: (id: ThemePresetId, followSystem?: boolean) => void;
   setBackground: (patch: Partial<Theme['background']>) => void;
   setGlassBlur: (blur: number) => void;
-  setGlassMaterial: (m: 'clear' | 'frost' | 'smoke' | 'matte' | 'neon') => void;
+  setGlassMaterial: (m: 'clear' | 'frost' | 'smoke' | 'neon') => void;
   setGlassNeon: (c: string) => void; // màu đèn neon ('' = màu nhấn theme)
   setAmbient: (preset: AmbientPresetId, on: boolean) => void;
   setMeteorLevel: (level: number) => void;
