@@ -232,6 +232,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     stallRef.current = { t: -1, at: t0 };
     loadAtRef.current = 0;
     flog(`tải bài: ${t.title}${t.artist ? ` — ${t.artist}` : ''}`, 'music');
+    loadStartedAt.current = Date.now();
     try {
       const uri = await resolveUrl(t.id);
       if (id !== reqId.current) return; // đã bấm bài khác
@@ -643,6 +644,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const lastStatus = useRef<{ playing: boolean; isBuffering: boolean; isLoaded: boolean; currentTime: number } | null>(null);
   const userToggleAt = useRef(0); // when the user last pressed play / pause inside the app
+  const loadStartedAt = useRef(0); // when the current song started loading
   // Theo dõi trạng thái thật của trình phát
   useEffect(() => {
     if (!musicSupported) return;
@@ -708,7 +710,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       // Android: when a new song is loaded, the player sometimes reports "finished" for it after 0.2 s
       // (log 23/11, Galaxy S21 FE: the app skipped through songs on its own, several times a second).
       // Trust "finished" only near the real end of the song.
-      const nearEnd = !(s.duration > 0) || s.currentTime >= s.duration - 2; // length unknown: keep trusting it
+      // Length unknown (0.0/0.0s, seen right after a new song loads on Android, log 23/11): only trust "finished" once the
+      // song has had time to really play, otherwise the app skipped 2-3 songs after one tap (user report 27/11)
+      const nearEnd = s.duration > 0 ? s.currentTime >= s.duration - 2 : Date.now() - loadStartedAt.current > 10000;
       if (s.didJustFinish && !nearEnd) flog(`báo hết sai (ở ${s.currentTime.toFixed(1)}/${(s.duration ?? 0).toFixed(1)}s) → bỏ qua`, 'music');
       const ended =
         (s.didJustFinish && nearEnd) ||
