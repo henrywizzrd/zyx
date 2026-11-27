@@ -504,7 +504,7 @@ export function SearchScreen() {
                       setUserMode(false);
                       runSearch(query, k, true);
                     }}
-                    style={[styles.chip, { backgroundColor: on ? accent : theme.colors.surface }, popEdge(on)]}
+                    style={[styles.chip, { backgroundColor: on ? accent : theme.colors.surface }, popEdge(true)]}
                   >
                     <Text style={{ color: on ? theme.colors.onAccent : text, fontWeight: '700', fontSize: 13 }}>{tr(`search.filter.${k}`)}</Text>
                   </Pressable>

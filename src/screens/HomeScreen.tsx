@@ -25,7 +25,7 @@ import { SmartImage } from '../components/Cover';
 import { checkNetwork, useOffline } from '../data/net';
 import { cacheGet, cacheSet, createPlaylist, getDownloadedTracks, getPlaylists, getRecent, getTopArtists, RecentItem, useDbVersion } from '../data/db';
 import { useDisplayFont } from '../theme/fonts';
-import { popEdge, popMode, popRow, popThumb } from '../theme/pop';
+import { popEdge, popInner, popMode, popRow, popThumb } from '../theme/pop';
 
 const PAD = 16;
 type ScrollViewRef = React.ComponentRef<typeof ScrollView>;
@@ -593,30 +593,46 @@ function Trending() {
           </Text>
           {data.songs.slice(0, 10).map((s, i) => (
             <Stagger key={`${s.id}:${i}:${region}:${range}`} i={i}>
+            {popMode.on ? (
+              // Pop: three separate boxes in a row — rank, song, menu (Tyson 27/11). Playing song = accent song box
+              <View style={{ flexDirection: 'row', alignItems: 'stretch', gap: 8, marginVertical: 4 }}>
+                <View style={[styles.popBox, popInner(), { width: 44 }, i < 3 && { backgroundColor: accent }]}>
+                  <Text style={{ color: i < 3 ? theme.colors.onAccent : text, fontSize: 17, fontWeight: '900' }}>{i + 1}</Text>
+                </View>
+                <Pressable
+                  testID={`trending-${i}`}
+                  onPress={() => playTrack(s, data.songs, ctx!)}
+                  onLongPress={() => songMenu(s)}
+                  style={[styles.rankRow, popRow(s.id === track.id, accent), { flex: 1, marginVertical: 0 }]}
+                >
+                  {s.thumb ? <Image source={{ uri: s.thumb }} style={[styles.rankThumb, popThumb()]} /> : <View style={[styles.rankThumb, { backgroundColor: surface }, popThumb()]} />}
+                  <View style={{ flex: 1 }}>
+                    <Text numberOfLines={1} style={{ color: s.id === track.id ? theme.colors.onAccent : text, fontSize: 15, fontWeight: '800' }}>{s.title}</Text>
+                    <Text numberOfLines={1} style={{ color: s.id === track.id ? theme.colors.onAccent : textSecondary, fontSize: 13 }}>{s.artist}</Text>
+                  </View>
+                </Pressable>
+                <Pressable onPress={() => songMenu(s)} hitSlop={6} style={[styles.popBox, popInner(), { width: 44 }]}>
+                  <Ionicons name="ellipsis-horizontal" size={20} color={text} />
+                </Pressable>
+              </View>
+            ) : (
             <Pressable
               testID={`trending-${i}`}
               onPress={() => playTrack(s, data.songs, ctx!)}
               onLongPress={() => songMenu(s)}
-              style={[styles.rankRow, popRow(s.id === track.id, accent)]}
+              style={styles.rankRow}
             >
-              {(() => {
-                // Pop: the playing song is an accent card, so everything on it uses the accent's text colour
-                const onCard = popMode.on && s.id === track.id;
-                return (
-                  <>
-                    <Text style={{ width: 26, color: onCard ? theme.colors.onAccent : popMode.on ? text : i < 3 ? accentText : textSecondary, fontSize: 16, fontWeight: '800', textAlign: 'center' }}>{i + 1}</Text>
-                    {s.thumb ? <Image source={{ uri: s.thumb }} style={[styles.rankThumb, popThumb()]} /> : <View style={[styles.rankThumb, { backgroundColor: surface }, popThumb()]} />}
-                    <View style={{ flex: 1 }}>
-                      <Text numberOfLines={1} style={{ color: onCard ? theme.colors.onAccent : s.id === track.id ? accentText : text, fontSize: 15, fontWeight: popMode.on ? '800' : '600' }}>{s.title}</Text>
-                      <Text numberOfLines={1} style={{ color: onCard ? theme.colors.onAccent : textSecondary, fontSize: 13 }}>{s.artist}</Text>
-                    </View>
-                  </>
-                );
-              })()}
+              <Text style={{ width: 26, color: i < 3 ? accentText : textSecondary, fontSize: 16, fontWeight: '800', textAlign: 'center' }}>{i + 1}</Text>
+              {s.thumb ? <Image source={{ uri: s.thumb }} style={styles.rankThumb} /> : <View style={[styles.rankThumb, { backgroundColor: surface }]} />}
+              <View style={{ flex: 1 }}>
+                <Text numberOfLines={1} style={{ color: s.id === track.id ? accentText : text, fontSize: 15, fontWeight: '600' }}>{s.title}</Text>
+                <Text numberOfLines={1} style={{ color: textSecondary, fontSize: 13 }}>{s.artist}</Text>
+              </View>
               <Pressable onPress={() => songMenu(s)} hitSlop={12} style={{ paddingLeft: 6 }}>
-                <Ionicons name="ellipsis-horizontal" size={20} color={popMode.on && s.id === track.id ? theme.colors.onAccent : textSecondary} />
+                <Ionicons name="ellipsis-horizontal" size={20} color={textSecondary} />
               </Pressable>
             </Pressable>
+            )}
             </Stagger>
           ))}
           {data.playlistId && (
@@ -948,6 +964,7 @@ const styles = StyleSheet.create({
   regionRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, height: 42 },
   rankRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   rankThumb: { width: 46, height: 46, borderRadius: 4 },
+  popBox: { borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 });
 
 // Portrait Community tab: Home's header + tabs on top, then every post. Pull to refresh, older posts load near the end

@@ -235,9 +235,12 @@ export function LibraryScreen() {
   const chip = (label: string, on: boolean, onPress: () => void) => (
     <Pressable
       onPress={onPress}
-      style={[styles.chip, on ? [{ backgroundColor: accent }, popEdge(true)] : glassShadow(0.5, theme.colors.glassTint !== 'dark')]}
+      style={[
+        styles.chip,
+        on ? [{ backgroundColor: accent }, popEdge(true)] : pop ? [{ backgroundColor: theme.colors.surface }, popEdge(true)] : glassShadow(0.5, theme.colors.glassTint !== 'dark'),
+      ]}
     >
-      {!on && <GlassFill radius={18} solid={0.45} slab />}
+      {!on && !pop && <GlassFill radius={18} solid={0.45} slab />}
       <Text style={{ color: on ? theme.colors.onAccent : text, fontWeight: '600', fontSize: 13 }}>{label}</Text>
     </Pressable>
   );
@@ -537,7 +540,7 @@ export function LibraryScreen() {
             {menu.map((m) => {
               const on = filter === m.id;
               return (
-                <Pressable key={m.id} onPress={() => toggleFilter(m.id)} style={[styles.menuRow, { backgroundColor: on ? theme.colors.accent : 'transparent' }, on && popEdge(true)]}>
+                <Pressable key={m.id} onPress={() => toggleFilter(m.id)} style={[styles.menuRow, { backgroundColor: on ? theme.colors.accent : pop ? theme.colors.surface : 'transparent' }, popEdge(true), pop && { marginBottom: 6 }]}>
                   <Ionicons name={m.icon} size={22} color={on ? theme.colors.onAccent : text} />
                   <Text style={{ flex: 1, color: on ? theme.colors.onAccent : text, fontSize: 16, fontWeight: '700' }}>{m.label}</Text>
                   <Ionicons name="chevron-forward" size={18} color={on ? theme.colors.onAccent : textSecondary} />

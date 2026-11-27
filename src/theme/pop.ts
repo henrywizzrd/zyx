@@ -102,11 +102,14 @@ export function setPopMode(on: boolean, colors: Palette, pop: PopSettings) {
 }
 
 // Outline for small filled things (chips, pills) that don't use GlassFill: in Pop they need the same ink edge
-// (and, when raised, the same hard shadow) as every card. Returns nothing in Glass style
+// (and, when raised, the same hard shadow) as every card. Returns nothing in Glass style.
+// Radius 14, not a full pill: when the corner radius is more than half the height, iOS draws the outline and the
+// box-shadow with different curves at the round ends — the "extra edge" on the right of the Library chips (27/11).
+// Outline, fill and shadow all sit on this one view, so selected and unselected chips also have the same size
 export function popEdge(raised = false) {
   if (!popMode.on) return null;
-  const o = raised && popMode.offset ? Math.max(2, Math.round(popMode.offset * 0.6)) : 0;
-  return { borderWidth: Math.min(popMode.line, 2.5), borderColor: popMode.ink, borderCurve: 'circular' as const, ...(o ? { boxShadow: `${o}px ${o}px 0px ${popMode.shadow}` } : null) };
+  const o = raised && popMode.offset ? Math.max(3, Math.round(popMode.offset * 0.75)) : 0;
+  return { borderWidth: Math.min(popMode.line, 2.5), borderColor: popMode.ink, borderRadius: 14, borderCurve: 'circular' as const, ...(o ? { boxShadow: `${o}px ${o}px 0px ${popMode.shadow}` } : null) };
 }
 
 // Pop rows (approved cards mockup 27/11): every song row is a flat outlined card — outline only, no shadow, since

@@ -15,6 +15,8 @@ import type { Post } from '../data/social';
 
 type Counts = Record<string, Pick<Post, 'likes' | 'liked' | 'comments'>>;
 import { PostComposer } from './PostComposer';
+import { popEdge, popInner, popMode } from '../theme/pop';
+import { solidShadow } from './Glass';
 
 type Tab = 'home' | 'reposts' | 'share';
 
@@ -68,12 +70,21 @@ export function ProfileFeed() {
   const [tab, setTab] = useState<Tab>('home');
   const [composing, setComposing] = useState(false);
   const { text, textSecondary, border, surface } = theme.colors;
+  const pop = popMode.on;
 
   const tabBtn = (k: Tab, label: string) => {
     const on = tab === k;
     return (
-      <Pressable key={k} onPress={() => setTab(k)} style={[styles.tab, { borderBottomColor: on ? text : border }]}>
-        <Text style={{ color: on ? text : textSecondary, fontWeight: on ? '800' : '600', fontSize: 15 }}>{label}</Text>
+      <Pressable
+        key={k}
+        onPress={() => setTab(k)}
+        style={
+          pop
+            ? [styles.popTab, on && { backgroundColor: theme.colors.accent, borderWidth: 2, borderColor: theme.colors.border }]
+            : [styles.tab, { borderBottomColor: on ? text : border }]
+        }
+      >
+        <Text style={{ color: pop && on ? theme.colors.onAccent : on ? text : textSecondary, fontWeight: on ? '800' : '600', fontSize: 15 }}>{label}</Text>
       </Pressable>
     );
   };
@@ -87,7 +98,8 @@ export function ProfileFeed() {
 
   return (
     <View>
-      <View style={styles.tabs}>
+      {/* Pop: the three tabs sit in one outlined box, the open one is an accent block (like Home's For You / Community) */}
+      <View style={[styles.tabs, pop && [styles.popTabs, popInner(), solidShadow(0.8)]]}>
         {tabBtn('home', t('social.tabHome'))}
         {tabBtn('reposts', t('social.tabReposts'))}
         {tabBtn('share', t('social.tabShare'))}
@@ -96,7 +108,7 @@ export function ProfileFeed() {
       {tab === 'home' && (
         <View>
           {/* Ô "Có gì mới?": bấm để mở khung soạn bài */}
-          <Pressable onPress={() => setComposing(true)} style={[styles.compose, { borderBottomColor: border }]}>
+          <Pressable onPress={() => setComposing(true)} style={[styles.compose, { borderBottomColor: border }, pop && [styles.popCompose, popInner()]]}>
             <View style={[styles.avatar, { backgroundColor: profile.avatarColor }]}>
               {profile.avatar ? (
                 <Image source={{ uri: profile.avatar }} style={StyleSheet.absoluteFill} />
@@ -108,8 +120,8 @@ export function ProfileFeed() {
               <Text style={{ color: text, fontWeight: '700' }}>{profile.name}</Text>
               <Text style={{ color: textSecondary, marginTop: 2 }}>{t('social.whatsNew')}</Text>
             </View>
-            <View style={[styles.postPill, { backgroundColor: surface }]}>
-              <Text style={{ color: text, fontWeight: '700', fontSize: 13 }}>{t('social.publish')}</Text>
+            <View style={[styles.postPill, { backgroundColor: pop ? theme.colors.accent : surface }, popEdge(true)]}>
+              <Text style={{ color: pop ? theme.colors.onAccent : text, fontWeight: pop ? '900' : '700', fontSize: 13 }}>{t('social.publish')}</Text>
             </View>
           </Pressable>
           {posts.length === 0
@@ -157,6 +169,9 @@ export function ProfileFeed() {
 const styles = StyleSheet.create({
   tabs: { flexDirection: 'row' },
   tab: { flex: 1, alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1.5 },
+  popTabs: { gap: 5, padding: 5, borderRadius: 16, marginTop: 4 },
+  popTab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 11 },
+  popCompose: { borderBottomWidth: 2, borderRadius: 16, paddingHorizontal: 12, marginTop: 14, marginBottom: 14 },
   compose: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   avatar: { width: 38, height: 38, borderRadius: 19, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   postPill: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16 },
