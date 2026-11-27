@@ -16,7 +16,7 @@ import { useT } from '../i18n';
 import { TabId } from '../theme/types';
 import { DockGlyph } from './DockIcons';
 import { LABELS } from './FloatingDock';
-import { ArtSlab, GlassFill, glassShadow, hasLiquidGlass } from './Glass';
+import { ArtSlab, GlassFill, glassShadow, hasLiquidGlass, solidShadow } from './Glass';
 import { usePlayerPick, ViewRef } from '../player/PlayerProvider';
 import { FADE_LAND, playerOrigin, playerProgress, prewarmPlayer } from './PlayerTransition';
 import { hapticSnap } from './haptics';
@@ -175,7 +175,7 @@ export function ZyxDock({ active, onChange, onOpenPlayer, hidden }: { active: Ta
         {/* bong bóng mini player cố định ở góc phải */}
         {/* đo vị trí ở khung NGOÀI (không co khi nhấn): đo khung đang co thì player nở ra / thu về sai cỡ (62 thay vì 66) */}
         <Animated.View ref={bubbleRef} collapsable={false} style={[styles.abs, { right: M, bottom: (H - B) / 2, width: B, height: B }, track ? bubbleOut : null]}>
-          <Animated.View style={[{ width: B, height: B, borderRadius: BR, borderCurve: 'continuous' }, glassShadow(track ? 1.15 : 1, light), bubbleStyle]}>
+          <Animated.View style={[{ width: B, height: B, borderRadius: BR, borderCurve: 'continuous' }, solidShadow(track ? 1.15 : 1, light), bubbleStyle]}>
             <Pressable
               testID="zyx-bubble"
               accessibilityLabel={track ? `${track.title} — ${track.artist}` : t('tab.search')}

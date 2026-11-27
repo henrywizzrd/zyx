@@ -30,7 +30,7 @@ import Animated, { useSharedValue } from 'react-native-reanimated';
 import { useRotateEnter } from '../components/rotateEnter';
 import { useDockCollapse } from '../components/dockCollapse';
 import { useRenderProbe } from '../components/JankMonitor';
-import { GlassFill, glassShadow } from '../components/Glass';
+import { GlassFill, glassShadow, solidShadow } from '../components/Glass';
 import { useDisplayFont } from '../theme/fonts';
 import { popEdge, popMode } from '../theme/pop';
 
@@ -403,10 +403,10 @@ export function LibraryScreen() {
   // ================= Pop profile header (27/11) =================
   // Pop is flat, so the cover doesn't fade into the page: it sits in an outlined card with a hard shadow,
   // the avatar overlaps its bottom-left corner, and the name is set in the title font on the page colour
-  const popBtn = [styles.popBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderWidth: Math.min(popMode.line, 2.5) }, glassShadow(0.6)];
+  const popBtn = [styles.popBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderWidth: Math.min(popMode.line, 2.5) }, solidShadow(0.6)];
   const popHero = (
     <View style={{ paddingTop: pad.top + 10, paddingHorizontal: H_PAD }}>
-      <View style={[styles.popCover, glassShadow(1), { backgroundColor: profile.wallColor, borderColor: theme.colors.border, borderWidth: popMode.line }]}>
+      <View style={[styles.popCover, solidShadow(1), { backgroundColor: profile.wallColor, borderColor: theme.colors.border, borderWidth: popMode.line }]}>
         <View style={[StyleSheet.absoluteFill, { borderRadius: 18, overflow: 'hidden' }]}>
           {!!profile.cover && <Image source={{ uri: profile.cover }} resizeMode="cover" style={StyleSheet.absoluteFill} />}
         </View>
@@ -417,7 +417,7 @@ export function LibraryScreen() {
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 14, marginTop: -46, paddingLeft: 14 }}>
         <Pressable
           onPress={() => editImage('avatar')}
-          style={[styles.avatar, glassShadow(1), { width: 96, height: 96, overflow: 'visible', backgroundColor: profile.avatarColor, borderColor: theme.colors.border, borderWidth: popMode.line }]}
+          style={[styles.avatar, solidShadow(1), { width: 96, height: 96, overflow: 'visible', backgroundColor: profile.avatarColor, borderColor: theme.colors.border, borderWidth: popMode.line }]}
         >
           <View style={[StyleSheet.absoluteFill, { borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }]}>
             {profile.avatar ? (
@@ -459,7 +459,7 @@ export function LibraryScreen() {
         <ScrollView style={{ width: leftW, flexGrow: 0 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: pad.top + 12, paddingBottom: pad.bottom + pad.endPadding, paddingHorizontal: H_PAD }}>
           {/* vừa xoay sang ngang: cột trái trượt vào từ trái, cột phải từ phải (rotateEnter.ts) */}
           <Animated.View entering={enter(0, 'left')}>
-          <View style={[styles.landCard, pop && glassShadow(1), { backgroundColor: profile.wallColor }, pop && { borderWidth: popMode.line, borderColor: theme.colors.border }]}>
+          <View style={[styles.landCard, pop && solidShadow(1), { backgroundColor: profile.wallColor }, pop && { borderWidth: popMode.line, borderColor: theme.colors.border }]}>
             {profile.cover ? (
               <>
                 {/* Ảnh bìa: rõ ở nửa trên, mờ dần xuống dưới (bản mờ chồng lên, lộ dần theo dải chuyển từ trong suốt → đặc) */}

@@ -1,5 +1,5 @@
 import React, { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArtSlab, glassShadow } from './Glass';
+import { ArtSlab, glassShadow, solidShadow } from './Glass';
 import { Animated, Easing, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
@@ -177,7 +177,7 @@ export function MiniPlayer({ hidden, onOpen }: { hidden: boolean; onOpen: () => 
           <Animated.View
             style={[
               { width: S, height: S, borderRadius: bubbleRadius, borderCurve: 'continuous', opacity: d.opacity, transform: [{ scale: d.scale }] },
-              glassShadow(1.15, theme.colors.glassTint !== 'dark'),
+              solidShadow(1.15, theme.colors.glassTint !== 'dark'),
             ]}
           >
             <Pressable

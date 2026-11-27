@@ -9,6 +9,7 @@ import { usePlayerTransition } from './PlayerTransition';
 import { markRender } from './JankMonitor';
 import RNMaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
+import RAnimated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 const USE_NATIVE = Platform.OS !== 'web';
 // Kiểu khai báo của thư viện chưa khớp React 19, ép kiểu để dùng như component bình thường
@@ -56,7 +57,7 @@ const useInk = () => React.useContext(InkCtx);
 // Pop player: the line being sung gets a highlighter-pen background in this colour
 const MarkCtx = React.createContext<string | null>(null);
 
-const LyricLine = React.memo(function LyricLine({ text, state, near }: { text: string; state: LineState; near: boolean }) {
+const LyricLine = React.memo(function LyricLine({ text, state, near, onWidth }: { text: string; state: LineState; near: boolean; onWidth?: (w: number) => void }) {
   const lit = state === 'active' || state === 'plain';
   const a = useRef(new Animated.Value(lit ? 1 : 0)).current;
   const d = useRef(new Animated.Value(DIM[state])).current;
@@ -72,19 +73,55 @@ const LyricLine = React.memo(function LyricLine({ text, state, near }: { text: s
   const ink = useInk();
   const base = ink ? { color: inkA(ink, state === 'browse' ? 0.5 : 0.3) } : state === 'browse' ? styles.browse : styles.dim;
   const on = ink ? { color: ink } : styles.active;
-  const mark = React.useContext(MarkCtx);
   return (
     <View>
-      <Animated.Text style={[styles.line, base, { opacity: d }]}>{text}</Animated.Text>
+      <Animated.Text
+        style={[styles.line, base, { opacity: d }]}
+        // widest wrapped line of this lyric: the Pop marker stretches to it
+        onTextLayout={onWidth ? (e) => onWidth(Math.max(0, ...e.nativeEvent.lines.map((l) => l.width))) : undefined}
+      >
+        {text}
+      </Animated.Text>
       {(near || lit) && (
         <Animated.Text style={[styles.line, on, { position: 'absolute', left: 0, right: 0, top: 0, opacity: a }]}>
-          {/* a nested span: its background follows each wrapped line of text, like a marker */}
-          {mark ? <Text style={{ backgroundColor: mark }}>{text}</Text> : text}
+          {text}
         </Animated.Text>
       )}
     </View>
   );
 });
+
+// Pop player: one outlined "highlighter" box behind the line being sung. When the line changes it springs to the
+// new line and stretches / shrinks to that line's length and number of wrapped rows
+function PopMarker({ color, y, h, w }: { color: string; y: number; h: number; w: number }) {
+  const sy = useSharedValue(y);
+  const sh = useSharedValue(h);
+  const sw = useSharedValue(w);
+  const first = useRef(true);
+  useEffect(() => {
+    const cfg = { damping: 18, stiffness: 190, mass: 0.9 };
+    if (first.current) {
+      first.current = false;
+      sy.value = y;
+      sh.value = h;
+      sw.value = w;
+      return;
+    }
+    sy.value = withSpring(y, cfg);
+    sh.value = withSpring(h, cfg);
+    sw.value = withSpring(w, cfg);
+  }, [y, h, w]); // eslint-disable-line react-hooks/exhaustive-deps
+  const style = useAnimatedStyle(() => ({ top: sy.value, height: sh.value, width: sw.value }));
+  return (
+    <RAnimated.View
+      pointerEvents="none"
+      style={[
+        { position: 'absolute', left: -10, backgroundColor: color, borderRadius: 12, borderWidth: 2.5, borderColor: '#111111', boxShadow: '4px 4px 0px #111111' },
+        style,
+      ]}
+    />
+  );
+}
 
 // Một dòng hiển thị: câu hát, hoặc đoạn chỉ có nhạc (hiện nốt nhạc)
 type Row = { t: number | null; text: string; music?: boolean };
@@ -201,6 +238,10 @@ function LyricsViewInner({
   const scroll = useRef<ScrollViewInstance>(null);
   const ys = useRef<number[]>([]);
   const hs = useRef<number[]>([]); // chiều cao từng dòng, để đặt câu đang hát đúng giữa khung
+  const ws = useRef<number[]>([]); // text width of each line (Pop marker)
+  const widthCbs = useRef<((w: number) => void)[]>([]);
+  const mark = React.useContext(MarkCtx);
+  const [, bumpMark] = useState(0); // re-render once the playing line's width is known
   const [h, setH] = useState(0);
   const focusAt = focus != null && h > 0 ? Math.min(h, Math.max(0, focus)) : h / 2;
 
@@ -217,6 +258,8 @@ function LyricsViewInner({
     gen.current++;
     ys.current = [];
     hs.current = [];
+    ws.current = [];
+    widthCbs.current = [];
     placed.current = false;
   }
 
@@ -393,10 +436,15 @@ function LyricsViewInner({
             }
           }}
         >
+        {!!mark && synced && cur >= 0 && ys.current[cur] != null && !rows[cur]?.music && !!rows[cur]?.text && (
+          <PopMarker color={mark} y={ys.current[cur] + 1} h={(hs.current[cur] ?? 0) - 2} w={Math.max(40, (ws.current[cur] ?? 0) + 20)} />
+        )}
         {rows.map((l, i) => {
           const onLayout = (e: any) => {
+            const moved = ys.current[i] !== e.nativeEvent.layout.y || hs.current[i] !== e.nativeEvent.layout.height;
             ys.current[i] = e.nativeEvent.layout.y;
             hs.current[i] = e.nativeEvent.layout.height;
+            if (mark && moved && i === curRef.current) bumpMark((n) => n + 1);
             // Dòng đang hát vừa được đo (lần đầu, hoặc đo lại vì bố cục vừa xê dịch — ví dụ khung lời vừa có chiều cao thật
             // khi mở player): đặt lại đúng giữa khung ngay. Trước đây chỉ đặt một lần theo số đo cũ nên mở lại player
             // lời nằm sai chỗ và "đứng im" cho tới khi sang câu mới
@@ -433,7 +481,18 @@ function LyricsViewInner({
               }}
               style={{ paddingVertical: 6 }}
             >
-              <LyricLine text={l.text} near={!synced || Math.abs(i - cur) <= 2} state={!synced ? 'plain' : active ? 'active' : browsing ? 'browse' : stateFor(Math.abs(i - cur))} />
+              <LyricLine
+                text={l.text}
+                onWidth={
+                  mark
+                    ? (widthCbs.current[i] ??= (w: number) => {
+                        if (ws.current[i] === w) return;
+                        ws.current[i] = w;
+                        if (i === curRef.current) bumpMark((n) => n + 1);
+                      })
+                    : undefined
+                }
+                near={!synced || Math.abs(i - cur) <= 2} state={!synced ? 'plain' : active ? 'active' : browsing ? 'browse' : stateFor(Math.abs(i - cur))} />
             </Pressable>
           );
         })}

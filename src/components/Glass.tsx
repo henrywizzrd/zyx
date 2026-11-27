@@ -68,16 +68,23 @@ export type GlassMaterial = 'clear' | 'frost' | 'neon';
 // Bóng hai lớp của tấm kính đặt nổi trên mặt bàn (công thức chốt từ trang thử kính):
 // một bóng đậm, gọn sát chân + một bóng mềm, rộng. lift: độ nổi (1 = bình thường, cầm lên thì lớn hơn)
 export function glassShadow(lift = 1, light = false) {
-  // Pop style: one hard offset shadow in the ink colour, no blur
+  // Pop: the hard shadow is drawn by GlassFill itself, on the same view as the outline — a shadow cast by the parent
+  // left a thin light seam on curved edges however the colours were set (Library chips, 27/11). Here only the
+  // corner shape is kept so the parent's own shape matches
+  if (popMode.on) return { borderCurve: 'circular' } as const;
+  return solidShadow(lift, light);
+}
+
+// Shadow for things that are NOT drawn by GlassFill (cover art, avatars, coloured buttons): in Pop a hard offset
+// shadow on the view itself, otherwise the normal two-layer glass shadow
+export function solidShadow(lift = 1, light = false) {
   if (popMode.on) {
     // Theme Studio → Pop → Shadow (none / short / long) and Shadow colour (ink / accent); smaller things get a shorter shadow
     if (!popMode.offset) return { boxShadow: undefined } as const;
     // Circular corners: iOS "continuous" corners go wrong when the radius is half the height or more (pills), and the
     // shadow and the outlined fill then don't line up — a double edge (Library "Artists" chip, 27/11)
-    // The view casting the shadow also gets the card colour: a shadow cast by a see-through view leaves a thin light
-    // seam between the outline and the shadow on curved edges (pills, 27/11). GlassFill draws on top of it anyway
     const o = Math.max(3, Math.round(popMode.offset * Math.min(lift, 1.5)));
-    return { boxShadow: `${o}px ${o}px 0px ${popMode.shadow}`, borderCurve: 'circular', backgroundColor: popMode.fill } as const;
+    return { boxShadow: `${o}px ${o}px 0px ${popMode.shadow}`, borderCurve: 'circular' } as const;
   }
   const k = light ? 0.55 : 1;
   const e = 7 * lift;
@@ -93,6 +100,9 @@ export const SQUIRCLE = { borderCurve: 'continuous' as const };
 // noRim: tắt ánh sáng ở viền (vệt sáng mép trên, bóng tối mép dưới, viền bắt sáng) — tuỳ chọn của dock.
 // Liquid Glass thật của iOS tự vẽ ánh sáng viền và không tắt được, nên khi tắt thì dùng kính tự vẽ (vẫn mờ, vẫn trong)
 // material / liquid: overrides used by the Glass Lab debug screen (compare each material, real Liquid Glass vs self-drawn)
+// smaller things (chips, small buttons) get a slightly shorter shadow
+const popShadowOffset = (radius: number) => Math.max(3, Math.round(popMode.offset * (radius <= 20 ? 0.75 : 1)));
+
 export function GlassFill({
   radius = 0,
   solid = 0,
@@ -128,7 +138,12 @@ export function GlassFill({
     return (
       <View
         pointerEvents="none"
-        style={[StyleSheet.absoluteFill, { borderRadius: radius, borderCurve: 'circular', backgroundColor: fill, borderWidth: popMode.line, borderColor: ink }]}
+        style={[
+          StyleSheet.absoluteFill,
+          { borderRadius: radius, borderCurve: 'circular', backgroundColor: fill, borderWidth: popMode.line, borderColor: ink },
+          // hard shadow on this same view (see glassShadow). solid 0 = a highlight inside another card: no shadow
+          solid !== 0 && popMode.offset ? { boxShadow: `${popShadowOffset(radius)}px ${popShadowOffset(radius)}px 0px ${popMode.shadow}` } : null,
+        ]}
       />
     );
   }

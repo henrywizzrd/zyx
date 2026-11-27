@@ -11,7 +11,7 @@ import { useNav } from '../nav/Nav';
 import { signOut, useSession } from '../data/auth';
 import { setCrossfade, useCrossfade } from '../player/crossfade';
 import { setCrashReports, useCrashReports } from '../data/crashReports';
-import { GlassFill, glassShadow } from '../components/Glass';
+import { GlassFill, glassShadow, solidShadow } from '../components/Glass';
 import { useRenderProbe } from '../components/JankMonitor';
 import { useDisplayFont } from '../theme/fonts';
 import { Chevron, Group, GROUP_COLORS, Row, Seg, Toggle } from '../components/SettingsUI';
@@ -107,7 +107,7 @@ export function SettingsScreen() {
       onPress={signOut}
       style={({ pressed }) => [
         styles.signOut,
-        pop ? glassShadow(1) : glassShadow(0.6, theme.colors.glassTint !== 'dark'),
+        pop ? solidShadow(1) : glassShadow(0.6, theme.colors.glassTint !== 'dark'),
         pop ? { backgroundColor: GROUP_COLORS.coral } : null,
         pressed && { opacity: 0.7 },
       ]}
