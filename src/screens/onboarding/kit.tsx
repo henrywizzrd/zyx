@@ -19,11 +19,12 @@ export function Headline({ children, size, style }: { children: React.ReactNode;
   );
 }
 
-// A box with a hard shadow: a solid ink copy sits behind it, offset down-right
-export function Hard({ children, style, offset = 4, radius = 999, color = OB.ink, pressed }: { children?: React.ReactNode; style?: StyleProp<ViewStyle>; offset?: number; radius?: number; color?: string; pressed?: boolean }) {
+// A box with a hard shadow: a solid ink copy sits behind it, offset down-right.
+// style is the box itself; margins, rotation and position go in outer (so the shadow moves with the box).
+export function Hard({ children, style, outer, offset = 4, radius = 999, color = OB.ink, pressed }: { children?: React.ReactNode; style?: StyleProp<ViewStyle>; outer?: StyleProp<ViewStyle>; offset?: number; radius?: number; color?: string; pressed?: boolean }) {
   const o = pressed ? 1 : offset;
   return (
-    <View style={{ paddingRight: offset, paddingBottom: offset }}>
+    <View style={[{ paddingRight: offset, paddingBottom: offset }, outer]}>
       <View style={{ position: 'absolute', left: offset, top: offset, right: 0, bottom: 0, borderRadius: radius, backgroundColor: color }} />
       <View style={[{ borderRadius: radius, borderWidth: 2.5, borderColor: OB.ink, transform: [{ translateX: offset - o }, { translateY: offset - o }] }, style]}>{children}</View>
     </View>

@@ -80,7 +80,7 @@ export function LookStep({ look, setLook, onBack, onNext, scale }: { look: LookC
       <Headline size={44 * scale} style={{ marginTop: 14 }}>
         Pick your look
       </Headline>
-      <Hard style={{ flexDirection: 'row', overflow: 'hidden', backgroundColor: OB.paper, marginTop: 14 }}>
+      <Hard outer={{ marginTop: 14 }} style={{ flexDirection: 'row', overflow: 'hidden', backgroundColor: OB.paper }}>
         {seg('glass', 'Default')}
         {seg('pop', 'Pop')}
       </Hard>

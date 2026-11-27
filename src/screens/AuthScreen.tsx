@@ -195,7 +195,7 @@ export function AuthScreen({ onDone, preview }: { onDone: () => void; preview?: 
               </Animated.View>
             )}
             <View onLayout={(e: LayoutChangeEvent) => setBlock({ top: e.nativeEvent.layout.y, h: e.nativeEvent.layout.height })} style={{ alignSelf: 'flex-start', marginTop: 8 }}>
-              <Hard radius={18} offset={5} style={{ backgroundColor: OB.acc, borderRadius: 18, borderWidth: 3, paddingHorizontal: 16, paddingTop: 2, paddingBottom: 4, transform: [{ rotate: '-3deg' }] }}>
+              <Hard radius={18} offset={5} outer={{ transform: [{ rotate: '-3deg' }] }} style={{ backgroundColor: OB.acc, borderRadius: 18, borderWidth: 3, paddingHorizontal: 16, paddingTop: 2, paddingBottom: 4 }}>
                 <Text allowFontScaling={false} style={{ fontFamily: DISPLAY_FONT, fontWeight: 'normal', fontSize: 56 * scale, color: OB.ink, includeFontPadding: false }}>
                   ZYX
                 </Text>

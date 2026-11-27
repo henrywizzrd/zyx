@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { Session, syncSession, useSession } from '../data/auth';
-import { kvGet, kvSet } from '../data/db';
+import { syncSession, useSession } from '../data/auth';
+import { kvSet } from '../data/db';
 import { syncProfile } from '../data/profile';
 import { syncPosts } from '../data/social';
 import { AuthScreen } from './AuthScreen';
@@ -16,29 +16,15 @@ export function previewWelcome() {
 }
 
 // Not signed in (first launch, or just signed out): sign-in screen first, then the app.
-// 27/11: after signing in (or choosing guest) from the sign-in screen, each account — and guest — sees the welcome
-// screens once on this device (genres, what's inside, pick your look, drop the needle). Whoever is already signed in
-// when this version arrives is marked as done, so updating never shows them.
-const welcomeKey = (s: Session) => `${ONBOARDED_KEY}:${s.mode === 'account' ? s.id || s.username : 'guest'}`;
+// 27/11: every time someone signs in (or chooses guest) from the sign-in screen, the welcome screens follow
+// (genres, what's inside, pick your look, drop the needle). Opening the app while already signed in skips them.
 // "entered" covers the case where the session can't be saved (e.g. web without SQLite): still let them in this time.
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const session = useSession();
   const [entered, setEntered] = useState(false);
-  const [first] = useState(session); // who was signed in when the app opened
-  const [welcome, setWelcome] = useState<string | null>(null); // key of the account seeing the welcome screens
-  const [justIn, setJustIn] = useState(false); // came through the sign-in screen; check once the session is set
+  const [welcome, setWelcome] = useState(false); // showing the welcome screens after sign-in
   const [preview, setPreview] = useState<'auth' | 'intro' | null>(null);
   const [flash, setFlash] = useState(false); // lime flash fading out over the app after "drop the needle"
-  useEffect(() => {
-    if (first) kvSet(welcomeKey(first), true); // already signed in when the app opened: never show them
-  }, [first]);
-  useEffect(() => {
-    if (!justIn || !session) return;
-    setJustIn(false);
-    const k = welcomeKey(session);
-    if (kvGet<boolean>(k)) return;
-    setWelcome(k); // marked done when they finish (closing the app halfway shows them again next time)
-  }, [justIn, session]);
   useEffect(() => {
     openPreview = () => setPreview('auth');
     return () => {
@@ -69,8 +55,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [accountId]);
 
   const endWelcome = () => {
-    if (welcome && !preview) kvSet(welcome, true);
-    setWelcome(null);
+    if (welcome && !preview) kvSet(ONBOARDED_KEY, true);
+    setWelcome(false);
     setPreview(null);
     setFlash(true);
   };
@@ -80,7 +66,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       <AuthScreen
         onDone={() => {
           setEntered(true);
-          setJustIn(true);
+          setWelcome(true);
         }}
       />
     );
