@@ -417,6 +417,22 @@ export function setLogContext(c: string) {
 }
 export const getLogContext = () => ctx;
 
+// Touch probe (28/11, Tyson: after a Spotify import the Library "froze" while JS and the UI thread kept running).
+// For a few minutes after armTouchProbe(), every touch that reaches the app is logged (at most one per 300ms), so the
+// next log shows whether taps arrive at all (→ something swallowing them in JS) or not (→ a native layer on top)
+let probeUntil = 0;
+let lastProbe = 0;
+export function armTouchProbe(ms: number, why: string) {
+  probeUntil = Date.now() + ms;
+  log('ui', `dò chạm bật ${Math.round(ms / 1000)}s: ${why}`);
+}
+export function noteTouch(x: number, y: number) {
+  const now = Date.now();
+  if (now > probeUntil || now - lastProbe < 300) return;
+  lastProbe = now;
+  log('ui', `chạm ${Math.round(x)},${Math.round(y)} · ${ctx}`);
+}
+
 // ---- Dò "khung hình JS ngừng chạy" (Tyson 21/11: mở lại player lúc đang thu về → đĩa + nền khói đứng im ~11 giây dù nhạc
 // vẫn chạy). Log cho thấy lúc đó requestAnimationFrame / setTimeout của luồng JS KHÔNG chạy, nhưng sự kiện từ trình phát
 // (báo giờ mỗi 0,5s) vẫn tới và màn hình vẫn vẽ lại → các việc chờ hẹn giờ (bật xoay đĩa, chạy khói...) bị treo tới lần chạm sau.

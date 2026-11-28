@@ -1,5 +1,5 @@
 import React, { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { installAppLog, log, previousSession, setLogContext } from './src/data/applog';
+import { installAppLog, log, noteTouch, previousSession, setLogContext } from './src/data/applog';
 import { reportPreviousRun } from './src/data/blackbox';
 import { beginMotion, endMotion, JankMonitor, setPerfInfo, useRenderProbe, heapMB } from './src/components/JankMonitor';
 import { updateCoverTint } from './src/theme/coverTint';
@@ -539,7 +539,7 @@ setTimeout(() => void reportPreviousRun(previousSession), 4000);
 
 export default function App() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1 }} onTouchStart={(e) => noteTouch(e.nativeEvent.pageX, e.nativeEvent.pageY)}>
       <SafeAreaProvider>
         <ScreenSizeProvider>
         <ThemeProvider>

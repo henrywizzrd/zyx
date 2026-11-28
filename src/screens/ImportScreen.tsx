@@ -2,14 +2,14 @@
 // builds a new playlist in the same order. Songs it can't find are listed so the user can look for them by hand.
 // Opened from the + button on the profile (Library) and from Settings
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { useContentInsets } from '../components/FloatingDock';
 import { useT } from '../i18n';
 import { useNav } from '../nav/Nav';
 import { Chevron, Group, GROUP_COLORS, PageHeader, Row } from '../components/SettingsUI';
-import { log } from '../data/applog';
+import { armTouchProbe, log } from '../data/applog';
 import { addToPlaylist, createPlaylist, setPlaylistDescription } from '../data/db';
 import { fetchSpotifyList, matchAll, type SpotifyList, type SpotifyTrack } from '../music/spotifyImport';
 import { musicSupported } from '../music/lazy';
@@ -31,7 +31,17 @@ export function ImportScreen() {
   const [link, setLink] = useState('');
   const [step, setStep] = useState<Step>({ s: 'idle' });
   const gone = useRef(false);
-  useEffect(() => () => void (gone.current = true), []);
+  useEffect(() => {
+    // Keyboard and page lifetime go to the log too: the Library felt frozen after leaving this page (28/11)
+    const a = Keyboard.addListener('keyboardDidShow', () => log('ui', 'import: bàn phím hiện'));
+    const b = Keyboard.addListener('keyboardDidHide', () => log('ui', 'import: bàn phím ẩn'));
+    return () => {
+      gone.current = true;
+      a.remove();
+      b.remove();
+      log('ui', `import: đóng trang (bàn phím ${Keyboard.isVisible() ? 'còn hiện' : 'đã ẩn'})`);
+    };
+  }, []);
   const busy = step.s === 'reading' || step.s === 'matching';
 
   const start = async () => {
@@ -64,6 +74,7 @@ export function ImportScreen() {
     });
     log('music', `spotify import: "${list.name}" matched ${got.length - missing.length}/${got.length} in ${Math.round((Date.now() - t0) / 1000)}s`);
     setStep({ s: 'done', list, playlistId: id, found: got.length - missing.length, missing });
+    armTouchProbe(180000, 'sau khi nhập playlist Spotify');
   };
 
   const openPlaylist = () => step.s === 'done' && push({ type: 'collection', source: 'local', kind: 'playlist', id: step.playlistId, title: step.list.name });
