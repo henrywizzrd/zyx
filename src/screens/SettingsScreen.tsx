@@ -98,7 +98,8 @@ export function SettingsScreen() {
 
   const help = (
     <Group label={t('settings.group.help')} color={GROUP_COLORS.pink}>
-      <Row first title={t('settings.log')} hint={t('settings.logHint')} onPress={() => push({ type: 'log' })} right={<Chevron />} />
+      <Row first title={t('settings.support')} hint={t('settings.supportHint')} onPress={() => push({ type: 'support' })} right={<Chevron />} />
+      <Row title={t('settings.log')} hint={t('settings.logHint')} onPress={() => push({ type: 'log' })} right={<Chevron />} />
       {/* Crash reports (on by default): crash + black-box log go to the developer automatically */}
       <Row title={t('settings.crashReports')} hint={t('settings.crashReportsHint')} right={<Toggle value={crashReports} onChange={setCrashReports} />} />
       {/* Only the admin account sees this (the server also refuses everyone else) */}

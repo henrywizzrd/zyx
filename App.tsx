@@ -56,6 +56,7 @@ import { UpdateNotice } from './src/components/UpdateNotice';
 import { AuthGate } from './src/screens/AuthGate';
 import { DockSettingsScreen } from './src/screens/DockSettingsScreen';
 import { AdminDeviceScreen, AdminScreen } from './src/screens/AdminScreen';
+import { SupportScreen } from './src/screens/SupportScreen';
 import { loadFonts } from './src/theme/fonts';
 import { installDeviceReport } from './src/data/deviceReport';
 
@@ -371,6 +372,8 @@ function Root() {
                   <StatsScreen />
                 ) : pg.type === 'dock' ? (
                   <DockSettingsScreen />
+                ) : pg.type === 'support' ? (
+                  <SupportScreen />
                 ) : pg.type === 'admin' ? (
                   <AdminScreen />
                 ) : pg.type === 'adminDevice' ? (

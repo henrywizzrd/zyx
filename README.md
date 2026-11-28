@@ -14,7 +14,10 @@
 </div>
 
 <p align="center">
-  <img src="docs/donate.png" width="100%" alt="Enjoying ZYX? Buy me a coffee — scan the Vietcombank QR code" />
+  <img src="docs/donate.png" width="100%" alt="Enjoying ZYX? Buy me a coffee: Vietcombank QR code for Vietnam, PayPal QR code for everywhere else" />
+</p>
+<p align="center">
+  <a href="https://paypal.me/Tysonneee"><img src="https://img.shields.io/badge/Donate-PayPal-0070BA?style=for-the-badge&logo=paypal&logoColor=white" alt="Donate with PayPal" /></a>
 </p>
 
 <p align="center">
