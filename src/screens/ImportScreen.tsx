@@ -9,7 +9,7 @@ import { useContentInsets } from '../components/FloatingDock';
 import { useT } from '../i18n';
 import { useNav } from '../nav/Nav';
 import { Chevron, Group, GROUP_COLORS, PageHeader, Row } from '../components/SettingsUI';
-import { armTouchProbe, log } from '../data/applog';
+import { log } from '../data/applog';
 import { addToPlaylist, createPlaylist, setPlaylistDescription } from '../data/db';
 import { fetchSpotifyList, matchAll, type SpotifyList, type SpotifyTrack } from '../music/spotifyImport';
 import { musicSupported } from '../music/lazy';
@@ -74,7 +74,6 @@ export function ImportScreen() {
     });
     log('music', `spotify import: "${list.name}" matched ${got.length - missing.length}/${got.length} in ${Math.round((Date.now() - t0) / 1000)}s`);
     setStep({ s: 'done', list, playlistId: id, found: got.length - missing.length, missing });
-    armTouchProbe(180000, 'sau khi nhập playlist Spotify');
   };
 
   const openPlaylist = () => step.s === 'done' && push({ type: 'collection', source: 'local', kind: 'playlist', id: step.playlistId, title: step.list.name });

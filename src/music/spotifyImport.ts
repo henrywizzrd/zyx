@@ -212,15 +212,27 @@ export async function matchAll(
   let next = 0;
   let done = 0;
   let found = 0;
+  // Smoothness (28/11, Tyson: the page stuttered a little while matching): each search result is parsed on the JS
+  // thread, so run 3 at a time, give the UI a frame between searches, and redraw the progress at most ~4 times a second
+  let shownAt = 0;
+  const report = (force = false) => {
+    const now = Date.now();
+    if (!force && now - shownAt < 250) return;
+    shownAt = now;
+    onProgress(done, found);
+  };
+  const frame = () => new Promise<void>((r) => requestAnimationFrame(() => setTimeout(r, 0)));
   const worker = async () => {
     while (next < tracks.length && !cancelled()) {
       const i = next++;
       out[i] = await matchTrack(tracks[i]);
       done++;
       if (out[i]) found++;
-      onProgress(done, found);
+      report();
+      await frame();
     }
   };
-  await Promise.all([worker(), worker(), worker(), worker()]);
+  await Promise.all([worker(), worker(), worker()]);
+  report(true);
   return out;
 }
