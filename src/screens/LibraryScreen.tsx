@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useActionSheet } from '../components/ActionSheet';
 import { useOffline } from '../data/net';
 import { isDownloaded, setOnlyDownloaded, useDownloads, useOnlyDownloaded } from '../data/downloads';
 import { getLikedTracks, getPlaylistTracks } from '../data/db';
@@ -132,6 +133,7 @@ export function LibraryScreen() {
   const [sort, setSort] = useState<Sort>('recents');
   const library = useLibrary();
   const { push } = useNav();
+  const actions = useActionSheet();
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -395,8 +397,17 @@ export function LibraryScreen() {
               {t(sort === 'recents' ? 'lib.customOrder' : 'lib.az')}
             </Text>
           </Pressable>
-          {/* Tạo playlist mới */}
-          <Pressable onPress={newPlaylist} hitSlop={8} accessibilityLabel={t('lib.create')}>
+          {/* + : new playlist or import one from Spotify (28/11) */}
+          <Pressable
+            onPress={() =>
+              actions.openActions({ title: t('lib.addTitle'), icon: 'add' }, [
+                { label: t('lib.create'), icon: 'add-circle-outline', run: newPlaylist },
+                { label: t('import.title'), icon: 'download-outline', run: () => push({ type: 'import' }) },
+              ])
+            }
+            hitSlop={8}
+            accessibilityLabel={t('lib.addTitle')}
+          >
             <Ionicons name="add" size={24} color={text} />
           </Pressable>
           {/* Chỉ hiện bài đã tải */}

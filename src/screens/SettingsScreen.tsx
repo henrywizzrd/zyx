@@ -82,6 +82,13 @@ export function SettingsScreen() {
     </Group>
   );
 
+  // Import playlists from other apps (28/11): Spotify first, more services later
+  const imports = (
+    <Group label={t('settings.group.import')} color={GROUP_COLORS.sky}>
+      <Row first title="Spotify" hint={t('import.settingsHint')} onPress={() => push({ type: 'import' })} right={<Chevron />} />
+    </Group>
+  );
+
   const account = (
     <Group label={t('settings.group.account')} color={GROUP_COLORS.lime}>
       <Row
@@ -92,7 +99,6 @@ export function SettingsScreen() {
       />
       {/* Profile not synced: show why + retry */}
       {!!syncErr && <Row title={t('settings.syncRetry')} hint={t('settings.syncError', { msg: syncErr })} onPress={() => syncProfile()} right={<Chevron />} />}
-      <Row title={t('import.title')} hint={t('import.settingsHint')} onPress={() => push({ type: 'import' })} right={<Chevron />} />
       <Row title={t('settings.reset')} hint={t('settings.resetHint')} onPress={confirmReset} right={<Chevron />} />
     </Group>
   );
@@ -144,6 +150,7 @@ export function SettingsScreen() {
             {title}
             {appearance}
             {playback}
+            {imports}
           </>
         }
         right={
@@ -172,6 +179,7 @@ export function SettingsScreen() {
         {title}
         {appearance}
         {playback}
+        {imports}
         {account}
         {help}
         {signOutButton}

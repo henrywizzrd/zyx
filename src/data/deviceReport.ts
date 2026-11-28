@@ -1,9 +1,9 @@
 // Device health for the admin dashboard (27/11). With "Send diagnostics" on (the default), the app sends a small
-// summary per day — counts only, no song names, no username or email — and uploads a full day's log only when the
-// admin asked for that day from the dashboard. Server side: supabase functions report_device / upload_device_log;
+// summary per day — counts only, no song names, no username or email — and uploads a full day's log when the
+// admin asked for that day from the dashboard, or by itself for a day with a crash or a freeze (kept 7 days). Server side: supabase functions report_device / upload_device_log;
 // only the admin account can read the data.
 import { AppState } from 'react-native';
-import { getDayLines, listLogDays, log as appLog, type DayMeta } from './applog';
+import { dayOf, getDayLines, listLogDays, log as appLog, type DayMeta } from './applog';
 import { crashReportsOn } from './crashReports';
 import { dayText, deviceId, deviceInfo } from './logShare';
 import { kvGet, kvSet } from './db';
@@ -12,6 +12,7 @@ const sb = () => (require('../backend/supabase') as typeof import('../backend/su
 
 const EVERY_MS = 30 * 60 * 1000; // at most one report every 30 minutes
 const SENT_KEY = 'zyx.healthSent'; // day → number of log lines when that day was last reported
+const AUTO_KEY = 'zyx.problemLogSent'; // day → number of log lines when that day's log was auto-uploaded
 let lastAt = 0;
 let busy = false;
 
@@ -90,6 +91,20 @@ export async function reportDevice(force = false) {
     if (error) throw error;
     for (const m of metas) sent[m.day] = m.lines;
     kvSet(SENT_KEY, Object.fromEntries(Object.entries(sent).sort().slice(-20)));
+    // Days with a crash or a freeze (last 7 days): upload the log right away so the admin can read it without asking
+    // (28/11). Today's log goes up once; a past day goes up again only if it changed after that. Auto logs are deleted after 7 days
+    const auto = kvGet<Record<string, number>>(AUTO_KEY) ?? {};
+    const today = dayOf(Date.now());
+    const weekAgo = dayOf(Date.now() - 7 * 86400000);
+    for (const d of days) {
+      if (!(d.crashes > 0 || d.freezes > 0) || d.day < weekAgo) continue;
+      if (auto[d.day] != null && (d.day === today || auto[d.day] === d.log_lines)) continue;
+      const text = await dayText(d.day);
+      const { data: ok, error: e3 } = await sb().rpc('upload_problem_log', { p_device: id, p_day: d.day, p_content: text });
+      if (!e3 && ok) auto[d.day] = d.log_lines;
+      appLog('ui', e3 ? `problem log ${d.day} failed to upload: ${e3.message}` : `problem log ${d.day} ${ok ? `uploaded (${Math.round(text.length / 1024)}KB)` : 'not accepted'}`);
+    }
+    kvSet(AUTO_KEY, Object.fromEntries(Object.entries(auto).sort().slice(-10)));
     // Days the admin asked for: upload them (scrubbed the same way as "Send to developer")
     const pending = (data as string[] | null) ?? [];
     for (const day of pending) {
