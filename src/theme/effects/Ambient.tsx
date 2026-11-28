@@ -35,7 +35,7 @@ import { BEAN_COLORS, BEAN_SVG } from './beans';
 import { drawBubble, drawFish, FISH_BODY, FISH_COLORS, FISH_FIN, FISH_TAIL } from './ocean';
 import { useScreenSize } from '../../components/ScreenSize';
 import { starryBand, starryShader } from './starry';
-import { auroraSkySvg, LOOSE_PETAL_PATH, meteorSkySvg, neonSkySvg, PETAL_PATH, rainGlassSvg } from './scenes';
+import { auroraSkySvg, LOOSE_PETAL_PATH, meteorSkySvg, PETAL_PATH } from './scenes';
 import { smokeShader } from './smoke';
 import { smokeUniformColors } from '../smokeTones';
 import { useCoverTint } from '../coverTint';
@@ -93,8 +93,6 @@ function pickEffect(theme: ReturnType<typeof useTheme>['theme']): React.ReactEle
   if (theme.preset === 'meteor' && on.meteor) return <MeteorShower level={theme.effects.meteorLevel ?? 1} />;
   if (theme.preset === 'starry' && on.starry) return <StarryDrift />;
   if (theme.preset === 'aurora' && on.aurora) return <AuroraRibbons />;
-  if (theme.preset === 'rain' && on.rain) return <RainOnGlass />;
-  if (theme.preset === 'neon' && on.neon) return <NeonGrid />;
   // Khói phủ kín nền nên chỉ chạy khi nền là màu của bộ (người dùng đặt ảnh / video thì để thấy ảnh của họ)
   if (theme.preset === 'smoke' && on.smoke && !onMedia) return <SmokeSky live />;
   return null;
@@ -117,11 +115,11 @@ function SvgScene() {
   const { theme } = useTheme();
   const { width, height } = useScreenSize();
   const p = theme.preset;
-  const kind = theme.background.type === 'preset' && (p === 'meteor' || p === 'aurora' || p === 'rain' || p === 'neon') ? p : null;
+  const kind = theme.background.type === 'preset' && (p === 'meteor' || p === 'aurora') ? p : null;
   const svg = useMemo(() => {
     if (!kind || width < 1 || height < 1) return null;
     try {
-      const make = kind === 'aurora' ? auroraSkySvg : kind === 'rain' ? rainGlassSvg : kind === 'neon' ? neonSkySvg : meteorSkySvg;
+      const make = kind === 'aurora' ? auroraSkySvg : meteorSkySvg;
       return Skia.SVG.MakeFromString(make(width, height));
     } catch (e) {
       console.warn('[theme] scene', e);
@@ -879,250 +877,6 @@ function AuroraRibbons() {
 }
 
 // ---------- Mưa trên kính: mưa rơi phía sau, cứ vài giây một giọt nước chảy dài xuống kính, thỉnh thoảng sấm chớp ----------
-const DRIP_EVERY = 2.6; // giây
-const DRIP_DUR = 4.2;
-const FLASH_EVERY = 21;
-const GUST_EVERY = 3.4; // giây giữa các cơn gió
-function RainOnGlass() {
-  const { width, height } = useScreenSize();
-  const clock = useAmbientClock();
-  // Vệt mưa: x, tốc độ (px/s), độ dài, độ đậm, pha
-  const streaks = useMemo(() => {
-    const out: number[] = [];
-    for (let i = 0; i < scaled(70, width, height); i++) out.push(rnd(i, 51), 700 + rnd(i, 52) * 500, 14 + rnd(i, 53) * 26, 0.08 + rnd(i, 54) * 0.18, rnd(i, 55));
-    return out;
-  }, [width, height]);
-  // Giọt to đọng trên kính: x, y (phần màn hình), bán kính, độ "nhạy gió", nhịp rung
-  const big = useMemo(() => {
-    const out: number[] = [];
-    for (let i = 0; i < scaled(55, width, height); i++) out.push(rnd(i, 131), rnd(i, 132), 3.2 + rnd(i, 133) * 4, 0.5 + rnd(i, 134) * 0.5, rnd(i, 135));
-    return out;
-  }, [width, height]);
-  const picture = useDerivedValue(() => {
-    const t = clock.value / 1000;
-    const rec = Skia.PictureRecorder();
-    const canvas = rec.beginRecording(Skia.XYWHRect(0, 0, width, height));
-    try {
-      // Mưa rơi (phía sau kính: mảnh, mờ, hơi xiên)
-      const rain = Skia.Paint();
-      rain.setAntiAlias(true);
-      rain.setStyle(1);
-      rain.setStrokeWidth(1);
-      rain.setStrokeCap(1);
-      rain.setColor(Skia.Color('#D2E1F0'));
-      for (let i = 0; i < streaks.length; i += 5) {
-        const len = streaks[i + 2];
-        const y = ((streaks[i + 4] * (height + len) + streaks[i + 1] * t) % (height + len)) - len;
-        const x = streaks[i] * (width + 60) - 30 + y * 0.12;
-        rain.setAlphaf(streaks[i + 3]);
-        canvas.drawLine(x, y, x + len * 0.12, y + len, rain);
-      }
-
-      // Giọt to đọng trên kính (trong suốt): khi có gió lùa qua thì rung rinh rồi lặng dần
-      const drop = Skia.Paint();
-      drop.setAntiAlias(true);
-      const rim = Skia.Paint();
-      rim.setAntiAlias(true);
-      rim.setStyle(1);
-      rim.setStrokeWidth(0.8);
-      const g = Math.floor(t / GUST_EVERY);
-      // màu tính một lần mỗi khung (trước đây đọc chuỗi 'rgba(...)' 4 lần cho MỖI giọt → hơn 200 lần mỗi khung)
-      const cBody = Skia.Color('rgba(255,255,255,0.05)');
-      const cRimLight = Skia.Color('rgba(255,255,255,0.28)');
-      const cRimDark = Skia.Color('rgba(0,0,0,0.25)');
-      const cSpark = Skia.Color('rgba(255,255,255,0.65)');
-      for (let i = 0; i < big.length; i += 5) {
-        const x = big[i] * width;
-        const y = big[i + 1] * height;
-        const r = big[i + 2];
-        // Cơn gió: quét từ trái sang phải trong 0,9s; giọt nào bị gió chạm thì rung (dao động tắt dần)
-        let sx = 1;
-        let sy = 1;
-        let ox = 0;
-        for (let k = g - 1; k <= g; k++) {
-          if (k < 0 || rnd(k, 141) > 0.75) continue; // thỉnh thoảng mới có gió
-          const local = t - (k * GUST_EVERY + rnd(k, 142) * 1.5) - big[i] * 0.9;
-          if (local < 0 || local > 1.6) continue;
-          const amp = big[i + 3] * 0.16 * Math.exp(-local * 3.2);
-          const w = Math.sin(local * (20 + big[i + 4] * 10));
-          sx += amp * w;
-          sy -= amp * w * 0.8;
-          ox += amp * 6 * Math.exp(-local * 2);
-        }
-        canvas.save();
-        canvas.translate(x + ox, y);
-        canvas.scale(sx, sy);
-        const ry = r * 1.12;
-        // thân giọt gần như trong suốt, vành dưới sáng, mép trên tối, một chấm sáng
-        drop.setColor(cBody);
-        canvas.drawOval(Skia.XYWHRect(-r, -ry, r * 2, ry * 2), drop);
-        rim.setColor(cRimLight);
-        canvas.drawArc(Skia.XYWHRect(-r * 0.92, -ry * 0.92, r * 1.84, ry * 1.84), 20, 140, false, rim);
-        rim.setColor(cRimDark);
-        canvas.drawArc(Skia.XYWHRect(-r, -ry, r * 2, ry * 2), 200, 140, false, rim);
-        drop.setColor(cSpark);
-        canvas.drawCircle(-r * 0.32, -ry * 0.42, Math.max(0.7, r * 0.2), drop);
-        canvas.restore();
-      }
-
-      // Giọt nước chảy trên kính: nhanh dần, hơi lắc, để lại vệt ướt phía sau
-      const trail = Skia.Paint();
-      trail.setAntiAlias(true);
-      trail.setStyle(1);
-      trail.setStrokeCap(1);
-      const head = Skia.Paint();
-      head.setAntiAlias(true);
-      head.setColor(Skia.Color('#FFFFFF'));
-      const cur = Math.floor(t / DRIP_EVERY);
-      for (let k = cur - 2; k <= cur; k++) {
-        if (k < 0) continue;
-        const st = k * DRIP_EVERY + rnd(k, 61) * 0.8;
-        const p = (t - st) / DRIP_DUR;
-        if (p < 0 || p > 1) continue;
-        const x0 = width * (0.05 + rnd(k, 62) * 0.9);
-        const y0 = height * (0.05 + rnd(k, 63) * 0.45);
-        const dist = height * (0.3 + rnd(k, 64) * 0.4);
-        const r = 2.6 + rnd(k, 65) * 2;
-        const y = y0 + dist * Math.pow(p, 1.7);
-        const x = x0 + Math.sin(p * 11 + k) * 2.2;
-        const fade = p > 0.82 ? (1 - p) / 0.18 : p < 0.06 ? p / 0.06 : 1;
-        trail.setStrokeWidth(r * 0.9);
-        trail.setShader(
-          Skia.Shader.MakeLinearGradient({ x, y: y0 }, { x, y }, [Skia.Color('rgba(255,255,255,0)'), Skia.Color(`rgba(255,255,255,${(0.16 * fade).toFixed(3)})`)], null, 0)
-        );
-        canvas.drawLine(x0, y0, x, y, trail);
-        head.setAlphaf(0.06 * fade);
-        canvas.drawOval(Skia.XYWHRect(x - r, y - r * 1.15, r * 2, r * 2.3), head);
-        rim.setColor(Skia.Color(`rgba(255,255,255,${(0.3 * fade).toFixed(3)})`));
-        canvas.drawArc(Skia.XYWHRect(x - r * 0.92, y - r * 1.06, r * 1.84, r * 2.12), 20, 140, false, rim);
-        head.setAlphaf(0.6 * fade);
-        canvas.drawCircle(x - r * 0.35, y - r * 0.45, Math.max(0.6, r * 0.28), head);
-      }
-
-      // Sấm chớp: ~21 giây một lần, hai lần loé nhanh rồi tắt dần, sáng từ trên trời xuống
-      const c = Math.floor(t / FLASH_EVERY);
-      const local = t - c * FLASH_EVERY - (5 + rnd(c, 71) * 11);
-      if (local >= 0 && local < 0.75) {
-        const a =
-          local < 0.06 ? (local / 0.06) * 0.5
-          : local < 0.14 ? 0.5 - ((local - 0.06) / 0.08) * 0.42
-          : local < 0.22 ? 0.08 + ((local - 0.14) / 0.08) * 0.32
-          : 0.4 * (1 - (local - 0.22) / 0.53);
-        const flash = Skia.Paint();
-        flash.setShader(
-          Skia.Shader.MakeLinearGradient({ x: 0, y: 0 }, { x: 0, y: height }, [Skia.Color(`rgba(235,240,255,${a.toFixed(3)})`), Skia.Color(`rgba(235,240,255,${(a * 0.25).toFixed(3)})`)], null, 0)
-        );
-        canvas.drawRect(Skia.XYWHRect(0, 0, width, height), flash);
-      }
-    } catch (e) {
-      // vẽ lỗi thì khung hình này để trống
-    }
-    return rec.finishRecordingAsPicture();
-  });
-  return <Layer picture={picture} />;
-}
-
-// ---------- Neon: lưới phối cảnh chạy về phía người xem dưới chân trời, thỉnh thoảng nháy glitch ----------
-const GLITCH_EVERY = 6.5;
-function NeonGrid() {
-  const { width, height } = useScreenSize();
-  const clock = useAmbientClock(true);
-  // Đường dọc không bao giờ chuyển động: vẽ một lần vào lớp riêng (trước đây vẽ lại kèm làm nhoè 17 đường mỗi khung)
-  const still = useMemo(() => {
-    const rec = Skia.PictureRecorder();
-    const canvas = rec.beginRecording(Skia.XYWHRect(0, 0, width, height));
-    try {
-      const hy = height * 0.62;
-      const cx = width / 2;
-      const glow = Skia.Paint();
-      glow.setAntiAlias(true);
-      glow.setStyle(1);
-      glow.setStrokeWidth(3);
-      glow.setMaskFilter(Skia.MaskFilter.MakeBlur(0, 4, true));
-      glow.setColor(Skia.Color('rgba(255,61,203,0.35)'));
-      const core = Skia.Paint();
-      core.setAntiAlias(true);
-      core.setStyle(1);
-      core.setStrokeWidth(1);
-      core.setColor(Skia.Color('rgba(255,120,225,0.55)'));
-      const V = 16;
-      for (let i = 0; i <= V; i++) {
-        const bx = cx + (i - V / 2) * width * 0.2;
-        canvas.drawLine(cx, hy, bx, height, glow);
-        canvas.drawLine(cx, hy, bx, height, core);
-      }
-    } catch {}
-    return rec.finishRecordingAsPicture();
-  }, [width, height]);
-  const picture = useDerivedValue(() => {
-    const t = clock.value / 1000;
-    const rec = Skia.PictureRecorder();
-    const canvas = rec.beginRecording(Skia.XYWHRect(0, 0, width, height));
-    try {
-      const hy = height * 0.62;
-      // Quầng sáng: dải chuyển màu mờ dần hai phía (trước đây làm nhoè đường kẻ MỖI khung — rất tốn GPU), nhìn gần như cũ
-      const glow = Skia.Paint();
-      const core = Skia.Paint();
-      core.setAntiAlias(true);
-      core.setStyle(1);
-      core.setStrokeWidth(1);
-      const G = 7; // nửa bề dày quầng (điểm)
-      // Đường ngang: trôi dần xuống (lại gần), càng gần càng thưa và sáng
-      const Hn = 10;
-      for (let k = 0; k < Hn; k++) {
-        const z = ((k + t * 0.55) % Hn) / Hn;
-        const y = hy + (height - hy) * Math.pow(z, 2.2);
-        const a = 0.15 + 0.6 * z;
-        glow.setShader(
-          Skia.Shader.MakeLinearGradient(
-            { x: 0, y: y - G },
-            { x: 0, y: y + G },
-            [Skia.Color('rgba(0,240,255,0)'), Skia.Color(`rgba(0,240,255,${(a * 0.42).toFixed(3)})`), Skia.Color('rgba(0,240,255,0)')],
-            [0, 0.5, 1],
-            TileMode.Clamp
-          )
-        );
-        canvas.drawRect(Skia.XYWHRect(0, y - G, width, G * 2), glow);
-        core.setColor(Skia.Color(`rgba(120,250,255,${a.toFixed(3)})`));
-        canvas.drawLine(0, y, width, y, core);
-      }
-      // Glitch: vài vệt màu lệch ngang trong ~0,3 giây, mỗi 6,5 giây
-      const c = Math.floor(t / GLITCH_EVERY);
-      const local = t - c * GLITCH_EVERY - (2 + rnd(c, 81) * 3);
-      if (local >= 0 && local < 0.3) {
-        const step = Math.floor(t * 20);
-        const bar = Skia.Paint();
-        for (let j = 0; j < 5; j++) {
-          const y = rnd(step, 90 + j) * height;
-          const h = 2 + rnd(step, 100 + j) * 14;
-          const dx = (rnd(step, 110 + j) - 0.5) * 40;
-          bar.setColor(Skia.Color(j % 2 ? 'rgba(0,240,255,0.28)' : 'rgba(255,61,203,0.28)'));
-          canvas.drawRect(Skia.XYWHRect(dx, y, width, h), bar);
-        }
-        bar.setColor(Skia.Color('rgba(255,255,255,0.08)'));
-        canvas.drawRect(Skia.XYWHRect(0, rnd(step, 120) * height, width, 1.5), bar);
-      }
-    } catch (e) {
-      // vẽ lỗi thì khung hình này để trống
-    }
-    return rec.finishRecordingAsPicture();
-  });
-  return (
-    <>
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <Canvas style={StyleSheet.absoluteFill}>
-          <Picture picture={still} />
-        </Canvas>
-      </View>
-      <Layer picture={picture} />
-    </>
-  );
-}
-
-// ---------- Khói màu: shader khói (smoke.ts, dùng chung với player đĩa than) làm nền cả app ----------
-// Chống lag như player đĩa than: vẽ ở 1/5 kích thước rồi phóng to (khói mềm nên nhìn y hệt), 30 khung / giây,
-// dừng khi mở player / app ở nền (RunningContext). Đồng hồ khói dùng chung cho mọi lớp → lớp chạy trong trang
-// đang vuốt quay lại khớp đúng với nền chung. Đổi dải màu: màu chuyển dần trong 1 giây
 const SMOKE_DIV = 5;
 const smokeTime = makeMutable(3);
 const smokeAcc = makeMutable(0);

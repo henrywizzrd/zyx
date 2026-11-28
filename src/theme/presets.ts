@@ -1,11 +1,11 @@
 // Các bộ màu có sẵn. Mọi màn hình (trừ Player) lấy màu từ đây qua theme.colors.
 // Thêm bộ màu mới: thêm id vào ThemePresetId, thêm một mục vào PRESETS và tên vào PRESET_ORDER.
 
-export type ThemePresetId = 'dark' | 'light' | 'green' | 'ocean' | 'latte' | 'snow' | 'sakura' | 'meteor' | 'starry' | 'aurora' | 'rain' | 'neon' | 'smoke' | 'cover';
+export type ThemePresetId = 'dark' | 'light' | 'green' | 'ocean' | 'latte' | 'snow' | 'sakura' | 'meteor' | 'starry' | 'aurora' | 'smoke' | 'cover';
 
 // Các bộ có hiệu ứng nền chạy liên tục (bật/tắt bằng công tắc Hiệu ứng nền, nhớ riêng từng bộ)
-export type AmbientPresetId = 'snow' | 'green' | 'ocean' | 'latte' | 'sakura' | 'meteor' | 'starry' | 'aurora' | 'rain' | 'neon' | 'smoke';
-export const AMBIENT_PRESETS: AmbientPresetId[] = ['snow', 'green', 'ocean', 'latte', 'sakura', 'meteor', 'starry', 'aurora', 'rain', 'neon', 'smoke'];
+export type AmbientPresetId = 'snow' | 'green' | 'ocean' | 'latte' | 'sakura' | 'meteor' | 'starry' | 'aurora' | 'smoke';
+export const AMBIENT_PRESETS: AmbientPresetId[] = ['snow', 'green', 'ocean', 'latte', 'sakura', 'meteor', 'starry', 'aurora', 'smoke'];
 
 export interface Palette {
   bg: string; // nền của app
@@ -48,9 +48,9 @@ export const PRESETS: Record<ThemePresetId, Palette> = {
     surface: '#FFFFFF',
     card: 'rgba(255,255,255,0.6)',
     text: '#121212',
-    textSecondary: '#5E5E5E',
-    accent: '#1AA34A',
-    accentText: '#1AA34A',
+    textSecondary: '#555555',
+    accent: '#12833A',
+    accentText: '#12833A',
     onAccent: '#FFFFFF',
     border: 'rgba(0,0,0,0.1)',
     skeleton: 'rgba(0,0,0,0.07)',
@@ -83,9 +83,9 @@ export const PRESETS: Record<ThemePresetId, Palette> = {
     surface: '#D3E4F7',
     card: 'rgba(211,228,247,0.6)',
     text: '#0C3B6E',
-    textSecondary: '#3D6A99',
-    accent: '#1D6FD1',
-    accentText: '#1D6FD1',
+    textSecondary: '#2F5A88',
+    accent: '#1760B8',
+    accentText: '#1760B8',
     onAccent: '#FFFFFF',
     border: 'rgba(12,59,110,0.15)',
     skeleton: 'rgba(12,59,110,0.08)',
@@ -100,9 +100,9 @@ export const PRESETS: Record<ThemePresetId, Palette> = {
     surface: '#E8DCC6',
     card: 'rgba(232,220,198,0.6)',
     text: '#4A3426',
-    textSecondary: '#7A5E4A',
-    accent: '#A0673A',
-    accentText: '#A0673A',
+    textSecondary: '#664B38',
+    accent: '#875330',
+    accentText: '#875330',
     onAccent: '#FFFFFF',
     border: 'rgba(74,52,38,0.15)',
     skeleton: 'rgba(74,52,38,0.08)',
@@ -117,9 +117,9 @@ export const PRESETS: Record<ThemePresetId, Palette> = {
     surface: '#FFFFFF',
     card: 'rgba(255,255,255,0.65)',
     text: '#0F2A44',
-    textSecondary: '#5A7189',
-    accent: '#3B82C4',
-    accentText: '#3B82C4',
+    textSecondary: '#4A6179',
+    accent: '#2A6DAE',
+    accentText: '#2A6DAE',
     onAccent: '#FFFFFF',
     border: 'rgba(15,42,68,0.12)',
     skeleton: 'rgba(15,42,68,0.07)',
@@ -135,9 +135,9 @@ export const PRESETS: Record<ThemePresetId, Palette> = {
     surface: '#F8DCE5',
     card: 'rgba(252,236,241,0.72)',
     text: '#5A2A3C',
-    textSecondary: '#93607A',
-    accent: '#D9547D',
-    accentText: '#D9547D',
+    textSecondary: '#7A4860',
+    accent: '#B83A62',
+    accentText: '#B83A62',
     onAccent: '#FFFFFF',
     border: 'rgba(90,42,60,0.14)',
     skeleton: 'rgba(90,42,60,0.08)',
@@ -201,42 +201,6 @@ export const PRESETS: Record<ThemePresetId, Palette> = {
     statusBar: 'light-content',
     switchOff: '#1E3A44',
   },
-  // Mưa trên kính: xám lạnh, nhấn xanh nước mưa
-  rain: {
-    bg: '#2B3036',
-    surface: '#383F47',
-    card: 'rgba(56,63,71,0.6)',
-    text: '#EEF2F5',
-    textSecondary: '#A6B0BA',
-    accent: '#9CCBEA',
-    accentText: '#9CCBEA',
-    onAccent: '#0F1A22',
-    border: 'rgba(220,235,245,0.14)',
-    skeleton: 'rgba(220,235,245,0.08)',
-    glass: 'rgba(44,50,57,0.55)',
-    glassRgb: '44,50,57',
-    glassTint: 'dark',
-    statusBar: 'light-content',
-    switchOff: '#4A535D',
-  },
-  // Neon / Cyberpunk: tím đen, nhấn hồng neon, viền xanh cyan
-  neon: {
-    bg: '#0A0514',
-    surface: '#1A0F2E',
-    card: 'rgba(26,15,46,0.62)',
-    text: '#F6EEFF',
-    textSecondary: '#A99BCB',
-    accent: '#FF3DCB',
-    accentText: '#FF3DCB',
-    onAccent: '#16001A',
-    border: 'rgba(0,240,255,0.3)',
-    skeleton: 'rgba(0,240,255,0.08)',
-    glass: 'rgba(22,10,40,0.6)',
-    glassRgb: '22,10,40',
-    glassTint: 'dark',
-    statusBar: 'light-content',
-    switchOff: '#33204F',
-  },
   // Khói màu: nền khói chuyển động (shader), mặc định dải cà phê. Nền / thẻ / kính / màu nhấn đổi theo dải màu người dùng chọn (smokeTones.ts)
   smoke: {
     bg: '#120905',
@@ -275,4 +239,4 @@ export const PRESETS: Record<ThemePresetId, Palette> = {
   },
 };
 
-export const PRESET_ORDER: ThemePresetId[] = ['dark', 'light', 'green', 'ocean', 'latte', 'snow', 'sakura', 'meteor', 'starry', 'aurora', 'rain', 'neon', 'smoke', 'cover'];
+export const PRESET_ORDER: ThemePresetId[] = ['dark', 'light', 'green', 'ocean', 'latte', 'snow', 'sakura', 'meteor', 'starry', 'aurora', 'smoke', 'cover'];

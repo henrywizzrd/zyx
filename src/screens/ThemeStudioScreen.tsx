@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, GestureResponderEvent, Pressable, ScrollView, StyleSheet, Switch, Text, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, Alert, GestureResponderEvent, Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { systemPreset, useTheme } from '../theme/ThemeProvider';
 import { useThemeTransition } from '../theme/ThemeTransition';
@@ -21,7 +21,6 @@ import { GlassFill, glassShadow } from '../components/Glass';
 import { POP_LINES, POP_PATTERNS, POP_SHADOW_COLORS, POP_SHADOWS, POP_THEME_NAMES, POP_THEME_ORDER, POP_THEMES, popSystemTheme, type PopThemeId } from '../theme/pop';
 
 const PAD = 16;
-const GAP = 12;
 
 // Gọi fn nhiều nhất mỗi `ms` một lần trong lúc kéo thanh trượt (đổi theme làm cả app vẽ lại, gọi liên tục sẽ giật);
 // lần cuối (khi nhả tay) luôn được áp dụng
@@ -39,134 +38,50 @@ function useThrottle<T>(fn: (v: T) => void, ms = 120) {
   };
 }
 
-// Màn hình thu nhỏ vẽ bằng màu của một bộ màu (tiêu đề, hai thẻ, hai dòng chữ, dock)
-function MiniScreen({ p, id, width, h }: { p: Palette; id: ThemePresetId; width: number; h: number }) {
-  return (
-    <View style={{ width, height: h, backgroundColor: p.bg, padding: 12 }}>
-      {/* Bộ Snow: vài bông tuyết; Latte: vài hạt cà phê; Ocean: vài bong bóng */}
-      {id === 'snow' &&
-        [[0.15, 0.1], [0.7, 0.18], [0.45, 0.32], [0.85, 0.45], [0.25, 0.55], [0.6, 0.62]].map(([x, y], i) => (
-          <View key={i} style={{ position: 'absolute', left: x * width, top: y * h, width: 5, height: 5, borderRadius: 3, backgroundColor: '#C9D9EA' }} />
-        ))}
-      {id === 'latte' &&
-        [[0.08, 0.06, 30], [0.82, 0.5, -20], [0.12, 0.66, 70]].map(([x, y, r], i) => (
-          <View key={i} style={{ position: 'absolute', left: x * width, top: y * h, width: 7, height: 10, borderRadius: 5, backgroundColor: '#8A5A3B', opacity: 0.6, transform: [{ rotate: `${r}deg` }] }} />
-        ))}
-      {id === 'sakura' &&
-        [[0.12, 0.08, 20], [0.78, 0.2, -30], [0.42, 0.46, 60], [0.86, 0.6, 10], [0.2, 0.7, -50]].map(([x, y, r], i) => (
-          <View key={`s${i}`} style={{ position: 'absolute', left: x * width, top: y * h, width: 7, height: 9, borderTopLeftRadius: 5, borderTopRightRadius: 5, borderBottomLeftRadius: 4, borderBottomRightRadius: 1, backgroundColor: '#F4A6BF', transform: [{ rotate: `${r}deg` }] }} />
-        ))}
-      {id === 'meteor' && (
-        <>
-          {[[0.12, 0.2], [0.8, 0.12], [0.5, 0.42], [0.3, 0.6], [0.9, 0.55], [0.65, 0.25]].map(([x, y], i) => (
-            <View key={`m${i}`} style={{ position: 'absolute', left: x * width, top: y * h, width: 2, height: 2, borderRadius: 1, backgroundColor: '#FFFFFF' }} />
-          ))}
-          <View style={{ position: 'absolute', left: width * 0.45, top: h * 0.22, width: width * 0.3, height: 1.2, backgroundColor: 'rgba(255,255,255,0.7)', transform: [{ rotate: '-38deg' }] }} />
-        </>
-      )}
-      {id === 'starry' && (
-        <>
-          {/* dải ngân hà tím mờ chéo qua + vài ngôi sao có quầng */}
-          <View style={{ position: 'absolute', left: -width * 0.2, top: h * 0.38, width: width * 1.4, height: h * 0.16, borderRadius: h, backgroundColor: 'rgba(140,110,230,0.22)', transform: [{ rotate: '-22deg' }] }} />
-          {[[0.15, 0.12, 2], [0.78, 0.1, 3], [0.55, 0.36, 2], [0.3, 0.52, 2], [0.86, 0.48, 2], [0.62, 0.68, 3], [0.1, 0.78, 2]].map(([x, y, r], i) => (
-            <View key={`st${i}`} style={{ position: 'absolute', left: x * width, top: y * h, width: r, height: r, borderRadius: r, backgroundColor: '#FFFFFF', shadowColor: '#C9D4FF', shadowOpacity: 0.9, shadowRadius: 3, shadowOffset: { width: 0, height: 0 } }} />
-          ))}
-        </>
-      )}
-      {id === 'aurora' && (
-        <>
-          <View style={{ position: 'absolute', left: -width * 0.1, top: h * 0.14, width: width * 1.2, height: h * 0.12, borderRadius: h, backgroundColor: 'rgba(61,245,160,0.35)', transform: [{ rotate: '-8deg' }] }} />
-          <View style={{ position: 'absolute', left: -width * 0.1, top: h * 0.22, width: width * 1.2, height: h * 0.08, borderRadius: h, backgroundColor: 'rgba(155,108,255,0.3)', transform: [{ rotate: '5deg' }] }} />
-          {[[0.15, 0.5], [0.8, 0.08], [0.6, 0.45], [0.35, 0.06]].map(([x, y], i) => (
-            <View key={`a${i}`} style={{ position: 'absolute', left: x * width, top: y * h, width: 2, height: 2, borderRadius: 1, backgroundColor: '#FFFFFF' }} />
-          ))}
-        </>
-      )}
-      {id === 'rain' && (
-        <>
-          {[[0.1, 0.12, 3], [0.3, 0.4, 2], [0.7, 0.1, 4], [0.85, 0.35, 2], [0.5, 0.6, 3], [0.2, 0.7, 2], [0.62, 0.3, 2]].map(([x, y, r], i) => (
-            <View key={`r${i}`} style={{ position: 'absolute', left: x * width, top: y * h, width: r * 2, height: r * 2.3, borderRadius: r, backgroundColor: 'rgba(255,255,255,0.22)' }} />
-          ))}
-          <View style={{ position: 'absolute', left: width * 0.78, top: h * 0.4, width: 2, height: h * 0.28, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.18)' }} />
-        </>
-      )}
-      {id === 'neon' && (
-        <>
-          <View style={{ position: 'absolute', left: 0, right: 0, top: h * 0.62, height: 1.5, backgroundColor: '#FF7AE0' }} />
-          {[0.72, 0.8, 0.9].map((y, i) => (
-            <View key={`n${i}`} style={{ position: 'absolute', left: 0, right: 0, top: y * h, height: 1, backgroundColor: 'rgba(0,240,255,0.6)' }} />
-          ))}
-        </>
-      )}
-      {id === 'smoke' && (
-        <>
-          <View style={{ position: 'absolute', left: -width * 0.15, top: h * 0.15, width: width * 0.8, height: h * 0.45, borderRadius: h, backgroundColor: 'rgba(158,97,33,0.45)', transform: [{ rotate: '-18deg' }] }} />
-          <View style={{ position: 'absolute', left: width * 0.4, top: h * 0.5, width: width * 0.75, height: h * 0.35, borderRadius: h, backgroundColor: 'rgba(92,51,19,0.6)', transform: [{ rotate: '12deg' }] }} />
-          <View style={{ position: 'absolute', left: width * 0.2, top: h * 0.05, width: width * 0.35, height: h * 0.18, borderRadius: h, backgroundColor: 'rgba(232,168,98,0.25)' }} />
-        </>
-      )}
-      {id === 'cover' && (
-        <View style={{ position: 'absolute', right: 10, top: 10, flexDirection: 'row', gap: 3 }}>
-          {['#E2574C', '#F2B134', '#3E8EDE'].map((c) => (
-            <View key={c} style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: c }} />
-          ))}
-        </View>
-      )}
-      {id === 'ocean' &&
-        [[0.85, 0.62, 6], [0.8, 0.5, 4], [0.86, 0.4, 3], [0.1, 0.58, 5]].map(([x, y, r], i) => (
-          <View key={i} style={{ position: 'absolute', left: x * width, top: y * h, width: r, height: r, borderRadius: r, borderWidth: 1, borderColor: '#5B8FC9' }} />
-        ))}
-      <View style={{ width: '55%', height: 9, borderRadius: 5, backgroundColor: p.text }} />
-      <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
-        <View style={{ flex: 1, height: 28, borderRadius: 6, backgroundColor: p.surface }} />
-        <View style={{ flex: 1, height: 28, borderRadius: 6, backgroundColor: p.surface }} />
-      </View>
-      <View style={{ width: '80%', height: 6, borderRadius: 3, backgroundColor: p.textSecondary, marginTop: 12, opacity: 0.7 }} />
-      <View style={{ width: '60%', height: 6, borderRadius: 3, backgroundColor: p.textSecondary, marginTop: 6, opacity: 0.7 }} />
-      {/* Dock thu nhỏ */}
-      <View style={[styles.miniDock, { backgroundColor: p.glass, borderColor: p.border }]}>
-        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: p.accent }} />
-        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: p.textSecondary }} />
-        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: p.textSecondary }} />
-        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: p.textSecondary }} />
-      </View>
-    </View>
-  );
-}
 
-// Thẻ chọn bộ màu. id = 'system': nửa trái là Dark, nửa phải là Light (theo sáng/tối của điện thoại)
-function PresetCard({ id, selected, width, onPress }: {
-  id: ThemePresetId | 'system'; selected: boolean; width: number; onPress: (e: GestureResponderEvent) => void;
-}) {
+// Theme tile (28/11, same size and layout as the Pop tiles): the theme's background, its accent as a dot and a glass bar
+// like the dock. id = 'system': left half Dark, right half Light (follows the phone)
+function GlassTile({ id, selected, size, onPress }: { id: ThemePresetId | 'system'; selected: boolean; size: number; onPress: (e: GestureResponderEvent) => void }) {
   const { theme } = useTheme();
   const t = useT();
-  const h = width * 1.2;
+  const face = (p: Palette) => (
+    <>
+      <View style={{ position: 'absolute', right: '12%', top: '12%', width: '26%', aspectRatio: 1, borderRadius: 99, backgroundColor: p.accent }} />
+      <View style={{ position: 'absolute', left: '18%', right: '18%', bottom: '16%', height: '24%', borderRadius: 99, backgroundColor: p.glass, borderWidth: 1, borderColor: p.border }} />
+    </>
+  );
   return (
-    <Pressable onPress={onPress} style={{ width }}>
-      <View style={[styles.preview, { height: h, borderColor: selected ? theme.colors.accent : theme.colors.border, borderWidth: selected ? 2.5 : 1 }]}>
+    <Pressable onPress={onPress} style={{ width: size, alignItems: 'center' }} accessibilityRole="radio" accessibilityState={{ selected }} accessibilityLabel={t(`preset.${id}`)}>
+      <View
+        style={[
+          { width: size, height: size, borderRadius: 16, borderCurve: 'continuous', overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.border },
+          selected && { outlineWidth: 3, outlineColor: theme.colors.text, outlineOffset: 2 },
+        ]}
+      >
         {id === 'system' ? (
           <>
-            <MiniScreen p={PRESETS.dark} id="dark" width={width} h={h} />
-            {/* Nửa phải: cùng màn hình đó ở chế độ sáng */}
-            <View style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: width / 2, overflow: 'hidden' }}>
-              <View style={{ position: 'absolute', top: 0, right: 0 }}>
-                <MiniScreen p={PRESETS.light} id="light" width={width} h={h} />
+            <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '50%', backgroundColor: PRESETS.dark.bg }} />
+            <View style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '50%', backgroundColor: PRESETS.light.bg }} />
+            <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+              <View style={[styles.systemBadge, { position: 'relative', left: 0, top: 0, marginLeft: 0, backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                <Ionicons name="phone-portrait-outline" size={14} color={theme.colors.text} />
               </View>
             </View>
-            <View style={[styles.systemBadge, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-              <Ionicons name="phone-portrait-outline" size={14} color={theme.colors.text} />
-            </View>
           </>
-        ) : (
-          <MiniScreen p={PRESETS[id]} id={id} width={width} h={h} />
-        )}
-        {selected && (
-          <View style={[styles.check, { backgroundColor: theme.colors.accent }]}>
-            <Ionicons name="checkmark" size={14} color={theme.colors.onAccent} />
+        ) : id === 'cover' ? (
+          <View style={{ flex: 1, backgroundColor: PRESETS.cover.bg }}>
+            <View style={{ position: 'absolute', left: '14%', top: '16%', flexDirection: 'row', gap: 3 }}>
+              {['#E2574C', '#F2B134', '#3E8EDE'].map((c) => (
+                <View key={c} style={{ width: size * 0.14, height: size * 0.14, borderRadius: 99, backgroundColor: c }} />
+              ))}
+            </View>
+            {face(PRESETS.cover)}
           </View>
+        ) : (
+          <View style={{ flex: 1, backgroundColor: PRESETS[id].bg }}>{face(PRESETS[id])}</View>
         )}
       </View>
-      <Text numberOfLines={1} style={{ color: theme.colors.text, fontSize: 14, fontWeight: '700', marginTop: 8 }}>{t(`preset.${id}`)}</Text>
+      <Text numberOfLines={1} style={{ color: theme.colors.text, fontSize: 12, fontWeight: '800', marginTop: 6 }}>{t(`preset.${id}`)}</Text>
     </Pressable>
   );
 }
@@ -185,7 +100,7 @@ export function ThemeStudioScreen() {
   const { pop } = useNav();
   const goBack = useAnimatedBack() ?? pop;
   const [picking, setPicking] = useState<BackgroundType | null>(null);
-  const { text, textSecondary, accent, onAccent, surface, border } = theme.colors;
+  const { text, textSecondary, accent, border } = theme.colors;
   const bg = theme.background;
   const hasMedia = bg.type !== 'preset' && !!bg.uri;
   useRenderProbe('Giao diện (studio)', { theme, width, picking, pad });
@@ -196,8 +111,7 @@ export function ThemeStudioScreen() {
   const smokeS = useThrottle((v: number) => setSmokeSpeed(0.3 + v * 1.7));
   const smokeSpeed = theme.effects.smokeSpeed ?? 1;
 
-  const cols = width >= 600 ? 3 : 2;
-  const cardW = Math.floor((Math.min(width, 520) - PAD * 2 - GAP * (cols - 1)) / cols);
+  const tile = Math.floor((Math.min(width, 520) - PAD * 2 - 10 * 3) / 4); // 4 tiles a row, same as the Pop side
 
   // Chọn ảnh / GIF / video làm nền: chép vào thư mục của app, xoá file nền cũ
   const pickBg = async (kind: 'image' | 'video') => {
@@ -223,23 +137,6 @@ export function ThemeStudioScreen() {
     }
   };
 
-  const bgChip = (type: BackgroundType, label: string, icon: keyof typeof Ionicons.glyphMap, onPress: () => void) => {
-    const on = type === 'preset' ? !hasMedia : hasMedia && bg.type === type;
-    return (
-      <Pressable key={type} onPress={onPress} style={[styles.chip, { backgroundColor: on ? accent : surface, borderColor: border }]}>
-        {picking === type ? (
-          <ActivityIndicator size="small" color={on ? onAccent : text} />
-        ) : (
-          <Ionicons name={icon} size={16} color={on ? onAccent : text} />
-        )}
-        <Text style={{ color: on ? onAccent : text, fontWeight: '700', fontSize: 13 }}>
-          {label}
-          {on && type !== 'preset' ? ` · ${t('studio.bgChange')}` : ''}
-        </Text>
-      </Pressable>
-    );
-  };
-
   return (
     <View style={StyleSheet.absoluteFill}>
       <ScrollView showsVerticalScrollIndicator={false}
@@ -261,170 +158,161 @@ export function ThemeStudioScreen() {
           <PopPane />
         ) : (
         <>
-        {/* Bộ màu */}
+        {/* Themes: compact tiles like the Pop side (28/11). First tile = follow the phone (Dark / Light) */}
         <Text style={[styles.section, { color: text }]}>{t('studio.presets')}</Text>
-        <Text style={{ color: textSecondary, fontSize: 13, marginBottom: 12 }}>{t('studio.presetsHint')}</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
-          {/* Theo hệ thống: Light hoặc Dark tuỳ điện thoại đang để sáng hay tối */}
-          <PresetCard
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
+          <GlassTile
             id="system"
-            width={cardW}
+            size={tile}
             selected={theme.followSystem}
             onPress={(e) => changePreset(systemPreset(scheme), { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY }, true)}
           />
           {PRESET_ORDER.map((id) => (
-            <PresetCard
+            <GlassTile
               key={id}
               id={id}
-              width={cardW}
+              size={tile}
               selected={!theme.followSystem && theme.preset === id}
               onPress={(e) => changePreset(id, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY })}
             />
           ))}
         </View>
+        {theme.preset === 'cover' && <Text style={{ color: textSecondary, fontSize: 12, marginTop: 10 }}>{t('studio.coverHint')}</Text>}
 
-        {/* Hiệu ứng nền của bộ đang dùng (bộ nào có thì mới hiện). Bật/tắt được nhớ riêng cho từng bộ */}
-        {(AMBIENT_PRESETS as ThemePresetId[]).includes(theme.preset) && (
-          <View style={styles.switchRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: text }]}>{t('studio.ambient')}</Text>
-              <Text style={{ color: textSecondary, fontSize: 12, marginTop: 2 }}>
-                {t(`studio.ambient.${theme.preset as AmbientPresetId}`)}
-                {theme.preset !== 'latte' ? ` ${t('studio.ambientPause')}` : ''}
-              </Text>
-            </View>
-            <Switch
-              value={theme.effects.ambient[theme.preset as AmbientPresetId]}
-              onValueChange={(on) => setAmbient(theme.preset as AmbientPresetId, on)}
-              trackColor={{ true: accent, false: theme.colors.switchOff }}
+        {/* Look: background effect, glass type, glass blur — rows like the Pop side */}
+        <Group label={t('studio.popLook')} color={GROUP_COLORS.yellow} style={{ marginTop: 34 }}>
+          {(AMBIENT_PRESETS as ThemePresetId[]).includes(theme.preset) && (
+            <Row
+              first
+              title={t('studio.ambient')}
+              hint={`${t(`studio.ambient.${theme.preset as AmbientPresetId}`)}${theme.preset !== 'latte' ? ` ${t('studio.ambientPause')}` : ''}`}
+              right={<Toggle value={theme.effects.ambient[theme.preset as AmbientPresetId]} onChange={(on) => setAmbient(theme.preset as AmbientPresetId, on)} />}
             />
-          </View>
-        )}
-
-        {/* Bộ Mưa sao băng: chọn mật độ sao băng */}
-        {theme.preset === 'meteor' && theme.effects.ambient.meteor && (
-          <>
-            <Text style={[styles.label, { color: text, marginTop: 16 }]}>{t('studio.meteorLevel')}</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-              {([0, 1, 2, 3] as const).map((lv) => {
-                const on = (theme.effects.meteorLevel ?? 1) === lv;
+          )}
+          {theme.preset === 'meteor' && theme.effects.ambient.meteor && (
+            <Row
+              title={t('studio.meteorLevel')}
+              right={
+                <Seg
+                  options={['0', '1', '2', '3'] as const}
+                  value={String(theme.effects.meteorLevel ?? 1) as '0' | '1' | '2' | '3'}
+                  onSelect={(v) => setMeteorLevel(Number(v) as 0 | 1 | 2 | 3)}
+                  labels={{ '0': t('studio.meteorLevel.0'), '1': t('studio.meteorLevel.1'), '2': t('studio.meteorLevel.2'), '3': t('studio.meteorLevel.3') }}
+                />
+              }
+            />
+          )}
+          {theme.preset === 'smoke' && (
+            <View style={styles.block}>
+              <Text style={[styles.label, { color: text }]}>{t('studio.smokeTone')}</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
+                {SMOKE_TONES.map((tone) => (
+                  <ToneChip
+                    key={tone}
+                    tone={tone}
+                    label={t(`studio.smokeTone.${tone}`)}
+                    on={(theme.effects.smokeTone ?? 'coffee') === tone}
+                    ring={accent}
+                    text={text}
+                    dim={textSecondary}
+                    onPress={() => setSmokeTone(tone)}
+                  />
+                ))}
+              </View>
+              {(theme.effects.smokeTone ?? 'coffee') === 'cover' && <Text style={{ color: textSecondary, fontSize: 12, marginTop: 8 }}>{t('studio.coverHint')}</Text>}
+              {theme.effects.ambient.smoke && (
+                <>
+                  <View style={styles.sliderHead}>
+                    <Text style={[styles.label, { color: text }]}>{t('studio.smokeSpeed')}</Text>
+                    <Text style={{ color: textSecondary, fontSize: 13 }}>{smokeSpeed.toFixed(1)}×</Text>
+                  </View>
+                  <Slider value={(smokeSpeed - 0.3) / 1.7} thickness={6} fill={accent} track={border} onChange={smokeS.change} onCommit={smokeS.commit} />
+                </>
+              )}
+            </View>
+          )}
+          <Row
+            first={!(AMBIENT_PRESETS as ThemePresetId[]).includes(theme.preset) && theme.preset !== 'smoke'}
+            title={t('studio.material')}
+            right={
+              <Seg
+                options={['clear', 'frost', 'neon'] as const}
+                value={theme.glass.material ?? 'clear'}
+                onSelect={(m) => {
+                  setGlassMaterial(m);
+                  // Frosted starts thin (light blur); the Glass blur slider makes it thicker
+                  if (m === 'frost' && (theme.glass.material ?? 'clear') !== 'frost') setGlassBlur(15);
+                }}
+                labels={{ clear: t('studio.material.clear'), frost: t('studio.material.frost'), neon: t('studio.material.neon') }}
+              />
+            }
+          />
+          {/* Neon: light colour (first = the theme's accent). Each dot glows in its own colour */}
+          {theme.glass.material === 'neon' && (
+            <View style={[styles.block, { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }]}>
+              {NEON_COLORS.map((c) => {
+                const col = c || accent;
+                const on = (theme.glass.neon ?? '') === c;
                 return (
-                  <Pressable key={lv} onPress={() => setMeteorLevel(lv)} style={[styles.chip, { backgroundColor: on ? accent : surface, borderColor: border }]}>
-                    <Text style={{ color: on ? onAccent : text, fontWeight: '700', fontSize: 13 }}>{t(`studio.meteorLevel.${lv}`)}</Text>
+                  <Pressable
+                    key={c || 'auto'}
+                    onPress={() => setGlassNeon(c)}
+                    hitSlop={6}
+                    accessibilityLabel={c || t('studio.neon.auto')}
+                    style={{
+                      width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center',
+                      backgroundColor: 'rgba(8,8,20,0.6)', borderWidth: on ? 2 : 1, borderColor: col,
+                      boxShadow: `0px 0px ${on ? 14 : 7}px ${col}`,
+                    }}
+                  >
+                    {c === '' ? <Text style={{ color: col, fontSize: 11, fontWeight: '800' }}>A</Text> : <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: col, boxShadow: `0px 0px 6px ${col}` }} />}
                   </Pressable>
                 );
               })}
             </View>
-          </>
-        )}
-
-        {/* Bộ Khói màu: chọn dải màu (đổi cả nền khói lẫn màu giao diện) + tốc độ khói */}
-        {theme.preset === 'smoke' && (
-          <>
-            <Text style={[styles.label, { color: text, marginTop: 16 }]}>{t('studio.smokeTone')}</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
-              {SMOKE_TONES.map((tone) => (
-                <ToneChip
-                  key={tone}
-                  tone={tone}
-                  label={t(`studio.smokeTone.${tone}`)}
-                  on={(theme.effects.smokeTone ?? 'coffee') === tone}
-                  ring={accent}
-                  text={text}
-                  dim={textSecondary}
-                  onPress={() => setSmokeTone(tone)}
-                />
-              ))}
+          )}
+          <View style={[styles.block, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: border }]}>
+            <View style={[styles.sliderHead, { marginTop: 0 }]}>
+              <Text style={[styles.label, { color: text }]}>{t('studio.blur')}</Text>
+              <Text style={{ color: textSecondary, fontSize: 13 }}>{Math.round(theme.glass.blur)}</Text>
             </View>
-            {(theme.effects.smokeTone ?? 'coffee') === 'cover' && (
-              <Text style={{ color: textSecondary, fontSize: 12, marginTop: 8 }}>{t('studio.coverHint')}</Text>
-            )}
-            {theme.effects.ambient.smoke && (
-              <>
-                <View style={styles.sliderHead}>
-                  <Text style={[styles.label, { color: text }]}>{t('studio.smokeSpeed')}</Text>
-                  <Text style={{ color: textSecondary, fontSize: 13 }}>{smokeSpeed.toFixed(1)}×</Text>
-                </View>
-                <Slider value={(smokeSpeed - 0.3) / 1.7} thickness={6} fill={accent} track={border} onChange={smokeS.change} onCommit={smokeS.commit} />
-              </>
-            )}
-          </>
-        )}
-
-        {theme.preset === 'cover' && <Text style={{ color: textSecondary, fontSize: 12, marginTop: 14 }}>{t('studio.coverHint')}</Text>}
-
-        {/* Nền */}
-        <Text style={[styles.section, { color: text }]}>{t('studio.background')}</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {bgChip('preset', t('studio.bgPreset'), 'color-palette-outline', () => setBackground({ type: 'preset' }))}
-          {bgChip('image', t('studio.bgImage'), 'image-outline', () => pickBg('image'))}
-          {bgChip('video', t('studio.bgVideo'), 'film-outline', () => pickBg('video'))}
-        </View>
-        <Text style={{ color: textSecondary, fontSize: 12, marginTop: 8 }}>{t('studio.bgHint')}</Text>
-
-        {hasMedia && (
-          <>
-            <View style={styles.sliderHead}>
-              <Text style={[styles.label, { color: text }]}>{t('studio.dim')}</Text>
-              <Text style={{ color: textSecondary, fontSize: 13 }}>{Math.round((bg.dim / 0.8) * 100)}%</Text>
-            </View>
-            <Slider value={bg.dim / 0.8} thickness={6} fill={accent} track={border} onChange={dimS.change} onCommit={dimS.commit} />
-          </>
-        )}
-
-        {/* Loại kính: Trong / Mờ / Khói / Mờ tối (dock, mini player, bảng bật lên, thẻ...) */}
-        <Text style={[styles.label, { color: text, marginTop: 18 }]}>{t('studio.material')}</Text>
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-          {(['clear', 'frost', 'neon'] as const).map((m) => {
-            const on = (theme.glass.material ?? 'clear') === m;
-            return (
-              <Pressable
-                key={m}
-                onPress={() => {
-                  setGlassMaterial(m);
-                  // Mờ tối: mặc định bản MỎNG (nhoè nhẹ, trong) — kéo thanh Độ mờ kính sang phải để dày / đặc hơn
-                  if (m === 'frost' && (theme.glass.material ?? 'clear') !== 'frost') setGlassBlur(15);
-                }}
-                style={{ flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 14, borderCurve: 'continuous', backgroundColor: on ? accent : theme.colors.surface }}
-              >
-                <Text style={{ color: on ? theme.colors.onAccent : text, fontWeight: '700' }}>{t(`studio.material.${m}` as const)}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* Neon: chọn màu đèn (ô đầu = màu nhấn của theme). Mỗi ô tự phát sáng đúng màu của nó */}
-        {theme.glass.material === 'neon' && (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 14 }}>
-            {NEON_COLORS.map((c) => {
-              const col = c || accent;
-              const on = (theme.glass.neon ?? '') === c;
-              return (
-                <Pressable
-                  key={c || 'auto'}
-                  onPress={() => setGlassNeon(c)}
-                  hitSlop={6}
-                  accessibilityLabel={c || t('studio.neon.auto')}
-                  style={{
-                    width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center',
-                    backgroundColor: 'rgba(8,8,20,0.6)', borderWidth: on ? 2 : 1, borderColor: col,
-                    boxShadow: `0px 0px ${on ? 14 : 7}px ${col}`,
-                  }}
-                >
-                  {c === '' ? <Text style={{ color: col, fontSize: 11, fontWeight: '800' }}>A</Text> : <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: col, boxShadow: `0px 0px 6px ${col}` }} />}
-                </Pressable>
-              );
-            })}
+            <Slider value={theme.glass.blur / 100} thickness={6} fill={accent} track={border} onChange={blurS.change} onCommit={blurS.commit} />
+            <Text style={{ color: textSecondary, fontSize: 12, marginTop: 6 }}>{t('studio.blurHint')}</Text>
           </View>
-        )}
+        </Group>
 
-        {/* Kính mờ */}
-        <View style={styles.sliderHead}>
-          <Text style={[styles.label, { color: text }]}>{t('studio.blur')}</Text>
-          <Text style={{ color: textSecondary, fontSize: 13 }}>{Math.round(theme.glass.blur)}</Text>
-        </View>
-        <Slider value={theme.glass.blur / 100} thickness={6} fill={accent} track={border} onChange={blurS.change} onCommit={blurS.commit} />
-        <Text style={{ color: textSecondary, fontSize: 12, marginTop: 4 }}>{t('studio.blurHint')}</Text>
+        {/* Background: the theme's own, or your photo / GIF / video */}
+        <Group label={t('studio.background')} color={GROUP_COLORS.sky}>
+          <Row
+            first
+            title={t('studio.background')}
+            hint={t('studio.bgHint')}
+            right={
+              picking ? (
+                <ActivityIndicator color={text} />
+              ) : (
+                <Seg
+                  options={['preset', 'image', 'video'] as const}
+                  value={hasMedia ? (bg.type as 'image' | 'video') : 'preset'}
+                  onSelect={(v) => (v === 'preset' ? setBackground({ type: 'preset' }) : pickBg(v))}
+                  labels={{ preset: t('studio.bgPreset'), image: t('studio.bgImage'), video: t('studio.bgVideo') }}
+                />
+              )
+            }
+          />
+          {hasMedia && (
+            <Row title={t('studio.bgChange')} onPress={() => pickBg(bg.type as 'image' | 'video')} right={<Ionicons name="images-outline" size={18} color={textSecondary} />} />
+          )}
+          {hasMedia && (
+            <View style={[styles.block, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: border }]}>
+              <View style={[styles.sliderHead, { marginTop: 0 }]}>
+                <Text style={[styles.label, { color: text }]}>{t('studio.dim')}</Text>
+                <Text style={{ color: textSecondary, fontSize: 13 }}>{Math.round((bg.dim / 0.8) * 100)}%</Text>
+              </View>
+              <Slider value={bg.dim / 0.8} thickness={6} fill={accent} track={border} onChange={dimS.change} onCommit={dimS.commit} />
+            </View>
+          )}
+        </Group>
         </>
         )}
       </ScrollView>
@@ -437,20 +325,14 @@ const styles = StyleSheet.create({
   circle: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 20, fontWeight: '800' },
   section: { fontSize: 18, fontWeight: '800', marginTop: 26, marginBottom: 6 },
-  preview: { borderRadius: 14, overflow: 'hidden' },
   systemBadge: {
     position: 'absolute', left: '50%', top: '42%', marginLeft: -14, width: 28, height: 28, borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center',
   },
-  miniDock: {
-    position: 'absolute', left: 12, right: 12, bottom: 12, height: 24, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around',
-  },
-  check: { position: 'absolute', top: 8, right: 8, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth },
   sliderHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 22 },
   label: { fontSize: 15, fontWeight: '700' },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 18 },
+  block: { paddingHorizontal: 16, paddingVertical: 14 },
 });
 
 // Ô chọn dải màu khói: chấm tròn tô chuyển màu của dải (Theo ảnh bìa: ba màu mẫu), vòng màu nhấn hiện / tắt êm khi chọn

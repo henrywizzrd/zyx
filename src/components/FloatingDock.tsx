@@ -197,12 +197,8 @@ export function FloatingDock({ active, onChange, hidden = false }: { active: Tab
   };
 
   // Bóng đổ nhẹ để dock tách khỏi nội dung phía sau; đang kéo thì nổi cao hơn
-  // Bộ Neon: dock phát sáng hồng neon thay cho bóng đen
-  const neon = theme.preset === 'neon';
   // Kính đặt nổi trên mặt bàn: bóng hai lớp (sát chân + lan); cầm lên để kéo thì nổi cao hơn
-  const glow = neon
-    ? { shadowColor: theme.colors.accent, shadowOpacity: lit ? 0.85 : 0.6, shadowRadius: lit ? 24 : 18, shadowOffset: { width: 0, height: 0 }, elevation: 12 }
-    : glassShadow(lit ? 1.7 : 1, theme.colors.glassTint !== 'dark');
+  const glow = glassShadow(lit ? 1.7 : 1, theme.colors.glassTint !== 'dark');
 
   return (
     <View pointerEvents={hidden ? 'none' : 'box-none'} style={[styles.layer, dockStyle, { zIndex: d.zIndex }]}>

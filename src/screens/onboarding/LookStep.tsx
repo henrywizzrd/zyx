@@ -10,7 +10,7 @@ import { POP_THEME_NAMES, POP_THEME_ORDER, POP_THEMES, PopThemeId } from '../../
 import { PRESETS, ThemePresetId } from '../../theme/presets';
 import { BackButton, Dots, Hard, Headline, OB, PopButton } from './kit';
 
-export const DEFAULT_CHOICES: ThemePresetId[] = ['dark', 'light', 'green', 'ocean', 'latte', 'snow', 'sakura', 'meteor', 'starry', 'aurora', 'rain', 'neon'];
+export const DEFAULT_CHOICES: ThemePresetId[] = ['dark', 'light', 'green', 'ocean', 'latte', 'snow', 'sakura', 'meteor', 'starry', 'aurora', 'smoke', 'cover'];
 export type LookChoice = { kind: 'glass'; preset: ThemePresetId } | { kind: 'pop'; theme: PopThemeId };
 
 const lum = (hex: string) => {

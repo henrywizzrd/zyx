@@ -13,7 +13,7 @@ export const defaultTheme: Theme = {
   style: 'glass',
   pop: { theme: 'paper', followSystem: false, line: 'bold', shadow: 'short', shadowColor: 'ink', pattern: 'plain' },
   glass: { blur: 15, material: 'frost', neon: '' }, // default: Frosted, thin (27/11)
-  effects: { ambient: { snow: true, green: true, ocean: true, latte: true, sakura: true, meteor: true, starry: true, aurora: true, rain: true, neon: true, smoke: true }, meteorLevel: 1, smokeTone: 'coffee', smokeSpeed: 1 },
+  effects: { ambient: { snow: true, green: true, ocean: true, latte: true, sakura: true, meteor: true, starry: true, aurora: true, smoke: true }, meteorLevel: 1, smokeTone: 'coffee', smokeSpeed: 1 },
   dock: {
     position: 'bottom',
     items: ['home', 'search', 'library', 'settings'],
