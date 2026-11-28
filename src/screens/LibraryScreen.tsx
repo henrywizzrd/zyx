@@ -637,7 +637,8 @@ export function LibraryScreen() {
               <Text style={{ color: hero.sub, fontWeight: '600' }}> #{profile.tag}</Text>
             </Text>
             <View style={styles.followersRow}>
-              <Pressable style={[styles.plusBtn, { borderColor: hero.sub }]}>
+              {/* + : import a playlist from Spotify */}
+              <Pressable onPress={() => push({ type: 'import' })} hitSlop={6} accessibilityLabel={t('import.title')} style={[styles.plusBtn, { borderColor: hero.sub }]}>
                 <Ionicons name="add" size={18} color={hero.text} />
               </Pressable>
               <View style={{ marginLeft: 10 }}>

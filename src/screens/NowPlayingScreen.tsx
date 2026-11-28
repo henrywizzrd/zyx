@@ -843,8 +843,11 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
             </View>
             <View style={{ marginTop: 6 }}>{Progress}</View>
           </View></CloseZone>
-          <View style={[tile, { flex: 1, overflow: 'hidden' }]}>
-            <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} ink={POP && !POP_DARK ? '#111111' : undefined} mark={POP && !POP_DARK ? '#D4F25A' : undefined} />
+          {/* Clipping happens on an inner view: overflow hidden on the outlined tile itself breaks its border and shadow at the corners */}
+          <View style={[tile, { flex: 1 }]}>
+            <View style={{ flex: 1, borderRadius: tile.borderRadius - 2.5, overflow: 'hidden', paddingLeft: 24, paddingRight: 10 }}>
+              <LyricsView scale={0.72} status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} ink={POP && !POP_DARK ? '#111111' : undefined} mark={POP && !POP_DARK ? '#D4F25A' : undefined} />
+            </View>
           </View>
           <View style={[tile, { width: POP ? 84 : 76, paddingVertical: 10, alignItems: 'center', justifyContent: 'space-evenly' }]}>
             {controlRow(0.8)}

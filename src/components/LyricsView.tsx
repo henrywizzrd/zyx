@@ -73,17 +73,19 @@ const LyricLine = React.memo(function LyricLine({ text, state, near, onWidth }: 
   const ink = useInk();
   const base = ink ? { color: inkA(ink, state === 'browse' ? 0.5 : 0.3) } : state === 'browse' ? styles.browse : styles.dim;
   const on = ink ? { color: ink } : styles.active;
+  const k = React.useContext(ScaleCtx);
+  const size = k === 1 ? null : { fontSize: Math.round(30 * k), lineHeight: Math.round(38 * k) };
   return (
     <View>
       <Animated.Text
-        style={[styles.line, base, { opacity: d }]}
+        style={[styles.line, size, base, { opacity: d }]}
         // widest wrapped line of this lyric: the Pop marker stretches to it
         onTextLayout={onWidth ? (e) => onWidth(Math.max(0, ...e.nativeEvent.lines.map((l) => l.width))) : undefined}
       >
         {text}
       </Animated.Text>
       {(near || lit) && (
-        <Animated.Text style={[styles.line, on, { position: 'absolute', left: 0, right: 0, top: 0, opacity: a }]}>
+        <Animated.Text style={[styles.line, size, on, { position: 'absolute', left: 0, right: 0, top: 0, opacity: a }]}>
           {text}
         </Animated.Text>
       )}
@@ -196,13 +198,17 @@ function MusicNotes({ active }: { active: boolean }) {
   );
 }
 
-export function LyricsView(props: React.ComponentProps<typeof LyricsViewInner> & { ink?: string; mark?: string }) {
+// Text size multiplier (1 = full size). The landscape bento tile uses a smaller size so lines fit the tile
+const ScaleCtx = React.createContext(1);
+export function LyricsView(props: React.ComponentProps<typeof LyricsViewInner> & { ink?: string; mark?: string; scale?: number }) {
   return (
+    <ScaleCtx.Provider value={props.scale ?? 1}>
     <InkCtx.Provider value={props.ink ?? null}>
       <MarkCtx.Provider value={props.mark ?? null}>
         <LyricsViewInner {...props} />
       </MarkCtx.Provider>
     </InkCtx.Provider>
+    </ScaleCtx.Provider>
   );
 }
 

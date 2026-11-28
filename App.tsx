@@ -57,6 +57,7 @@ import { AuthGate } from './src/screens/AuthGate';
 import { DockSettingsScreen } from './src/screens/DockSettingsScreen';
 import { AdminDeviceScreen, AdminScreen } from './src/screens/AdminScreen';
 import { SupportScreen } from './src/screens/SupportScreen';
+import { ImportScreen } from './src/screens/ImportScreen';
 import { loadFonts } from './src/theme/fonts';
 import { installDeviceReport } from './src/data/deviceReport';
 
@@ -374,6 +375,8 @@ function Root() {
                   <DockSettingsScreen />
                 ) : pg.type === 'support' ? (
                   <SupportScreen />
+                ) : pg.type === 'import' ? (
+                  <ImportScreen />
                 ) : pg.type === 'admin' ? (
                   <AdminScreen />
                 ) : pg.type === 'adminDevice' ? (

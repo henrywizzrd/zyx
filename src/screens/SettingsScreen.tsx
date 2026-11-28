@@ -92,6 +92,7 @@ export function SettingsScreen() {
       />
       {/* Profile not synced: show why + retry */}
       {!!syncErr && <Row title={t('settings.syncRetry')} hint={t('settings.syncError', { msg: syncErr })} onPress={() => syncProfile()} right={<Chevron />} />}
+      <Row title={t('import.title')} hint={t('import.settingsHint')} onPress={() => push({ type: 'import' })} right={<Chevron />} />
       <Row title={t('settings.reset')} hint={t('settings.resetHint')} onPress={confirmReset} right={<Chevron />} />
     </Group>
   );
