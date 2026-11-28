@@ -760,7 +760,7 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
     );
     // Cột nút bên phải + khoảng trống quanh nó (kéo rộng sang trái và tới sát mép màn hình): vuốt xuống ở đây để thu nhỏ player.
     // Trước đây vùng vuốt chỉ rộng đúng bằng cột 44px, gần như kín chỗ bởi thanh âm lượng nên không kéo được
-    const sideZone = { alignSelf: 'stretch' as const, flexDirection: 'row' as const, justifyContent: 'center' as const, marginLeft: -20, paddingLeft: 20, paddingRight: insets.right + 14 };
+    const sideZone = { alignSelf: 'stretch' as const, flexDirection: 'row' as const, justifyContent: 'center' as const, marginLeft: -20, paddingLeft: 20, paddingRight: Math.max(10, insets.right - 16) }; // pushed closer to the right edge (28/11), still clear of the Dynamic Island
     // Vuốt xuống để thoát khi nằm ngang: thanh ngang ở mép trên (cả dải trên cùng đều vuốt được),
     // và mọi chỗ trống không phải lời / thanh trượt (trang trái, cột nút bên phải)
     const GrabBar = (
@@ -813,39 +813,28 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
       );
     }
 
-    // Hiệu ứng QUYỂN SÁCH: trang trái (ảnh bìa + điều khiển) và trang phải (lời) nghiêng vào giữa như cuốn sách đang mở,
-    // gáy sách ở giữa được che bằng một dải kính mờ mềm nối hai trang
-    const leftW = Math.min(340, win.width * 0.34);
-    // Chừa đủ chỗ cho nút thích, tên bài, thanh thời gian và hàng điều khiển bên dưới ảnh (trước đây ảnh to quá, đẩy nút phát ra ngoài màn hình)
-    const art = Math.max(90, Math.min(leftW - 24, usableH - 210));
-    const spineX = insets.left + 20 + leftW + 14; // vị trí gáy sách (giữa hai trang)
-    // Mỗi trang xoay quanh MÉP TRONG (phía gáy): mép trong đứng yên, mép ngoài nghiêng về phía người xem.
-    // (Trước đây xoay quanh giữa trang: nửa trong lùi ra sau mặt phẳng màn hình nên bị nền che mất → trang bị cắt cụt)
-    // Dải nối ở gáy: chỉ rộng hơn khe giữa hai trang (28) một chút, mỗi bên lấn vào trang ~12px để hai mép trang tan vào nền.
-    // (Trước đây cố định 140px: mỗi bên lấn vào trang tới 56px → trên màn hình nhỏ / Android che mất chữ đầu dòng lời
-    // và nút thích của trang trái)
-    const SEAM = 28 + 24;
-    // Hàng chờ và các bảng thao tác giờ mở trong cửa sổ riêng (Modal) luôn nằm trên cùng, nên hai trang giữ nguyên độ nghiêng
-    // (trước đây phải duỗi phẳng ra cho bảng khỏi bị đè → ảnh bìa và lời xê dịch mỗi lần mở bảng)
-    const flat = false;
+    // Bento (28/11): flat tiles, no 3D tilt. Left: big cover, title + like, time bar.
+    // Middle: lyrics. Then the 5 player buttons stacked vertically, then volume + side buttons at the right edge
+    const top = padT + 14; // tiles start below the grab bar
+    const innerH = win.height - top - padB;
+    const TILE_PAD = 14;
+    const INFO_H = 98; // title row + time bar under the cover
+    const art = Math.max(120, Math.min(innerH - TILE_PAD * 2 - INFO_H, Math.round(win.width * 0.4) - TILE_PAD * 2));
+    const tile = POP
+      ? { borderRadius: 22, borderCurve: 'continuous' as const, borderWidth: 2.5, borderColor: '#111111', backgroundColor: POP_DARK ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.32)', boxShadow: '5px 5px 0px #111111' }
+      : { borderRadius: 24, borderCurve: 'continuous' as const, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.14)' };
     return (
       <View style={{ flex: 1 }}>
         {Background}
         <StatusBar barStyle={POP && !POP_DARK ? 'dark-content' : 'light-content'} />
-        <View style={rowStyle}>
-          <CloseZone><View
-            
-            style={{ width: leftW, justifyContent: 'center', transformOrigin: 'right center', transform: [{ perspective: 1400 }, { rotateY: flat ? '0deg' : '12deg' }] }}
-          >
-            <View style={{ alignItems: 'center' }}>
-              <TrackSwap id={track.id}>
-              <Cover track={track} size={1200} style={{ width: art, height: art, borderRadius: 10 }}>
-                <Ionicons name="musical-notes" size={40} color="rgba(255,255,255,0.8)" />
+        <View style={[rowStyle, { paddingTop: top, gap: 12 }]}>
+          <CloseZone><View style={[tile, { width: art + TILE_PAD * 2, padding: TILE_PAD, justifyContent: 'center' }]}>
+            <TrackSwap id={track.id}>
+              <Cover track={track} size={1200} style={{ width: art, height: art, borderRadius: POP ? 14 : 16, borderWidth: POP ? 2.5 : 0, borderColor: '#111111' }}>
+                <Ionicons name="musical-notes" size={48} color="rgba(255,255,255,0.8)" />
               </Cover>
-              </TrackSwap>
-            </View>
-            {/* Tên bài + nút thích cùng một hàng (trước đây nút thích nằm riêng phía trên ảnh, bị đẩy ra khỏi màn hình) */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 }}>
+            </TrackSwap>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 }}>
               <View style={{ flex: 1 }}>
                 <Text numberOfLines={1} style={[styles.title, { color: FG }, { fontSize: 19 }]}>{title}</Text>
                 <Text numberOfLines={1} style={[styles.artist, { color: SOFT }, { fontSize: 14 }]}>{artist}</Text>
@@ -853,29 +842,14 @@ function ClassicNowPlaying({ onClose }: { onClose: () => void }) {
               {LikeButton}
             </View>
             <View style={{ marginTop: 6 }}>{Progress}</View>
-            <View style={{ marginTop: 2 }}>
-              {controls(false)}
-            </View>
           </View></CloseZone>
-          <View style={{ flex: 1, transformOrigin: 'left center', transform: [{ perspective: 1400 }, { rotateY: flat ? '0deg' : '-10deg' }] }}>
+          <View style={[tile, { flex: 1, overflow: 'hidden' }]}>
             <LyricsView status={lyr.status} lyrics={lyr.lyrics} onSeek={seekTo} ink={POP && !POP_DARK ? '#111111' : undefined} mark={POP && !POP_DARK ? '#D4F25A' : undefined} />
           </View>
-          <CloseZone><View  style={sideZone}>{SideButtons}</View></CloseZone>
-        </View>
-        {/* Gáy sách: dải kính mờ phủ lên mép trong của hai trang, mờ dần ra hai bên → ảnh và lời nối liền nhau */}
-        {/* Lúc mở bảng (hàng chờ, chế độ âm thanh...) hai trang duỗi phẳng ra: không còn gáy sách nên bỏ dải nối,
-            không thì nó che mất mép trái của lời thành một vệt lạ ở giữa */}
-        <View pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, left: spineX - SEAM / 2, width: SEAM, opacity: flat ? 0 : 1 }}>
-          <MaskedView
-            style={StyleSheet.absoluteFill}
-            maskElement={
-              <LinearGradient colors={['transparent', '#000', '#000', 'transparent']} locations={[0, 0.4, 0.6, 1]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={{ flex: 1 }} />
-            }
-          >
-            {/* Chính lớp nền của player (đặt đúng vị trí như nền thật) → hai trang hoà vào nền ở gáy sách,
-                không còn dải tối khác màu như lớp kính mờ tối trước đây */}
-            <View style={{ position: 'absolute', top: 0, bottom: 0, left: -(spineX - SEAM / 2), width: win.width }}>{Background}</View>
-          </MaskedView>
+          <View style={[tile, { width: POP ? 84 : 76, paddingVertical: 10, alignItems: 'center', justifyContent: 'space-evenly' }]}>
+            {controlRow(0.8)}
+          </View>
+          <CloseZone><View style={[sideZone, { marginLeft: -12, paddingLeft: 12 }]}>{SideButtons}</View></CloseZone>
         </View>
         {GrabBar}
         <QueueSheet visible={queueOpen} onClose={() => setQueueOpen(false)} inModal />
